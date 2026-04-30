@@ -28,8 +28,8 @@ async function fetchToken(username: string, password: string): Promise<TokenStor
     headers: {
       'Content-Type': 'application/json',
       'X-Service-Type': 'KC',
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
+      //clientId: config.clientId,
+      //clientSecret: config.clientSecret,
     },
     body: JSON.stringify({ email: username, grant_type: 'password', password }),
   });
@@ -56,8 +56,8 @@ async function refreshToken(): Promise<TokenStore> {
     headers: {
       'Content-Type': 'application/json',
       'X-Service-Type': 'KC',
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
+      //clientId: config.clientId,
+      //clientSecret: config.clientSecret,
     },
     body: JSON.stringify({
       grant_type: 'refresh_token',

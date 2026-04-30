@@ -102,21 +102,27 @@ export interface MemberProfile {
 
 export interface Member {
   id: MemberId;
-  name?: string;
-  type?: DeviceType;
-  online: boolean;
+  alias?: string;
+  connected: boolean;
   paused?: boolean;
+  device_id?: DeviceId;
+  type?: string;
+  wifi_standard?: string;
+  ipv4?: string;
+  channel?: number;
+  frequency?: number;
   rssi?: number;
   tx_rate?: number;
   rx_rate?: number;
-  connected_to?: DeviceId;
-  links?: MemberLink[];
-}
-
-export interface MemberLink {
-  band: string;
-  rssi: number;
-  device_id: DeviceId;
+  first_seen?: string;
+  last_seen?: string;
+  capable_24ghz?: boolean;
+  capable_5ghz?: boolean;
+  client_capabilities?: {
+    wifi_standard?: string;
+    ht_mode?: string;
+    bandwidth?: string;
+  };
 }
 
 // ─── Mesh / Topology ──────────────────────────────────────────────────────
