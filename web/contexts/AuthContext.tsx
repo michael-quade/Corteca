@@ -18,6 +18,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -63,8 +64,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ isAuthenticated: false, email: null, isLoading: false });
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    const data = await fetch("/api/auth/session").then((r) => r.json());
+    setState({
+      isAuthenticated: data.authenticated,
+      email: data.email ?? null,
+      isLoading: false,
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

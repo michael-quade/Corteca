@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
@@ -70,6 +71,18 @@ export default function DevicesPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-8">
+      <div className="mb-6">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 8H3M7 4l-4 4 4 4" />
+          </svg>
+          Back to Dashboard
+        </Link>
+      </div>
+
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-neutral-900">Device Search</h1>
         <p className="mt-1 text-sm text-neutral-500">

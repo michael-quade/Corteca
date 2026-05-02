@@ -175,13 +175,17 @@ export interface ActivityQuery {
   size?: number;
 }
 
+export type ActivityOrigin = 'USER' | 'AGENT' | 'DEVICE' | 'MESHNETWORK';
+
 export interface ActivityEvent {
-  id: string;
+  id?: string;
   operation: string;
-  origin: string;
+  origin?: ActivityOrigin;
   device_id?: DeviceId;
-  timestamp: string;
+  timestamp?: string;
+  created_at?: string;
   details?: object;
+  metadata?: Record<string, unknown>;
 }
 
 export async function getNetworkActivity(

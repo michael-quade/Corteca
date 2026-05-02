@@ -2,11 +2,13 @@
 
 import { useState, useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import * as Tabs from "@radix-ui/react-tabs";
 import { cn } from "@/web/lib/utils";
 import type { Member } from "@/web/lib/corteca/types";
 
 type SortKey = "alias" | "status" | "wifi" | "ipv4" | "device_id";
 type SortDir = "asc" | "desc";
+type TabId = "connected" | "not-connected";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "alias",     label: "Device" },
@@ -29,7 +31,7 @@ function wifiLabel(m: Member) {
 }
 
 function statusLabel(m: Member) {
-  if (m.paused)   return "paused";
+  if (m.paused) return "paused";
   return m.connected ? "connected" : "offline";
 }
 
@@ -91,7 +93,6 @@ function FilterPopover({ value, onChange, active }: FilterPopoverProps) {
             active ? "text-blue-600" : "text-neutral-400 hover:text-neutral-600"
           )}
         >
-          {/* Funnel icon */}
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
             <path d="M1 2h10L7 6.5V10.5L5 9.5V6.5L1 2Z" />
           </svg>
@@ -137,26 +138,14 @@ function FilterPopover({ value, onChange, active }: FilterPopoverProps) {
   );
 }
 
-interface NetworkMembersTableProps {
+function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort }: {
   members: Member[];
-}
-
-export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>("alias");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filters, setFilters] = useState<Record<SortKey, string>>({
-    alias: "", status: "", wifi: "", ipv4: "", device_id: "",
-  });
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
-
+  filters: Record<SortKey, string>;
+  setFilters: (fn: (f: Record<SortKey, string>) => Record<SortKey, string>) => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
   const rows = useMemo(() => {
     let result = [...members];
     for (const col of COLUMNS) {
@@ -175,63 +164,149 @@ export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
     return result;
   }, [members, filters, sortKey, sortDir]);
 
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-neutral-200 bg-neutral-50">
+          {COLUMNS.map((col) => (
+            <th key={col.key} className="px-4 py-3 text-left">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onSort(col.key)}
+                  className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-neutral-500 hover:text-neutral-800"
+                >
+                  {col.label}
+                  <span className={cn("text-xs", sortKey === col.key ? "text-neutral-700" : "text-neutral-300")}>
+                    {sortKey === col.key ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+                  </span>
+                </button>
+                <FilterPopover
+                  value={filters[col.key]}
+                  onChange={(v) => setFilters((f) => ({ ...f, [col.key]: v }))}
+                  active={!!filters[col.key]}
+                />
+              </div>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-neutral-100">
+        {rows.length === 0 ? (
+          <tr>
+            <td colSpan={COLUMNS.length} className="px-4 py-6 text-center text-sm text-neutral-400">
+              No devices match the current filters.
+            </td>
+          </tr>
+        ) : (
+          rows.map((m) => (
+            <tr key={m.id} className="bg-white transition-colors hover:bg-neutral-50">
+              <td className="px-4 py-3">
+                <p className="font-medium text-neutral-900">{m.alias ?? "—"}</p>
+                <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
+              </td>
+              <td className="px-4 py-3">
+                <StatusBadge connected={m.connected} paused={m.paused} />
+              </td>
+              <td className="px-4 py-3 text-neutral-600">{wifiLabel(m) || "—"}</td>
+              <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.ipv4 ?? "—"}</td>
+              <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.device_id ?? "—"}</td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+interface NetworkMembersTableProps {
+  members: Member[];
+}
+
+export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
+  const [activeTab, setActiveTab] = useState<TabId>("connected");
+  const [sortKey, setSortKey] = useState<SortKey>("alias");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [filters, setFilters] = useState<Record<SortKey, string>>({
+    alias: "", status: "", wifi: "", ipv4: "", device_id: "",
+  });
+
+  const connectedMembers    = useMemo(() => members.filter((m) => m.connected),  [members]);
+  const notConnectedMembers = useMemo(() => members.filter((m) => !m.connected), [members]);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function handleTabChange(tab: string) {
+    setActiveTab(tab as TabId);
+    setFilters({ alias: "", status: "", wifi: "", ipv4: "", device_id: "" });
+  }
+
   if (members.length === 0) {
     return <p className="text-sm text-neutral-500">No devices found in this network.</p>;
   }
 
+  const tabTriggerClass = (active: boolean) =>
+    cn(
+      "relative px-5 py-2.5 text-sm font-medium transition-colors",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-1",
+      active
+        ? "text-neutral-900 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-neutral-900"
+        : "text-neutral-500 hover:text-neutral-700"
+    );
+
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-neutral-200 bg-neutral-50">
-            {COLUMNS.map((col) => (
-              <th key={col.key} className="px-4 py-3 text-left">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleSort(col.key)}
-                    className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-neutral-500 hover:text-neutral-800"
-                  >
-                    {col.label}
-                    <span className={cn("text-xs", sortKey === col.key ? "text-neutral-700" : "text-neutral-300")}>
-                      {sortKey === col.key ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                    </span>
-                  </button>
-                  <FilterPopover
-                    value={filters[col.key]}
-                    onChange={(v) => setFilters((f) => ({ ...f, [col.key]: v }))}
-                    active={!!filters[col.key]}
-                  />
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-neutral-100">
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-4 py-6 text-center text-sm text-neutral-400">
-                No devices match the current filters.
-              </td>
-            </tr>
-          ) : (
-            rows.map((m) => (
-              <tr key={m.id} className="bg-white transition-colors hover:bg-neutral-50">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-neutral-900">{m.alias ?? "—"}</p>
-                  <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge connected={m.connected} paused={m.paused} />
-                </td>
-                <td className="px-4 py-3 text-neutral-600">{wifiLabel(m) || "—"}</td>
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.ipv4 ?? "—"}</td>
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.device_id ?? "—"}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+    <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
+      <div className="overflow-hidden rounded-lg border border-neutral-200">
+        <Tabs.List className="flex border-b border-neutral-200 bg-neutral-50">
+          <Tabs.Trigger value="connected" className={tabTriggerClass(activeTab === "connected")}>
+            Connected
+            <span className={cn(
+              "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
+              activeTab === "connected" ? "bg-green-100 text-green-700" : "bg-neutral-200 text-neutral-500"
+            )}>
+              {connectedMembers.length}
+            </span>
+          </Tabs.Trigger>
+          <Tabs.Trigger value="not-connected" className={tabTriggerClass(activeTab === "not-connected")}>
+            Not Connected
+            <span className={cn(
+              "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
+              activeTab === "not-connected" ? "bg-red-100 text-red-600" : "bg-neutral-200 text-neutral-500"
+            )}>
+              {notConnectedMembers.length}
+            </span>
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <Tabs.Content value="connected">
+          <DeviceTable
+            members={connectedMembers}
+            filters={filters}
+            setFilters={setFilters}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleSort}
+          />
+        </Tabs.Content>
+
+        <Tabs.Content value="not-connected">
+          <DeviceTable
+            members={notConnectedMembers}
+            filters={filters}
+            setFilters={setFilters}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleSort}
+          />
+        </Tabs.Content>
+      </div>
+    </Tabs.Root>
   );
 }

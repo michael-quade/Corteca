@@ -9,7 +9,9 @@ import { useAuth } from "@/web/contexts/AuthContext";
 import { cn } from "@/web/lib/utils";
 
 const NAV_LINKS = [
-  { href: "/devices", label: "Devices" },
+  { href: "/dashboard",      label: "Dashboard" },
+  { href: "/devices",        label: "Devices" },
+  { href: "/reboot-report",  label: "Reboot Report" },
 ];
 
 export function Navbar() {
