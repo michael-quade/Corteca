@@ -1,12 +1,15 @@
 "use client";
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { RebootChart, type RebootRow } from "@/web/components/RebootChart";
 import { RebootTable } from "@/web/components/tables/RebootTable";
+import { findDeviceIdInfo, injectAccountNames } from "@/web/lib/reportNameEnrichment";
+
+const NAME_BATCH = 50;
 
 function RefreshIcon() {
   return (
@@ -26,6 +29,8 @@ export default function RebootReportPage() {
   const [fetching, setFetching]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
+  const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
+  const [loadingNames, setLoadingNames] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
@@ -34,6 +39,7 @@ export default function RebootReportPage() {
   const fetchReport = useCallback(async () => {
     setFetching(true);
     setError(null);
+    setAccountNames(new Map());
     try {
       const res  = await fetchWithAuth("/api/reboot-report");
       const data = await res.json();
@@ -53,6 +59,53 @@ export default function RebootReportPage() {
   useEffect(() => {
     if (!isLoading && isAuthenticated) fetchReport();
   }, [isLoading, isAuthenticated, fetchReport]);
+
+  // Fetch account names whenever rows arrive
+  useEffect(() => {
+    if (rows.length === 0 || !isAuthenticated) return;
+    const baseRows = rows as Record<string, string>[];
+    const idInfo = findDeviceIdInfo(baseRows);
+    if (!idInfo) return;
+
+    const uniqueIds = [...new Set(
+      baseRows.map((r) => r[idInfo.col] ? idInfo.normalizeId(r[idInfo.col]) : '').filter(Boolean)
+    )];
+    if (uniqueIds.length === 0) return;
+
+    const names = new Map<string, string>();
+    setLoadingNames(true);
+
+    void (async () => {
+      for (let i = 0; i < uniqueIds.length; i += NAME_BATCH) {
+        const batch = uniqueIds.slice(i, i + NAME_BATCH);
+        try {
+          const qs = idInfo.lookupField === 'device_id'
+            ? `macs=${encodeURIComponent(batch.join(','))}`
+            : `ids=${encodeURIComponent(batch.join(','))}&lookupField=${idInfo.lookupField}`;
+          const r = await fetchWithAuth(`/api/network-map/account-names?${qs}`);
+          if (r.ok) {
+            const results = await r.json() as { mac: string; accountName: string }[];
+            for (const { mac, accountName } of results) if (accountName) names.set(mac, accountName);
+            setAccountNames(new Map(names));
+          }
+        } catch { /* non-blocking */ }
+      }
+      setLoadingNames(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, isAuthenticated]);
+
+  const enrichedRows = useMemo(() => {
+    const baseRows = rows as Record<string, string>[];
+    if (accountNames.size === 0) return baseRows;
+    const idInfo = findDeviceIdInfo(baseRows);
+    if (!idInfo) return baseRows;
+    return injectAccountNames(baseRows, accountNames, idInfo);
+  }, [rows, accountNames]);
+
+  const enrichedColumns = useMemo(() => {
+    return accountNames.size > 0 ? ['Account Name', ...columns] : columns;
+  }, [columns, accountNames]);
 
   if (isLoading) {
     return (
@@ -123,9 +176,20 @@ export default function RebootReportPage() {
       {rows.length > 0 && (
         <div className="space-y-8">
           <RebootChart rows={rows} />
-          <div>
-            <h2 className="mb-4 text-base font-semibold text-neutral-900">Report Data</h2>
-            <RebootTable rows={rows} columns={columns} />
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold text-neutral-900">Report Data</h2>
+              {loadingNames && (
+                <span className="flex items-center gap-1.5 text-xs text-neutral-400">
+                  <span className="h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-neutral-500" />
+                  Loading account names…
+                </span>
+              )}
+              {!loadingNames && accountNames.size > 0 && (
+                <span className="text-xs text-neutral-400">{accountNames.size} account name{accountNames.size !== 1 ? 's' : ''} resolved</span>
+              )}
+            </div>
+            <RebootTable rows={enrichedRows as RebootRow[]} columns={enrichedColumns} />
           </div>
         </div>
       )}

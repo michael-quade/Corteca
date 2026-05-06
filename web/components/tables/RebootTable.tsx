@@ -109,7 +109,12 @@ export function RebootTable({ rows, columns }: RebootTableProps) {
               displayed.map((row, i) => (
                 <tr key={i} className="bg-white transition-colors hover:bg-neutral-50">
                   {columns.map((col) => (
-                    <td key={col} className="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-600">
+                    <td key={col} className={cn(
+                      "whitespace-nowrap px-4 py-3 text-xs",
+                      col === "Account Name"
+                        ? "font-medium text-neutral-800"
+                        : "font-mono text-neutral-600"
+                    )}>
                       {displayCell(col, row[col])}
                     </td>
                   ))}

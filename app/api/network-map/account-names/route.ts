@@ -4,8 +4,8 @@ import { getNameCache } from '@/web/lib/corteca/nameCache';
 
 function extractName(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
-  const arr = Array.isArray(data) ? data : [];
-  const sub = arr[0];
+  const arr = Array.isArray(data) ? data : (data as Record<string, unknown>).content;
+  const sub = Array.isArray(arr) ? arr[0] : null;
   if (!sub || typeof sub !== 'object') return '';
   const s = sub as Record<string, unknown>;
   if (typeof s.name === 'string' && s.name.trim()) return s.name.trim();
@@ -14,8 +14,9 @@ function extractName(data: unknown): string {
   return [fn, ln].filter(Boolean).join(' ');
 }
 
-// GET /api/network-map/account-names?macs=MAC1,MAC2,...
-// POSTs to Corteca subscriber search with device_id for each MAC.
+// GET /api/network-map/account-names?macs=MAC1,MAC2
+//   or ?ids=ID1,ID2&lookupField=serial_no
+// Returns [{ mac: string; accountName: string }]  (mac = input id, for client keying)
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -23,10 +24,13 @@ export async function GET(req: NextRequest) {
   const baseUrl = process.env.CORTECA_API_BASE_URL;
   if (!baseUrl) return NextResponse.json({ error: 'API not configured' }, { status: 503 });
 
-  const macs = (req.nextUrl.searchParams.get('macs') ?? '')
-    .split(',').map((m) => m.trim()).filter(Boolean);
+  // Accept either ?macs= (legacy) or ?ids= (generic)
+  const rawIds = req.nextUrl.searchParams.get('ids') ?? req.nextUrl.searchParams.get('macs') ?? '';
+  const ids = rawIds.split(',').map((m) => m.trim()).filter(Boolean);
+  if (ids.length === 0) return NextResponse.json([]);
 
-  if (macs.length === 0) return NextResponse.json([]);
+  // Which subscriber search field to use in the POST body (default: device_id for MAC lookup)
+  const lookupField = req.nextUrl.searchParams.get('lookupField') ?? 'device_id';
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -36,8 +40,9 @@ export async function GET(req: NextRequest) {
   const nameCache = getNameCache();
 
   const results = await Promise.all(
-    macs.map(async (mac): Promise<{ mac: string; accountName: string }> => {
-      if (nameCache.has(mac)) return { mac, accountName: nameCache.get(mac)! };
+    ids.map(async (id): Promise<{ mac: string; accountName: string }> => {
+      const cacheKey = `${lookupField}:${id}`;
+      if (nameCache.has(cacheKey)) return { mac: id, accountName: nameCache.get(cacheKey)! };
 
       try {
         const res = await cortecaFetch(
@@ -45,25 +50,25 @@ export async function GET(req: NextRequest) {
           {
             method: 'POST',
             headers: authHeaders,
-            body: JSON.stringify({ device_id: mac }),
+            body: JSON.stringify({ [lookupField]: id }),
           }
         );
 
         if (!res.ok) {
-          console.warn(`[account-names] ${mac} → HTTP ${res.status}`);
-          return { mac, accountName: '' };
+          console.warn(`[account-names] ${lookupField}=${id} → HTTP ${res.status}`);
+          return { mac: id, accountName: '' };
         }
 
         const data = await res.json().catch(() => null);
         const name = extractName(data);
         if (name) {
-          nameCache.set(mac, name);
-          console.log(`[account-names] ${mac} → "${name}"`);
+          nameCache.set(cacheKey, name);
+          console.log(`[account-names] ${lookupField}=${id} → "${name}"`);
         }
-        return { mac, accountName: name };
+        return { mac: id, accountName: name };
       } catch (e) {
-        console.error(`[account-names] ${mac} exception: ${e}`);
-        return { mac, accountName: '' };
+        console.error(`[account-names] ${lookupField}=${id} exception:`, e);
+        return { mac: id, accountName: '' };
       }
     })
   );
