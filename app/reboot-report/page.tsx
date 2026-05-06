@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -34,7 +35,7 @@ export default function RebootReportPage() {
     setFetching(true);
     setError(null);
     try {
-      const res  = await fetch("/api/reboot-report");
+      const res  = await fetchWithAuth("/api/reboot-report");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to fetch report.");
       const list: RebootRow[] = Array.isArray(data) ? data : [];

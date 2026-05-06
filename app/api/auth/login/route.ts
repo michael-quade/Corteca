@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resetApiStats } from '@/web/lib/corteca/apiStats';
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  resetApiStats();
   const { access_token, refresh_token, expires_in } = await cortecaRes.json();
 
   const res = NextResponse.json({ email });

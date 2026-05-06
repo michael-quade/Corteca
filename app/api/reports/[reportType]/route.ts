@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { REPORT_CONFIGS } from '@/web/lib/reportTypes';
+import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 function parseRow(line: string): string[] {
   const result: string[] = [];
@@ -66,7 +67,7 @@ export async function GET(
 
   let listRes: Response;
   try {
-    listRes = await fetch(listUrl, { headers: authHeaders });
+    listRes = await cortecaFetch(listUrl, { headers: authHeaders });
   } catch {
     return NextResponse.json({ error: 'Could not reach the Corteca API.' }, { status: 502 });
   }
@@ -118,7 +119,7 @@ export async function GET(
 
   let dlRes: Response;
   try {
-    dlRes = await fetch(dlUrl, { headers: { ...authHeaders, Accept: 'text/csv' } });
+    dlRes = await cortecaFetch(dlUrl, { headers: { ...authHeaders, Accept: 'text/csv' } });
   } catch {
     return NextResponse.json({ error: 'Could not reach the Corteca API.' }, { status: 502 });
   }

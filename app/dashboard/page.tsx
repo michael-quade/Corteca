@@ -27,11 +27,33 @@ function NetworkVisualizerIcon() {
   );
 }
 
+function NetworkMapIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="6"  cy="8"  r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="15" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function PerformanceReportsIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 3v18h18" />
       <path d="M7 16l4-4 4 4 4-7" />
+    </svg>
+  );
+}
+
+function DataModelIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6h16M4 10h16M4 14h10M4 18h6" />
+      <circle cx="19" cy="16" r="3" />
+      <path d="m21.5 18.5-1.5-1.5" />
     </svg>
   );
 }
@@ -54,6 +76,18 @@ const FEATURES = [
     description: "Graphically view the access points and topology of a subscriber's home WiFi mesh network.",
     icon: <NetworkVisualizerIcon />,
     href: "/network-visualizer",
+  },
+  {
+    title: "Network Map",
+    description: "Global map of every managed WiFi network — online and offline — plotted by geographic location.",
+    icon: <NetworkMapIcon />,
+    href: "/network-map",
+  },
+  {
+    title: "Device Data Model Browser",
+    description: "Explore and configure the complete USP TR-369 data model for any managed device.",
+    icon: <DataModelIcon />,
+    href: "/device-browser",
   },
 ];
 

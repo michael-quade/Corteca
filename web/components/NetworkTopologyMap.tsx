@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { buildTree, buildPositions, buildLinkMediumMap, collectEdges, flatNodes, buildBoundingBox, CANVAS_W, LEVEL_H, PAD_TOP } from "@/web/lib/networkTopology";
+import { buildTree, buildPositions, buildLinkDataMap, linkTip, collectEdges, flatNodes, buildBoundingBox, CANVAS_W, LEVEL_H, PAD_TOP } from "@/web/lib/networkTopology";
 import { filterConnectedDevices, computeDevicePositions, deviceColor, type DeviceNode } from "@/web/lib/networkMembers";
 
 export interface NetworkTopologyData {
   networks: unknown; topology: unknown; mesh: unknown;
-  configs?: Record<string, unknown>; members?: unknown; rootDeviceId: string;
+  configs?: Record<string, unknown>; members?: unknown; summary?: unknown; rootDeviceId: string;
 }
 
 interface Tooltip { label: string; sub: string; px: number; py: number }
@@ -45,15 +45,15 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
   const [tooltip, setTooltip] = useState<Tooltip|null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const { tree, apPos, devPos, devices, edges, medMap } = useMemo(() => {
+  const { tree, apPos, devPos, devices, edges, linkMap } = useMemo(() => {
     const tree    = buildTree(data.topology, data.networks, data.mesh, data.configs??{}, data.rootDeviceId);
     const apPos   = new Map<string,{x:number;y:number}>();
     buildPositions(tree, 0, 70, CANVAS_W-70, apPos);
     const devices = filterConnectedDevices(data.members);
     const devPos  = computeDevicePositions(devices, apPos, tree);
     const edges   = collectEdges(tree);
-    const medMap  = buildLinkMediumMap(data.mesh);
-    return { tree, apPos, devPos, devices, edges, medMap };
+    const linkMap = buildLinkDataMap(data.mesh);
+    return { tree, apPos, devPos, devices, edges, linkMap };
   }, [data]);
 
   // Fit view after layout computed
@@ -126,7 +126,7 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-xs text-neutral-600">
         <div className="flex flex-wrap items-center gap-4">
-          {[["#3b82f6",undefined,"Ethernet"],["#f97316","8,4","WiFi"]].map(([c,d,l])=>(
+          {[["#3b82f6",undefined,"Ethernet"],["#f97316","8,4","Mesh WiFi"],["#9ca3af",undefined,"Wired client"],["#9ca3af","5,3","WiFi client"]].map(([c,d,l])=>(
             <span key={l as string} className="flex items-center gap-1.5">
               <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke={c as string} strokeWidth="2" strokeDasharray={d as string} strokeLinecap="round"/></svg>{l}
             </span>
@@ -149,15 +149,14 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
             {/* AP–AP bezier edges */}
             {edges.map(({from,to})=>{
               const p=apPos.get(from),c=apPos.get(to); if(!p||!c) return null;
-              const med=medMap.get(`${from}:${to}`)??medMap.get(`${to}:${from}`)??'';
-              const eth=med.includes('eth'); const mid=(p.y+c.y)/2;
-              return <path key={`a:${from}:${to}`} d={`M${p.x} ${p.y+22} C${p.x} ${mid},${c.x} ${mid},${c.x} ${c.y-42}`} fill="none" stroke={eth?"#3b82f6":"#f97316"} strokeWidth="2.5" strokeDasharray={eth?undefined:"8,4"} strokeLinecap="round"/>;
+              const ld=linkMap.get(`${from}:${to}`)??linkMap.get(`${to}:${from}`); const eth=(ld?.medium??'').includes('eth'); const mid=(p.y+c.y)/2; const [tl,ts]=linkTip(ld);
+              return <path key={`a:${from}:${to}`} d={`M${p.x} ${p.y+22} C${p.x} ${mid},${c.x} ${mid},${c.x} ${c.y-42}`} fill="none" stroke={eth?"#3b82f6":"#f97316"} strokeWidth="2.5" strokeDasharray={eth?undefined:"8,4"} strokeLinecap="round" onMouseEnter={()=>showTip(tl,ts,(p.x+c.x)/2,mid)} onMouseLeave={()=>setTooltip(null)}/>;
             })}
             {/* Device edges (offset to node boundaries) */}
             {showDevices && devices.map((d)=>{
               const ap=apPos.get(d.apId),dp=devPos.get(d.id); if(!ap||!dp) return null;
               const {x1,y1,x2,y2}=edgePts(ap.x,ap.y,dp.x,dp.y,AP_R,DEV_R);
-              return <line key={`d:${d.id}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#d1d5db" strokeWidth="1"/>;
+              return <line key={`d:${d.id}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#d1d5db" strokeWidth="1" strokeDasharray={d.wired?undefined:"5,3"}/>;
             })}
             {/* AP nodes */}
             {apNodes.map((node)=>{
@@ -176,7 +175,7 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
               const pos=devPos.get(d.id); if(!pos) return null;
               return (
                 <g key={d.id} transform={`translate(${pos.x},${pos.y})`} style={{cursor:"default"}}
-                  onMouseEnter={()=>showTip(d.label,`${d.type}${d.ipv4?` · ${d.ipv4}`:""}`,pos.x,pos.y)}
+                  onMouseEnter={()=>showTip(d.label,`${d.wired?"Wired":"WiFi"} · ${d.type}${d.ipv4?` · ${d.ipv4}`:""}`,pos.x,pos.y)}
                   onMouseLeave={()=>setTooltip(null)}>
                   <circle r={DEV_R} fill={deviceColor(d.type)} stroke="white" strokeWidth="1.5"/>
                   {showDeviceLabels && <text y={DEV_R+12} textAnchor="middle" fontSize="9" fill="#374151" style={{paintOrder:"stroke",stroke:"white",strokeWidth:2.5}}>{d.label}</text>}

@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/web/components/ui/Button";
 import { cn } from "@/web/lib/utils";
@@ -25,7 +26,7 @@ export function SubscriberSearch({ onSelect, selectedId }: SubscriberSearchProps
     setSearched(false);
 
     try {
-      const res = await fetch(`/api/subscribers?name=${encodeURIComponent(query.trim())}`);
+      const res = await fetchWithAuth(`/api/subscribers?name=${encodeURIComponent(query.trim())}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Search failed.");
       const list: Subscriber[] = Array.isArray(data) ? data : (data.content ?? []);
@@ -77,9 +78,9 @@ export function SubscriberSearch({ onSelect, selectedId }: SubscriberSearchProps
             const online = sub.home_wifis?.[0]?.status?.online;
             const id = sub.customer_id ?? sub.uuid;
             const displayName =
-              sub.name ??
+              sub.name ||
               `${sub.first_name ?? ""} ${sub.last_name ?? ""}`.trim() ||
-              sub.email ??
+              sub.email ||
               id;
             const isSelected = selectedId === sub.customer_id || selectedId === sub.uuid;
 

@@ -173,35 +173,73 @@ export function buildPositions(
   }
 }
 
-// ── Mesh link medium extraction ───────────────────────────────────────────────
+// ── Mesh link data extraction ─────────────────────────────────────────────────
 
-// links[].endpoints[0/1] have serial IDs → resolve to normalised MACs
-export function buildLinkMediumMap(mesh: unknown): Map<string, string> {
-  const map = new Map<string, string>();
+export interface LinkData {
+  medium: string;      // "eth" | "wifi" | ""
+  band?: string;       // "2.4GHz" | "5GHz" | "6GHz"
+  channel?: number;
+  rssi?: number;       // dBm (negative)
+  snr?: number;        // dB
+  rxRate?: number;     // Mbps downlink
+  txRate?: number;     // Mbps uplink
+  linkSpeed?: number;  // Mbps, wired only
+}
+
+function num(l: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const k of keys) { const v = l[k]; if (v !== undefined && v !== null) return Number(v); }
+  return undefined;
+}
+
+export function buildLinkDataMap(mesh: unknown): Map<string, LinkData> {
+  const map = new Map<string, LinkData>();
   if (!mesh || typeof mesh !== 'object') return map;
   const { bySerial } = buildMeshApMaps(mesh);
-  const m = mesh as Record<string, unknown>;
+  const links = Array.isArray((mesh as Record<string,unknown>).links)
+    ? ((mesh as Record<string,unknown>).links as unknown[]) : [];
 
-  const links = Array.isArray(m.links) ? (m.links as unknown[]) : [];
   for (const link of links) {
     if (typeof link !== 'object' || !link) continue;
     const l = link as Record<string, unknown>;
-    const medium    = String(l.medium ?? '').toLowerCase();
-    const endpoints = Array.isArray(l.endpoints) ? (l.endpoints as unknown[]) : [];
-    if (endpoints.length < 2) continue;
-
-    const macs = endpoints.map((ep) => {
-      if (typeof ep !== 'object' || !ep) return '';
+    const medium = String(l.medium ?? '').toLowerCase();
+    const eps = Array.isArray(l.endpoints) ? (l.endpoints as unknown[]) : [];
+    if (eps.length < 2) continue;
+    const macs = eps.map((ep) => {
       const e = ep as Record<string, unknown>;
       return bySerial.get(String(e.id ?? ''))?.mac ?? normalizeMac(String(e.macaddress ?? ''));
     }).filter(Boolean);
-
-    if (macs.length >= 2) {
-      map.set(`${macs[0]}:${macs[1]}`, medium);
-      map.set(`${macs[1]}:${macs[0]}`, medium);
-    }
+    if (macs.length < 2) continue;
+    const data: LinkData = {
+      medium,
+      band:      l.band ? String(l.band) : (l.radioband ? String(l.radioband) : undefined),
+      channel:   num(l, 'channel', 'operating_channel'),
+      rssi:      num(l, 'rssi', 'signal', 'signal_strength', 'rss'),
+      snr:       num(l, 'snr'),
+      rxRate:    num(l, 'rx_rate', 'rxrate', 'rxRate', 'data_rate', 'datarate'),
+      txRate:    num(l, 'tx_rate', 'txrate', 'txRate'),
+      linkSpeed: num(l, 'speed', 'rate', 'bandwidth', 'link_speed'),
+    };
+    map.set(`${macs[0]}:${macs[1]}`, data);
+    map.set(`${macs[1]}:${macs[0]}`, data);
   }
   return map;
+}
+
+export function linkTip(ld: LinkData | undefined): [string, string] {
+  const isEth = (ld?.medium ?? '').includes('eth');
+  if (isEth) {
+    const s = ld?.linkSpeed;
+    return ['Ethernet Backhaul', s ? (s >= 1000 ? `${s / 1000} Gbps` : `${s} Mbps`) : 'Wired link'];
+  }
+  const parts = [
+    ld?.band,
+    ld?.channel != null ? `Ch ${ld.channel}` : null,
+    ld?.rssi    != null ? `RSSI ${ld.rssi} dBm` : null,
+    ld?.snr     != null ? `SNR ${ld.snr} dB` : null,
+    (ld?.rxRate ?? 0) > 0 ? `↓${ld!.rxRate} Mbps` : null,
+    (ld?.txRate ?? 0) > 0 ? `↑${ld!.txRate} Mbps` : null,
+  ].filter(Boolean);
+  return ['WiFi Backhaul', parts.join(' · ') || 'WiFi link'];
 }
 
 // ── Tree traversal helpers ────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('corteca_token')?.value;
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   let cortecaRes: Response;
   try {
-    cortecaRes = await fetch(url, {
+    cortecaRes = await cortecaFetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',

@@ -7,7 +7,7 @@ export interface DeviceNode {
   label: string;
   apId: string;
   type: string;
-  ipv4?: string;
+  ipv4?: string; wired: boolean;
 }
 
 // ── Member filtering ──────────────────────────────────────────────────────────
@@ -32,8 +32,9 @@ export function filterConnectedDevices(raw: unknown): DeviceNode[] {
         id:    String(n.id ?? n.mac ?? ""),
         label: (alias || hostname || "Device").slice(0, 18),
         apId:  String(n.device_id ?? ""),
-        type:  String(n.type ?? "OTHER"),
+        type:  String(n.device_category ?? n.category ?? n.device_type ?? "OTHER"),
         ipv4:  n.ipv4 ? String(n.ipv4) : undefined,
+        wired: String(n.type ?? "").toLowerCase() === "ethernet" || n.wireless === false || n.wireless === "false" || String(n.connection_type ?? "").toLowerCase() === "ethernet" || String(n.layer1_interface ?? "").toLowerCase().includes("ethernet"),
       };
     })
     .filter((d) => d.id);

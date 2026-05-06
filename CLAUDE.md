@@ -11,7 +11,7 @@
 
 
 ## Component Architecture & Decomposition
-- **Modularization Rule:** DO NOT create single component files exceeding 200 lines.
+- **Modularization Rule:** DO NOT create single component files exceeding 300 lines.
 - **Mandatory Extraction:** If a component contains a Modal, Table, or Form, that sub-component MUST be extracted into its own file.
 - **No Inline Modals:** Never define modal content within a page or parent component file.
 - **No Alerts:** When making a simple confirmation or notification alert, make it into a modal using a standard confirm modal window.  

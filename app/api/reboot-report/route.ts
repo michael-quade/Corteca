@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 // ─── CSV parser ───────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
 
   let listRes: Response;
   try {
-    listRes = await fetch(listUrl, { headers: authHeaders });
+    listRes = await cortecaFetch(listUrl, { headers: authHeaders });
   } catch {
     return NextResponse.json({ error: 'Could not reach the Corteca API.' }, { status: 502 });
   }
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
 
   let dlRes: Response;
   try {
-    dlRes = await fetch(downloadUrl, {
+    dlRes = await cortecaFetch(downloadUrl, {
       headers: { ...authHeaders, Accept: 'text/csv' },
     });
   } catch {

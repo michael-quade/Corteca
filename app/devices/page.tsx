@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
@@ -28,7 +29,7 @@ export default function DevicesPage() {
 
     setLoadingMembers(true);
     try {
-      const res = await fetch(`/api/networks/${networkId}/members`);
+      const res = await fetchWithAuth(`/api/networks/${networkId}/members`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to fetch devices.");
       const list: Member[] = Array.isArray(data)

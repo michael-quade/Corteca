@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 export async function GET(
   req: NextRequest,
@@ -21,7 +22,7 @@ export async function GET(
 
   let cortecaRes: Response;
   try {
-    cortecaRes = await fetch(url, {
+    cortecaRes = await cortecaFetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',

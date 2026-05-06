@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
@@ -48,7 +49,7 @@ export default function ReportPage() {
     setFetching(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${reportType}`);
+      const res = await fetchWithAuth(`/api/reports/${reportType}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setData(json);

@@ -1,12 +1,27 @@
 "use client";
 
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
+import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
 import { cn } from "@/web/lib/utils";
 import type { Subscriber } from "@/web/lib/corteca/types";
+
+const NetworkMap = dynamic(
+  () => import("@/web/components/NetworkMap").then((m) => ({ default: m.NetworkMap })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[480px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50">
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+      </div>
+    ),
+  }
+);
 
 function BackNav() {
   return (
@@ -36,7 +51,7 @@ function DebugPanel({ data }: { data: NetworkTopologyData }) {
       </button>
       {open && (
         <div className="grid gap-3 border-t border-amber-200 p-4 sm:grid-cols-3">
-          {(["networks", "topology", "mesh"] as const).map((key) => (
+          {(["networks", "topology", "mesh", "members"] as const).map((key) => (
             <div key={key}>
               <p className="mb-1 font-mono text-xs font-bold text-amber-700 uppercase">{key}</p>
               <pre className="max-h-64 overflow-auto rounded bg-white p-2 text-xs text-neutral-700 ring-1 ring-amber-200">
@@ -50,17 +65,21 @@ function DebugPanel({ data }: { data: NetworkTopologyData }) {
   );
 }
 
+interface ApEthData { ports: EthernetPort[]; error?: string; label: string; serial: string; mac: string }
+
 export default function NetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  const [selected, setSelected] = useState<Subscriber | null>(null);
-  const [topoData, setTopoData] = useState<NetworkTopologyData | null>(null);
-  const [fetching, setFetching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected]     = useState<Subscriber | null>(null);
+  const [topoData, setTopoData]     = useState<NetworkTopologyData | null>(null);
+  const [apEthData, setApEthData]   = useState<Record<string, ApEthData> | null>(null);
+  const [fetching, setFetching]     = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     setSelected(subscriber);
     setTopoData(null);
+    setApEthData(null);
     setError(null);
 
     const deviceId = subscriber.home_wifis?.[0]?.id;
@@ -68,10 +87,23 @@ export default function NetworkVisualizerPage() {
 
     setFetching(true);
     try {
-      const res = await fetch(`/api/network/${deviceId}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const topoRes = await fetchWithAuth(`/api/network/${deviceId}`);
+      const json = await topoRes.json();
+      if (!topoRes.ok) throw new Error(json.error ?? `HTTP ${topoRes.status}`);
       setTopoData(json as NetworkTopologyData);
+      const allIds = Object.keys(json.configs ?? { [deviceId]: null });
+      allIds.sort((a) => (a === deviceId ? -1 : 1));
+      const ethResults = await Promise.all(allIds.map(async (id) => {
+        const cfg = ((json.configs?.[id] as Record<string,unknown>)?.params ?? json.configs?.[id]) as Record<string,string>|undefined;
+        const oui = cfg?.['Device.DeviceInfo.ManufacturerOUI'] ?? '', sn = cfg?.['Device.DeviceInfo.SerialNumber'] ?? '';
+        const model = String(cfg?.['Device.DeviceInfo.ModelName'] ?? '').replace(/^nokia\s+wifi\s+/i,'').replace(/^nokia\s+/i,'').trim();
+        const eid = oui && sn ? `?endpointId=${encodeURIComponent(`os::${oui}-${sn}`)}` : '';
+        const r = await fetchWithAuth(`/api/network/${id}/ethernet${eid}`);
+        const body = await r.json().catch(() => null);
+        const label = `${id === deviceId ? 'Gateway' : 'Mesh AP'}${model ? ` — ${model}` : ''}`;
+        return [id, r.ok ? { ports: body?.ports ?? [], label, serial: sn, mac: id } : { ports: [], error: body?.error ?? `HTTP ${r.status}`, label, serial: sn, mac: id }] as [string, ApEthData];
+      }));
+      setApEthData(Object.fromEntries(ethResults));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -94,13 +126,13 @@ export default function NetworkVisualizerPage() {
     : null;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto max-w-7xl px-6 py-10">
       <BackNav />
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-neutral-900">Home Network Visualizer</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Search for a subscriber to visualize their home network topology.
+          Search for a subscriber to visualize their home network topology and location.
         </p>
       </div>
 
@@ -139,7 +171,27 @@ export default function NetworkVisualizerPage() {
 
       {topoData && !fetching && (
         <div className="space-y-6">
-          <NetworkTopologyMap data={topoData} />
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-neutral-700">Network Topology</h2>
+              <NetworkTopologyMap data={topoData} />
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-neutral-700">Network Location</h2>
+              <NetworkMap data={topoData} />
+            </div>
+          </div>
+          {apEthData && Object.entries(apEthData).map(([, { ports, error: ethErr, label, serial, mac }]) => (
+            <div key={mac} className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-700">{label} — Ethernet Ports</h2>
+                <p className="font-mono text-xs text-neutral-400">{serial ? `S/N: ${serial} · ` : ''}MAC: {mac}</p>
+              </div>
+              {ethErr && <p className="text-sm text-red-600">{ethErr}</p>}
+              {!ethErr && ports.length === 0 && <p className="text-sm text-neutral-400">No Ethernet data returned.</p>}
+              {ports.length > 0 && <EthernetPortPanel ports={ports} />}
+            </div>
+          ))}
           <DebugPanel data={topoData} />
         </div>
       )}
