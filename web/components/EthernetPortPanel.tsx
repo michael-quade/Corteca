@@ -55,6 +55,12 @@ function StatusCell({ port }: { port: EthernetPort }) {
       Wired
     </span>
   );
+  if (port.status === "Unknown") return (
+    <span className="flex items-center gap-1.5 text-neutral-400 text-xs">
+      <span className="inline-block w-3.5 text-center text-neutral-300">—</span>
+      Unknown
+    </span>
+  );
   return (
     <span className="flex items-center gap-1.5 text-neutral-400 text-xs">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10h16M4 14h16"/><rect x="1" y="7" width="5" height="10" rx="1"/><rect x="18" y="7" width="5" height="10" rx="1"/><line x1="3" y1="3" x2="21" y2="21" strokeWidth="1.5" stroke="#f87171"/></svg>

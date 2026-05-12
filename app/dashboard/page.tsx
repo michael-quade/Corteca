@@ -58,6 +58,22 @@ function DataModelIcon() {
   );
 }
 
+function SwOverviewIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="4" height="4" rx="0.5" />
+      <rect x="10" y="3" width="4" height="4" rx="0.5" />
+      <rect x="17" y="3" width="4" height="4" rx="0.5" />
+      <rect x="3" y="10" width="4" height="4" rx="0.5" fill="currentColor" stroke="none" />
+      <rect x="10" y="10" width="4" height="4" rx="0.5" />
+      <rect x="17" y="10" width="4" height="4" rx="0.5" fill="currentColor" stroke="none" />
+      <rect x="3" y="17" width="4" height="4" rx="0.5" />
+      <rect x="10" y="17" width="4" height="4" rx="0.5" fill="currentColor" stroke="none" />
+      <rect x="17" y="17" width="4" height="4" rx="0.5" />
+    </svg>
+  );
+}
+
 const FEATURES = [
   {
     title: "Device Search",
@@ -88,6 +104,12 @@ const FEATURES = [
     description: "Explore and configure the complete USP TR-369 data model for any managed device.",
     icon: <DataModelIcon />,
     href: "/device-browser",
+  },
+  {
+    title: "Beacon SW Overview",
+    description: "Visual matrix of active Beacon software releases across the fleet — online/offline breakdown by model.",
+    icon: <SwOverviewIcon />,
+    href: "/sw-overview",
   },
 ];
 

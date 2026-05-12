@@ -65,7 +65,46 @@ function DebugPanel({ data }: { data: NetworkTopologyData }) {
   );
 }
 
-interface ApEthData { ports: EthernetPort[]; error?: string; label: string; serial: string; mac: string }
+interface ApEthData { ports: EthernetPort[]; error?: string; notice?: string; label: string; serial: string; mac: string }
+
+function parseEthernetFromConfig(params: Record<string, string> | undefined): EthernetPort[] {
+  if (!params) return [];
+  const grouped: Record<string, Record<string, string>> = {};
+  for (const [key, val] of Object.entries(params)) {
+    const m = key.match(/^Device\.Ethernet\.Interface\.(\d+)\.(.*)/);
+    if (m) {
+      if (!grouped[m[1]]) grouped[m[1]] = {};
+      grouped[m[1]][m[2]] = val;
+    }
+  }
+  if (Object.keys(grouped).length === 0) return [];
+  return Object.entries(grouped)
+    .map(([idx, p]) => ({
+      index: parseInt(idx, 10),
+      name: p.Name ?? `eth${parseInt(idx, 10) - 1}`,
+      upstream: p.Upstream === 'true',
+      enable: p.Enable !== 'false',
+      status: (p.Status ?? 'Unknown') as EthernetPort['status'],
+      maxBitRate: parseInt(p.MaxBitRate ?? '-1', 10),
+      currentBitRate: parseInt(p.CurrentBitRate ?? '0', 10),
+      duplexMode: p.DuplexMode ?? '',
+      macAddress: p.MACAddress ?? '',
+      connectedHost: null,
+    }))
+    .sort((a, b) => (a.upstream !== b.upstream ? (a.upstream ? -1 : 1) : a.index - b.index));
+}
+
+function getModelFallbackPorts(model: string): EthernetPort[] {
+  if (model.toLowerCase().includes('beacon')) {
+    return [
+      { index: 1, name: 'eth0', upstream: true,  enable: true, status: 'Unknown', maxBitRate: 10000, currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
+      { index: 2, name: 'eth1', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
+      { index: 3, name: 'eth2', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
+      { index: 4, name: 'eth3', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
+    ];
+  }
+  return [];
+}
 
 export default function NetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -101,7 +140,24 @@ export default function NetworkVisualizerPage() {
         const r = await fetchWithAuth(`/api/network/${id}/ethernet${eid}`);
         const body = await r.json().catch(() => null);
         const label = `${id === deviceId ? 'Gateway' : 'Mesh AP'}${model ? ` — ${model}` : ''}`;
-        return [id, r.ok ? { ports: body?.ports ?? [], label, serial: sn, mac: id } : { ports: [], error: body?.error ?? `HTTP ${r.status}`, label, serial: sn, mac: id }] as [string, ApEthData];
+        const livePorts: EthernetPort[] = r.ok ? (body?.ports ?? []) : [];
+        let ports = livePorts;
+        let notice: string | undefined;
+        if (ports.length === 0) {
+          const cfgPorts = parseEthernetFromConfig(cfg);
+          if (cfgPorts.length > 0) {
+            ports = cfgPorts;
+            notice = 'Port capabilities from device config — live status unavailable';
+          } else {
+            const specPorts = getModelFallbackPorts(model);
+            if (specPorts.length > 0) {
+              ports = specPorts;
+              notice = `Port layout from ${model} model spec — live status unavailable`;
+            }
+          }
+        }
+        const ethErr = livePorts.length === 0 && !r.ok && ports.length === 0 ? (body?.error ?? `HTTP ${r.status}`) : undefined;
+        return [id, { ports, error: ethErr, notice, label, serial: sn, mac: id }] as [string, ApEthData];
       }));
       setApEthData(Object.fromEntries(ethResults));
     } catch (e) {
@@ -181,17 +237,44 @@ export default function NetworkVisualizerPage() {
               <NetworkMap data={topoData} />
             </div>
           </div>
-          {apEthData && Object.entries(apEthData).map(([, { ports, error: ethErr, label, serial, mac }]) => (
-            <div key={mac} className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold text-neutral-700">{label} — Ethernet Ports</h2>
-                <p className="font-mono text-xs text-neutral-400">{serial ? `S/N: ${serial} · ` : ''}MAC: {mac}</p>
+          {apEthData && Object.entries(apEthData).map(([, entry]) => {
+            const { error: ethErr, label, serial, mac } = entry;
+            let ports = entry.ports;
+            let notice = entry.notice;
+
+            // Render-time fallback: if no live ports and no error, derive from topoData.configs
+            if (ports.length === 0 && !ethErr) {
+              const rawConfigs = (topoData?.configs ?? {}) as Record<string, unknown>;
+              const configEntry = rawConfigs[mac];
+              const cfgParams = ((configEntry as Record<string, unknown>)?.params ?? configEntry) as Record<string, string> | undefined;
+              const cfgPorts = parseEthernetFromConfig(cfgParams);
+              if (cfgPorts.length > 0) {
+                ports = cfgPorts;
+                notice = 'Port capabilities from device config — live status unavailable';
+              } else {
+                const rawModel = String(cfgParams?.['Device.DeviceInfo.ModelName'] ?? '');
+                const model = rawModel.replace(/^nokia\s+wifi\s+/i, '').replace(/^nokia\s+/i, '').trim();
+                const specPorts = getModelFallbackPorts(model);
+                if (specPorts.length > 0) {
+                  ports = specPorts;
+                  notice = `Port layout from ${model || 'device'} spec — live status unavailable`;
+                }
+              }
+            }
+
+            return (
+              <div key={mac} className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-neutral-700">{label} — Ethernet Ports</h2>
+                  <p className="font-mono text-xs text-neutral-400">{serial ? `S/N: ${serial} · ` : ''}MAC: {mac}</p>
+                </div>
+                {ethErr && <p className="text-sm text-red-600">{ethErr}</p>}
+                {notice && <p className="text-xs text-neutral-400 italic">{notice}</p>}
+                {!ethErr && ports.length === 0 && <p className="text-sm text-neutral-400">No Ethernet data returned.</p>}
+                {ports.length > 0 && <EthernetPortPanel ports={ports} />}
               </div>
-              {ethErr && <p className="text-sm text-red-600">{ethErr}</p>}
-              {!ethErr && ports.length === 0 && <p className="text-sm text-neutral-400">No Ethernet data returned.</p>}
-              {ports.length > 0 && <EthernetPortPanel ports={ports} />}
-            </div>
-          ))}
+            );
+          })}
           <DebugPanel data={topoData} />
         </div>
       )}
