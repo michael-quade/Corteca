@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/web/lib/utils";
 
 interface Stats { total: number; online: number; offline: number }
 
@@ -11,15 +10,12 @@ interface Props {
   stats: Stats | null;
   located: number;
   progress: number;
-  reportAge: string | null;
+  reportCachedAt: number | null;
+  geoCount: number | null;
   rateLimited: boolean;
   error: string | null;
-  showOnline: boolean;
-  showOffline: boolean;
   onNewReport: () => void;
   onRefreshLocations: () => void;
-  onToggleOnline: () => void;
-  onToggleOffline: () => void;
   onRetry: () => void;
 }
 
@@ -35,9 +31,8 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
 const isBusy = (p: MapPhase) => p === "report" || p === "locating";
 
 export function NetworkMapControls({
-  phase, stats, located, progress, reportAge, rateLimited, error,
-  showOnline, showOffline,
-  onNewReport, onRefreshLocations, onToggleOnline, onToggleOffline, onRetry,
+  phase, stats, located, progress, reportCachedAt, geoCount, rateLimited, error,
+  onNewReport, onRefreshLocations, onRetry,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -46,9 +41,13 @@ export function NetworkMapControls({
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Network Map</h1>
           <p className="mt-1 text-sm text-neutral-500">All managed WiFi networks plotted by location.</p>
+          {reportCachedAt && (
+            <p className="mt-1 text-sm text-neutral-600">
+              Report as of: <span className="font-medium">{new Date(reportCachedAt).toLocaleString()}</span>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {reportAge && <span className="text-xs text-neutral-400">Report from {reportAge}</span>}
           <button
             type="button" onClick={onNewReport} disabled={isBusy(phase)}
             className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
@@ -68,11 +67,18 @@ export function NetworkMapControls({
 
       {/* Stat cards */}
       {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total Networks"  value={stats.total}   color="text-neutral-900" />
-          <StatCard label="Online"          value={stats.online}  color="text-green-600" />
-          <StatCard label="Offline"         value={stats.offline} color="text-red-500" />
-          <StatCard label="Located on Map"  value={located}       color="text-blue-600" />
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Total Networks"  value={stats.total}   color="text-neutral-900" />
+            <StatCard label="Online"          value={stats.online}  color="text-green-600" />
+            <StatCard label="Offline"         value={stats.offline} color="text-red-500" />
+            <StatCard label="Located on Map"  value={located}       color="text-blue-600" />
+          </div>
+          {geoCount !== null && (
+            <p className="text-xs text-neutral-400">
+              Map shows active networks with a valid Customer ID ({geoCount} of {stats.online} online networks eligible).
+            </p>
+          )}
         </div>
       )}
 
@@ -99,28 +105,6 @@ export function NetworkMapControls({
         </div>
       )}
 
-      {/* Online / offline toggles */}
-      {(phase === "locating" || phase === "done") && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-neutral-500">Show:</span>
-          <button
-            type="button" onClick={onToggleOnline}
-            className={cn("flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-all",
-              showOnline ? "border-green-300 bg-green-50 text-green-700" : "border-neutral-200 bg-white text-neutral-400 line-through")}
-          >
-            <span className={cn("h-2.5 w-2.5 rounded-full", showOnline ? "bg-green-500" : "bg-neutral-300")} />
-            Online{stats ? ` (${stats.online})` : ""}
-          </button>
-          <button
-            type="button" onClick={onToggleOffline}
-            className={cn("flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-all",
-              showOffline ? "border-red-300 bg-red-50 text-red-600" : "border-neutral-200 bg-white text-neutral-400 line-through")}
-          >
-            <span className={cn("h-2.5 w-2.5 rounded-full", showOffline ? "bg-red-500" : "bg-neutral-300")} />
-            Offline{stats ? ` (${stats.offline})` : ""}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

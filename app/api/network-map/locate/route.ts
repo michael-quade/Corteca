@@ -156,7 +156,13 @@ export async function GET(req: NextRequest) {
         setCache(mac, { ...coords, country, accountName });
         return { mac, lat: coords.lat, lng: coords.lng, country, accountName };
       } catch (e) {
-        console.error(`[locate] ${mac} → exception: ${e}`);
+        const isTimeout = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError' || (e as NodeJS.ErrnoException).code === 'UND_ERR_CONNECT_TIMEOUT');
+        if (isTimeout) {
+          console.warn(`[locate] ${mac} → connect timeout, skipping (not cached)`);
+        } else {
+          console.error(`[locate] ${mac} → exception: ${e}`);
+        }
+        // Do not cache timeouts — they are transient; leave key absent so retries work
         return null;
       }
     })

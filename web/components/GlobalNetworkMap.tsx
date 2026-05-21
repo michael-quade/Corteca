@@ -6,11 +6,15 @@ import type { NetworkDeviceInfo } from "@/app/api/network-map/device-info/[mac]/
 
 type L = typeof import("leaflet");
 
+const CONSOLE_BASE = process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? 'https://console.demo2.homewifi.nokia.com';
+
+function consoleUrl(mac: string): string {
+  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${mac.toUpperCase().replace(/:/g, '-')}`;
+}
+
 interface Props {
   devices: DeviceMarker[];
   progress: number;
-  showOnline: boolean;
-  showOffline: boolean;
   flyToTarget?: { lat: number; lng: number } | null;
   resetViewTrigger?: number;
   onPopupClose?: () => void;
@@ -34,6 +38,7 @@ function basePopupHtml(d: DeviceMarker, detail: string): string {
   const model  = d.model + (d.firmware ? ' · ' + d.firmware : '');
   const dot    = d.online ? '#22c55e' : '#ef4444';
   const status = d.online ? 'Online' : 'Offline';
+  const url    = esc(consoleUrl(d.mac));
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-width:200px;font-size:12px;line-height:1.6">
     <p style="margin:0 0 1px;font-weight:700;font-size:13px">${esc(name)}</p>
     ${sub   ? `<p style="margin:0 0 3px;color:#888;font-size:11px">${esc(sub)}</p>` : ''}
@@ -45,6 +50,13 @@ function basePopupHtml(d: DeviceMarker, detail: string): string {
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot}"></span>
       ${status}
     </p>
+    <a href="${url}" target="_blank" rel="noopener noreferrer"
+       style="display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:4px 10px;background:#3b82f6;color:#fff;font-size:11px;font-weight:600;border-radius:5px;text-decoration:none;white-space:nowrap">
+      Launch Corteca
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/><path d="M8 1h3v3M11 1 6 6"/>
+      </svg>
+    </a>
   </div>`;
 }
 
@@ -68,7 +80,7 @@ function richDetail(info: NetworkDeviceInfo): string {
   </table>`;
 }
 
-export function GlobalNetworkMap({ devices, progress, showOnline, showOffline, flyToTarget, resetViewTrigger, onPopupClose }: Props) {
+export function GlobalNetworkMap({ devices, progress, flyToTarget, resetViewTrigger, onPopupClose }: Props) {
   const mountRef        = useRef<HTMLDivElement>(null);
   const mapRef          = useRef<ReturnType<L["map"]> | null>(null);
   const LRef            = useRef<L | null>(null);
@@ -125,14 +137,6 @@ export function GlobalNetworkMap({ devices, progress, showOnline, showOffline, f
     };
   }, []);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const og  = onlineGroupRef.current;
-    const ofg = offlineGroupRef.current;
-    if (!map || !og || !ofg) return;
-    if (showOnline)  og.addTo(map);  else og.remove();
-    if (showOffline) ofg.addTo(map); else ofg.remove();
-  }, [showOnline, showOffline]);
 
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;
@@ -213,7 +217,7 @@ export function GlobalNetworkMap({ devices, progress, showOnline, showOffline, f
   }, [devices]);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-neutral-200" style={{ height: 600 }}>
+    <div className="relative isolate overflow-hidden rounded-xl border border-neutral-200" style={{ height: 600 }}>
       {progress < 100 && (
         <div className="absolute bottom-0 left-0 right-0 z-[1000] h-1 bg-neutral-100">
           <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }} />

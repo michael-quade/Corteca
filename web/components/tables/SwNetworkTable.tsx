@@ -24,6 +24,14 @@ interface SwNetworkTableProps {
   accountNames: Map<string, string>;
 }
 
+const CONSOLE_BASE = process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL
+  ?? 'https://console.demo2.homewifi.nokia.com';
+
+function consoleUrl(mac: string): string {
+  const dashMac = mac.toUpperCase().replace(/:/g, '-');
+  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${dashMac}`;
+}
+
 function toStr(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "string") return v;
@@ -121,7 +129,11 @@ export function SwNetworkTable({ entries, accountNames }: SwNetworkTableProps) {
               </tr>
             ) : (
               displayed.map((entry, i) => (
-                <tr key={i} className="bg-white transition-colors hover:bg-neutral-50">
+                <tr
+                  key={i}
+                  onClick={() => window.open(consoleUrl(entry.mac), '_blank', 'noopener,noreferrer')}
+                  className="group cursor-pointer bg-white transition-colors hover:bg-blue-50"
+                >
                   {COLUMNS.map((col) => {
                     const val = getVal(entry, accountNames, col);
                     if (col === "Online") {
@@ -141,15 +153,27 @@ export function SwNetworkTable({ entries, accountNames }: SwNetworkTableProps) {
                         </td>
                       );
                     }
+                    if (col === "Account Name") {
+                      return (
+                        <td key={col} className="whitespace-nowrap px-4 py-3 text-xs font-medium text-neutral-800">
+                          <span className="inline-flex items-center gap-1">
+                            {val || "—"}
+                            <svg
+                              width="10" height="10" viewBox="0 0 12 12" fill="none"
+                              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                              className="opacity-0 transition-opacity group-hover:opacity-40"
+                            >
+                              <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7" />
+                              <path d="M8 1h3v3M11 1 6 6" />
+                            </svg>
+                          </span>
+                        </td>
+                      );
+                    }
                     return (
                       <td
                         key={col}
-                        className={cn(
-                          "whitespace-nowrap px-4 py-3 text-xs",
-                          col === "Account Name"
-                            ? "font-medium text-neutral-800"
-                            : "font-mono text-neutral-600",
-                        )}
+                        className="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-600"
                       >
                         {val || "—"}
                       </td>

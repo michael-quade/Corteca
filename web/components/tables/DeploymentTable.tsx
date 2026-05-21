@@ -4,6 +4,12 @@ import { useState, useMemo, useCallback } from "react";
 import { cn } from "@/web/lib/utils";
 import { ColumnFilter } from "./ColumnFilter";
 
+const CONSOLE_BASE = process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? 'https://console.demo2.homewifi.nokia.com';
+
+function consoleUrl(mac: string): string {
+  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${mac.toUpperCase().replace(/:/g, '-')}`;
+}
+
 interface Props { rows: Record<string, string>[]; headers: string[]; pinnedFirst?: string[] }
 
 type SortDir = "asc" | "desc";
@@ -139,16 +145,34 @@ export function DeploymentTable({ rows, headers, pinnedFirst = ["Account Name", 
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {visibleRows.map((row, i) => (
-              <tr key={i} className="hover:bg-neutral-50">
-                {orderedHeaders.map((col) => {
-                  const isPin = col === pinnedCol;
-                  return (
-                    <td key={col} className={cn("max-w-[200px] truncate px-3 py-1.5 text-neutral-700", isPin && "sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb] font-medium")} title={row[col]}>{row[col] || "—"}</td>
-                  );
-                })}
-              </tr>
-            ))}
+            {visibleRows.map((row, i) => {
+              const mac = (row["Home WiFi ID"] || row["MAC"] || "").trim();
+              return (
+                <tr
+                  key={i}
+                  onClick={() => mac && window.open(consoleUrl(mac), '_blank', 'noopener,noreferrer')}
+                  className={cn("group transition-colors", mac ? "cursor-pointer hover:bg-blue-50" : "hover:bg-neutral-50")}
+                >
+                  {orderedHeaders.map((col) => {
+                    const isPin = col === pinnedCol;
+                    return (
+                      <td key={col} className={cn("max-w-[200px] truncate px-3 py-1.5 text-neutral-700", isPin && "sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb] font-medium group-hover:bg-blue-50")} title={row[col]}>
+                        {isPin ? (
+                          <span className="inline-flex items-center gap-1">
+                            {row[col] || "—"}
+                            {mac && (
+                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-0 transition-opacity group-hover:opacity-40">
+                                <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/><path d="M8 1h3v3M11 1 6 6"/>
+                              </svg>
+                            )}
+                          </span>
+                        ) : (row[col] || "—")}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

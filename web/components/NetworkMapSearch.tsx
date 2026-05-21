@@ -1,16 +1,12 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import type { CachedMarker, Continent } from "@/web/lib/geoUtils";
-
-const CONTINENTS: Continent[] = [
-  "Africa", "Antarctica", "Asia", "Europe", "North America", "Oceania", "South America",
-];
+import type { CachedMarker } from "@/web/lib/geoUtils";
 
 interface SearchResult {
   mac: string;
-  label: string;       // accountName or customerId
-  subLabel: string;    // customerId when label is accountName
+  label: string;
+  subLabel: string;
   lat: number | null;
   lng: number | null;
 }
@@ -18,21 +14,15 @@ interface SearchResult {
 interface Props {
   rawRows: Record<string, string>[];
   markerCache: Map<string, CachedMarker>;
-  continentFilter: Continent | null;
-  countryFilter: string | null;
   onFlyTo: (lat: number, lng: number) => void;
   onClearFly: () => void;
-  onContinentChange: (c: Continent | null) => void;
-  onCountryChange: (c: string | null) => void;
   onMacSelect: (mac: string | null) => void;
   onResetView: () => void;
 }
 
 export function NetworkMapSearch({
   rawRows, markerCache,
-  continentFilter, countryFilter,
-  onFlyTo, onClearFly, onContinentChange, onCountryChange,
-  onMacSelect, onResetView,
+  onFlyTo, onClearFly, onMacSelect, onResetView,
 }: Props) {
   const [query, setQuery]         = useState("");
   const [open, setOpen]           = useState(false);
@@ -40,31 +30,33 @@ export function NetworkMapSearch({
   const inputRef                  = useRef<HTMLInputElement>(null);
   const dropRef                   = useRef<HTMLDivElement>(null);
 
-  const availableCountries = useMemo(() => {
-    const countries = new Set<string>();
-    for (const m of markerCache.values()) {
-      if (m.country) countries.add(m.country);
-    }
-    return [...countries].sort();
-  }, [markerCache]);
-
   const searchResults = useMemo<SearchResult[]>(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    const seen = new Set<string>();
+    const macToIdx = new Map<string, number>();
     const results: SearchResult[] = [];
 
     for (const row of rawRows) {
       const mac         = (row["Home WiFi ID"] || row["MAC"] || "").trim();
       const custId      = (row["Customer ID"] ?? "").trim();
       const accountName = (row["Account Name"] ?? row["Customer Name"] ?? row["Subscriber Name"] ?? row["Network Name"] ?? row["Name"] ?? "").trim();
-      if (!mac || seen.has(mac)) continue;
+      if (!mac) continue;
+
+      if (macToIdx.has(mac)) {
+        // Back-fill Customer ID if the stored result is missing it
+        const idx = macToIdx.get(mac)!;
+        if (custId && !results[idx].subLabel && results[idx].label) {
+          results[idx] = { ...results[idx], subLabel: custId };
+        }
+        continue;
+      }
+
       const label = accountName || custId;
       if (!label.toLowerCase().includes(q) && !mac.toLowerCase().includes(q)) continue;
-      seen.add(mac);
+      if (results.length >= 20) break;
+      macToIdx.set(mac, results.length);
       const marker = markerCache.get(mac);
       results.push({ mac, label: label || mac, subLabel: accountName ? custId : "", lat: marker?.lat ?? null, lng: marker?.lng ?? null });
-      if (results.length >= 20) break;
     }
     return results;
   }, [query, rawRows, markerCache]);
@@ -95,13 +87,11 @@ export function NetworkMapSearch({
     setOpen(false);
     onClearFly();
     onMacSelect(null);
+    onResetView();
   }
 
-  const hasFilters = selected || continentFilter || countryFilter;
-
   return (
-    <div className="relative z-[1000] flex flex-wrap items-end gap-3">
-      {/* Network search */}
+    <div className="relative z-20 flex items-end gap-3">
       <div className="relative flex-1 min-w-[220px]">
         <label className="mb-1 block text-xs font-medium text-neutral-500">Search Network</label>
         <div className="relative">
@@ -111,7 +101,7 @@ export function NetworkMapSearch({
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelected(null); setOpen(true); }}
             onFocus={() => { if (searchResults.length > 0) setOpen(true); }}
-            placeholder="Search by name…"
+            placeholder="Search by name or Customer ID…"
             className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 pr-8 text-sm placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
           />
           {query && (
@@ -140,42 +130,13 @@ export function NetworkMapSearch({
           </div>
         )}
       </div>
-
-      {/* Continent filter */}
-      <div className="min-w-[160px]">
-        <label className="mb-1 block text-xs font-medium text-neutral-500">Continent</label>
-        <select
-          value={continentFilter ?? ""}
-          onChange={(e) => onContinentChange((e.target.value as Continent) || null)}
-          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
-        >
-          <option value="">All Continents</option>
-          {CONTINENTS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      {/* Country filter */}
-      <div className="min-w-[160px]">
-        <label className="mb-1 block text-xs font-medium text-neutral-500">Country</label>
-        <select
-          value={countryFilter ?? ""}
-          onChange={(e) => onCountryChange(e.target.value || null)}
-          disabled={availableCountries.length === 0}
-          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200 disabled:text-neutral-400"
-        >
-          <option value="">All Countries</option>
-          {availableCountries.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      {/* Clear all filters */}
-      {hasFilters && (
+      {selected && (
         <button
           type="button"
-          onClick={() => { handleClear(); onContinentChange(null); onCountryChange(null); onResetView(); }}
+          onClick={handleClear}
           className="rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-500 hover:bg-neutral-50"
         >
-          Clear All
+          Clear
         </button>
       )}
     </div>

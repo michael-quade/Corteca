@@ -13,7 +13,7 @@ import { NetworkMapSearch } from "@/web/components/NetworkMapSearch";
 import {
   continentFromLatLng, loadMarkerCache, saveMarkerCache, clearMarkerCache,
   loadNameCache, saveNameCache, clearNameClientCache,
-  type CachedMarker, type Continent,
+  type CachedMarker,
 } from "@/web/lib/geoUtils";
 
 const GlobalNetworkMap = dynamic(
@@ -21,8 +21,8 @@ const GlobalNetworkMap = dynamic(
   { ssr: false, loading: () => <div className="flex h-[600px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50"><span className="h-7 w-7 animate-spin rounded-full border-2 border-neutral-300 border-t-blue-600" /></div> }
 );
 
-const BATCH      = 20;
-const CONCURRENCY = 8;
+const BATCH       = 10;
+const CONCURRENCY = 3;
 const NAME_BATCH = 50;
 
 interface Stats { total: number; online: number; offline: number }
@@ -38,15 +38,13 @@ export default function NetworkMapPage() {
   const [devices, setDevices]         = useState<DeviceMarker[]>([]);
   const [rawRows, setRawRows]         = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders]   = useState<string[]>([]);
-  const [showOnline, setShowOnline]   = useState(true);
-  const [showOffline, setShowOffline] = useState(true);
-  const [rateLimited, setRateLimited] = useState(false);
-  const [reportAge, setReportAge]     = useState<string | null>(null);
-  const [markerCache, setMarkerCache] = useState<Map<string, CachedMarker>>(new Map());
-  const [flyToTarget, setFlyToTarget]         = useState<{ lat: number; lng: number } | null>(null);
-  const [continentFilter, setContinentFilter] = useState<Continent | null>(null);
-  const [countryFilter, setCountryFilter]     = useState<string | null>(null);
-  const [macFilter, setMacFilter]             = useState<string | null>(null);
+  const [rateLimited, setRateLimited]   = useState(false);
+  const [reportCachedAt, setReportCachedAt] = useState<number | null>(null);
+  const [allDevices, setAllDevices]     = useState<ReportDevice[]>([]);
+  const [geoCount, setGeoCount]         = useState<number | null>(null);
+  const [markerCache, setMarkerCache]   = useState<Map<string, CachedMarker>>(new Map());
+  const [flyToTarget, setFlyToTarget]           = useState<{ lat: number; lng: number } | null>(null);
+  const [macFilter, setMacFilter]               = useState<string | null>(null);
   const [resetViewTrigger, setResetViewTrigger] = useState(0);
 
   useEffect(() => { setMarkerCache(loadMarkerCache()); }, []);
@@ -98,30 +96,31 @@ export default function NetworkMapPage() {
     return newCache;
   }, []);
 
-  const load = useCallback(async (forceReport = false, forceLocate = false) => {
+  const load = useCallback(async (forceReport = false) => {
     setPhase("report"); setError(null); setDevices([]); setLocated(0); setProgress(0);
-    setRawRows([]); setCsvHeaders([]); setRateLimited(false); setReportAge(null);
+    setRawRows([]); setCsvHeaders([]); setRateLimited(false); setReportCachedAt(null);
 
     try {
       const r1 = await fetchWithAuth(`/api/network-map${forceReport ? "?force=true" : ""}`);
+      if (!r1.headers.get("content-type")?.includes("application/json")) {
+        throw new Error(`Unexpected response from server (HTTP ${r1.status})`);
+      }
       const d1 = await r1.json();
       if (!r1.ok) throw new Error(d1.error ?? `HTTP ${r1.status}`);
 
-      if (d1.cachedAt) {
-        const ageMin = Math.round((Date.now() - d1.cachedAt) / 60_000);
-        setReportAge(ageMin < 2 ? "just now" : ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`);
-      }
+      if (d1.cachedAt) setReportCachedAt(d1.cachedAt);
 
       setStats(d1.stats);
-      const allDevices: ReportDevice[] = d1.devices ?? [];
+      const devs: ReportDevice[] = d1.devices ?? [];
+      setAllDevices(devs);
       const baseRows: Record<string, string>[] = d1.rawRows ?? [];
       const baseHeaders: string[] = d1.headers ?? [];
       setPhase("locating");
 
-      // Inject names from cache immediately, then update progressively as API responds.
-      // Cache and lookup are keyed by Customer ID (the subscriber's customer_id in Corteca).
-      const seedNames = forceReport ? new Map<string, string>() : loadNameCache();
-      if (forceReport) clearNameClientCache();
+      // If the API returned a fresh report (not from cache), discard stale geo data
+      const isNewReport = !d1.fromCache;
+      const seedNames = (forceReport || isNewReport) ? new Map<string, string>() : loadNameCache();
+      if (forceReport || isNewReport) clearNameClientCache();
 
       const applyNames = (names: Map<string, string>) => {
         const hasAny = [...names.values()].some(Boolean);
@@ -139,7 +138,7 @@ export default function NetworkMapPage() {
 
       // Collect unique MACs whose name is not yet resolved (falsy = missing or previously empty)
       const uniqueMacs = [...new Set(
-        allDevices.map((d) => d.mac).filter((mac) => mac && !seedNames.get(mac))
+        devs.map((d) => d.mac).filter((mac) => mac && !seedNames.get(mac))
       )];
       const allNames = new Map(seedNames);
       const nameFetch = (async () => {
@@ -164,10 +163,11 @@ export default function NetworkMapPage() {
         saveNameCache(new Map([...allNames].filter(([, v]) => Boolean(v))));
       })();
 
-      // Run locate concurrently with name fetching
-      const currentCache = forceLocate ? new Map<string, CachedMarker>() : loadMarkerCache();
-      if (forceLocate) clearMarkerCache();
-      const onlineDevices = allDevices.filter((d) => d.online);
+      // Auto-clear marker cache when a new report was received so stale locations don't linger
+      const currentCache = isNewReport ? new Map<string, CachedMarker>() : loadMarkerCache();
+      if (isNewReport) clearMarkerCache();
+      const onlineDevices = devs.filter((d) => d.online && d.customerId.trim() !== '');
+      setGeoCount(onlineDevices.length);
       const finalCache = await locateDevices(onlineDevices, currentCache);
       saveMarkerCache(finalCache);
       setMarkerCache(finalCache);
@@ -190,40 +190,26 @@ export default function NetworkMapPage() {
     }
   }, [locateDevices]);
 
+  const refreshLocations = useCallback(async () => {
+    if (allDevices.length === 0) return;
+    setPhase("locating"); setError(null); setDevices([]); setLocated(0); setProgress(0); setRateLimited(false);
+    clearMarkerCache();
+    const onlineDevices = allDevices.filter((d) => d.online && d.customerId.trim() !== '');
+    const finalCache = await locateDevices(onlineDevices, new Map());
+    saveMarkerCache(finalCache);
+    setMarkerCache(finalCache);
+    setProgress(100);
+    setPhase("done");
+  }, [allDevices, locateDevices]);
+
   useEffect(() => {
     if (!isLoading && isAuthenticated) load();
   }, [isLoading, isAuthenticated, load]);
 
-  const filteredDevices = useMemo(() => {
-    let list = devices;
-    if (continentFilter) list = list.filter((d) => markerCache.get(d.mac)?.continent === continentFilter);
-    if (countryFilter)   list = list.filter((d) => markerCache.get(d.mac)?.country   === countryFilter);
-    return list;
-  }, [devices, markerCache, continentFilter, countryFilter]);
-
   const tableRows = useMemo(() => {
-    let rows = rawRows;
-    if (macFilter) {
-      rows = rows.filter((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter);
-    }
-    if (!showOnline || !showOffline) {
-      rows = rows.filter((r) => {
-        const on = r["Online status"]?.toLowerCase() === "true";
-        return showOnline ? on : !on;
-      });
-    }
-    if (continentFilter || countryFilter) {
-      rows = rows.filter((r) => {
-        const mac = (r["Home WiFi ID"] || r["MAC"] || "").trim();
-        const m   = markerCache.get(mac);
-        if (!m) return false;
-        if (continentFilter && m.continent !== continentFilter) return false;
-        if (countryFilter   && m.country   !== countryFilter)   return false;
-        return true;
-      });
-    }
-    return rows;
-  }, [rawRows, macFilter, showOnline, showOffline, continentFilter, countryFilter, markerCache]);
+    if (!macFilter) return rawRows;
+    return rawRows.filter((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter);
+  }, [rawRows, macFilter]);
 
   if (isLoading || !isAuthenticated) {
     return <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center"><span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" /></main>;
@@ -238,30 +224,23 @@ export default function NetworkMapPage() {
 
       <NetworkMapControls
         phase={phase} stats={stats} located={located} progress={progress}
-        reportAge={reportAge} rateLimited={rateLimited} error={error}
-        showOnline={showOnline} showOffline={showOffline}
-        onNewReport={() => load(true, false)}
-        onRefreshLocations={() => load(false, true)}
-        onToggleOnline={() => setShowOnline((v) => !v)}
-        onToggleOffline={() => setShowOffline((v) => !v)}
-        onRetry={() => load(false, false)}
+        reportCachedAt={reportCachedAt} geoCount={geoCount} rateLimited={rateLimited} error={error}
+        onNewReport={() => load(true)}
+        onRefreshLocations={refreshLocations}
+        onRetry={() => load()}
       />
 
       {(phase === "locating" || phase === "done") && (
         <>
           <NetworkMapSearch
             rawRows={rawRows} markerCache={markerCache}
-            continentFilter={continentFilter} countryFilter={countryFilter}
             onFlyTo={(lat, lng) => setFlyToTarget({ lat, lng })}
             onClearFly={() => setFlyToTarget(null)}
-            onContinentChange={setContinentFilter}
-            onCountryChange={setCountryFilter}
             onMacSelect={setMacFilter}
             onResetView={() => setResetViewTrigger((n) => n + 1)}
           />
           <GlobalNetworkMap
-            devices={filteredDevices} progress={progress}
-            showOnline={showOnline} showOffline={showOffline}
+            devices={devices} progress={progress}
             flyToTarget={flyToTarget}
             resetViewTrigger={resetViewTrigger}
             onPopupClose={() => setMacFilter(null)}
@@ -269,18 +248,13 @@ export default function NetworkMapPage() {
         </>
       )}
 
-      {tableRows.length > 0 && (
+      {rawRows.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-700">
             Deployment Report
             {macFilter && (
               <span className="ml-2 font-normal text-blue-500">
                 — filtered to {rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter}
-              </span>
-            )}
-            {!macFilter && (!showOnline || !showOffline) && (
-              <span className="ml-2 font-normal text-neutral-400">
-                — showing {showOnline ? "online" : "offline"} only
               </span>
             )}
           </h2>

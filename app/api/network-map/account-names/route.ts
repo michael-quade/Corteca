@@ -39,39 +39,54 @@ export async function GET(req: NextRequest) {
 
   const nameCache = getNameCache();
 
-  const results = await Promise.all(
-    ids.map(async (id): Promise<{ mac: string; accountName: string }> => {
-      const cacheKey = `${lookupField}:${id}`;
-      if (nameCache.has(cacheKey)) return { mac: id, accountName: nameCache.get(cacheKey)! };
+  async function fetchOne(id: string): Promise<{ mac: string; accountName: string }> {
+    const cacheKey = `${lookupField}:${id}`;
+    if (nameCache.has(cacheKey)) return { mac: id, accountName: nameCache.get(cacheKey)! };
 
-      try {
-        const res = await cortecaFetch(
-          `${baseUrl}/dashboard-bff/subscribers?page=0&size=1&live_status=false`,
-          {
-            method: 'POST',
-            headers: authHeaders,
-            body: JSON.stringify({ [lookupField]: id }),
-          }
-        );
-
-        if (!res.ok) {
-          console.warn(`[account-names] ${lookupField}=${id} → HTTP ${res.status}`);
-          return { mac: id, accountName: '' };
+    try {
+      const res = await cortecaFetch(
+        `${baseUrl}/dashboard-bff/subscribers?page=0&size=1&live_status=false`,
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ [lookupField]: id }),
         }
+      );
 
-        const data = await res.json().catch(() => null);
-        const name = extractName(data);
-        if (name) {
-          nameCache.set(cacheKey, name);
-          console.log(`[account-names] ${lookupField}=${id} → "${name}"`);
-        }
-        return { mac: id, accountName: name };
-      } catch (e) {
-        console.error(`[account-names] ${lookupField}=${id} exception:`, e);
+      if (!res.ok) {
+        console.warn(`[account-names] ${lookupField}=${id} → HTTP ${res.status}`);
         return { mac: id, accountName: '' };
       }
-    })
-  );
+
+      const data = await res.json().catch(() => null);
+      const name = extractName(data);
+      if (name) {
+        nameCache.set(cacheKey, name);
+        console.log(`[account-names] ${lookupField}=${id} → "${name}"`);
+      }
+      return { mac: id, accountName: name };
+    } catch (e) {
+      const isTimeout = e instanceof Error && (
+        e.name === 'TimeoutError' || e.name === 'AbortError' ||
+        (e as NodeJS.ErrnoException).code === 'UND_ERR_CONNECT_TIMEOUT'
+      );
+      if (isTimeout) {
+        console.warn(`[account-names] ${lookupField}=${id} → connect timeout, skipping`);
+      } else {
+        console.warn(`[account-names] ${lookupField}=${id} exception:`, e);
+      }
+      return { mac: id, accountName: '' };
+    }
+  }
+
+  // Process in chunks of 3 to avoid overwhelming the upstream connection pool
+  const CONCURRENCY = 3;
+  const results: { mac: string; accountName: string }[] = [];
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const chunk = ids.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(chunk.map(fetchOne));
+    results.push(...chunkResults);
+  }
 
   return NextResponse.json(results);
 }

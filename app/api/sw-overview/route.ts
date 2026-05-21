@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getReportCache } from '@/web/lib/corteca/reportCache';
+import { ensureDeploymentReport, REPORT_MAX_AGE_MS } from '@/web/lib/corteca/deploymentReport';
 import { getSwMatrix, matchFirmware, deriveRelease } from '@/web/lib/swMatrix';
 
 export interface NetworkSwEntry {
@@ -36,14 +37,21 @@ export async function GET(req: NextRequest) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-  const reportCache = getReportCache();
-  if (!reportCache) {
-    return NextResponse.json(
-      { error: 'Deployment report not loaded. Visit /network-map first or trigger a refresh.' },
-      { status: 503 },
-    );
+  const baseUrl = process.env.CORTECA_API_BASE_URL;
+  if (!baseUrl) return NextResponse.json({ error: 'API not configured' }, { status: 503 });
+
+  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Auto-fetch when cache is absent or older than 8 hours
+  const existing = getReportCache();
+  const stale = !existing || (Date.now() - existing.cachedAt) > REPORT_MAX_AGE_MS;
+  if (stale) {
+    console.log('[sw-overview] cache missing or stale — auto-fetching deployment report');
+    const result = await ensureDeploymentReport(baseUrl, authHeaders);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 503 });
   }
 
+  const reportCache = getReportCache()!;
   const matrix = getSwMatrix();
   const now = Date.now();
 
