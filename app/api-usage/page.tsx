@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { useApiStats } from "@/web/contexts/ApiStatsContext";
 import { loadSessions, aggregateSessions } from "@/web/lib/sessionHistory";
@@ -23,19 +23,33 @@ const PERIODS: { label: string; value: Period }[] = [
 ];
 
 export default function ApiUsagePage() {
-  const { isAuthenticated }   = useAuth();
-  const live                  = useApiStats();
+  const { isAuthenticated }     = useAuth();
+  const live                    = useApiStats();
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
-  const [period, setPeriod]   = useState<Period>("day");
+  const [period, setPeriod]     = useState<Period>("day");
 
-  // Load from localStorage; refresh every 5 s and whenever live stats update
-  useEffect(() => {
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sessions');
+      if (res.ok) {
+        const data = await res.json() as SessionRecord[];
+        // Fall back to localStorage if DB returns empty (local dev or first run)
+        setSessions(data.length > 0 ? data : loadSessions());
+        return;
+      }
+    } catch { /* fall through */ }
     setSessions(loadSessions());
-    const t = setInterval(() => setSessions(loadSessions()), 5_000);
-    return () => clearInterval(t);
-  }, [live]);
+  }, []);
 
-  // Merge live in-progress session so chart/table show real-time values
+  // Refresh on mount and every 5 s; also re-run whenever live stats tick so
+  // the chart stays current between DB flushes
+  useEffect(() => {
+    fetchSessions();
+    const t = setInterval(fetchSessions, 5_000);
+    return () => clearInterval(t);
+  }, [fetchSessions, live]);
+
+  // Overlay live stats onto the active session so the table shows real-time values
   const merged = useMemo<SessionRecord[]>(() => sessions.map((s) =>
     !s.endTime
       ? { ...s, calls: live.calls, bytesSent: live.bytesSent, bytesReceived: live.bytesReceived, rateLimitHits: live.rateLimitHits }

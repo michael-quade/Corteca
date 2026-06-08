@@ -16,25 +16,42 @@ export interface ApiStats {
 const zero = (): ApiStats => ({ calls: 0, bytesSent: 0, bytesReceived: 0, rateLimitHits: 0, sessionStart: Date.now() });
 const Ctx  = createContext<ApiStats>(zero());
 
+function persistSession(session: SessionRecord, keepalive = false) {
+  fetch('/api/sessions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(session),
+    keepalive,
+  }).catch(() => {});
+}
+
 export function ApiStatsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated }    = useAuth();
   const [stats, setStats]      = useState<ApiStats>(zero);
   const sessionRef             = useRef<SessionRecord | null>(null);
-  const statsRef               = useRef<ApiStats>(zero());    // always-current mirror for flush
+  const statsRef               = useRef<ApiStats>(zero());
   const saveTimer              = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep statsRef in sync so the logout flush always sees fresh values
   useEffect(() => { statsRef.current = stats; }, [stats]);
 
   const flush = useCallback((final = false) => {
     if (!sessionRef.current) return;
-    const s   = statsRef.current;
+    const s = statsRef.current;
+    const updated: SessionRecord = {
+      ...sessionRef.current,
+      calls: s.calls,
+      bytesSent: s.bytesSent,
+      bytesReceived: s.bytesReceived,
+      rateLimitHits: s.rateLimitHits,
+      endTime: final ? Date.now() : sessionRef.current.endTime,
+    };
+
+    // Keep localStorage in sync as a local cache
     const all = loadSessions();
-    saveSessions(all.map((r) =>
-      r.id === sessionRef.current!.id
-        ? { ...r, calls: s.calls, bytesSent: s.bytesSent, bytesReceived: s.bytesReceived, rateLimitHits: s.rateLimitHits, endTime: final ? Date.now() : r.endTime }
-        : r
-    ));
+    saveSessions(all.map((r) => r.id === updated.id ? updated : r));
+
+    // Persist to DB (keepalive=true on final flush so it survives page unload)
+    persistSession(updated, final);
   }, []);
 
   const scheduleSave = useCallback(() => {
@@ -66,6 +83,8 @@ export function ApiStatsProvider({ children }: { children: ReactNode }) {
       saveSessions([...stored, fresh]);
       if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('corteca:sid', fresh.id);
       setStats(zero);
+      // Create the session row in DB immediately
+      persistSession(fresh);
     }
   }, [isAuthenticated, flush]);
 

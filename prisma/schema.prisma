@@ -16,3 +16,15 @@ model SwMatrix {
 
   @@map("sw_matrix")
 }
+
+model ApiSession {
+  id            String    @id
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime? @map("end_time")
+  calls         Int       @default(0)
+  bytesSent     Int       @default(0) @map("bytes_sent")
+  bytesReceived Int       @default(0) @map("bytes_received")
+  rateLimitHits Int       @default(0) @map("rate_limit_hits")
+
+  @@map("api_sessions")
+}
