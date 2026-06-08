@@ -126,6 +126,19 @@ async function readFromDatabase(): Promise<SwMatrix> {
   return result;
 }
 
+export async function saveSwMatrix(beaconModels: string[], releases: ReleaseRow[]): Promise<void> {
+  const { prisma } = await import('./prisma');
+  const data = {
+    beaconModels: JSON.parse(JSON.stringify(beaconModels)),
+    releases: JSON.parse(JSON.stringify(releases)),
+  };
+  await prisma.swMatrix.upsert({
+    where:  { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
+  });
+}
+
 export async function getSwMatrix(): Promise<SwMatrix> {
   if (cached && process.env.DATABASE_URL && Date.now() - cachedAt < CACHE_TTL_MS) {
     return cached;

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
 import path from 'path';
-import { getSwMatrix, clearSwMatrixCache } from '@/web/lib/swMatrix';
-import { prisma } from '@/web/lib/prisma';
+import { getSwMatrix, saveSwMatrix, clearSwMatrixCache } from '@/web/lib/swMatrix';
 
 export interface SwMatrixRow {
   name: string;
@@ -37,11 +36,7 @@ export async function GET() {
 }
 
 async function saveToDatabase(beaconModels: string[], releases: SwMatrixRow[]) {
-  await prisma.swMatrix.upsert({
-    where:  { id: 1 },
-    create: { id: 1, beaconModels: JSON.parse(JSON.stringify(beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
-    update: { beaconModels: JSON.parse(JSON.stringify(beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
-  });
+  await saveSwMatrix(beaconModels, releases);
 }
 
 function saveToXlsx(beaconModels: string[], releases: SwMatrixRow[]) {
