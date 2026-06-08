@@ -54,7 +54,7 @@ export function AssignFirmwareModal({ open, onClose, firmware, initialRelease, o
         : [...matrix.beaconModels, model];
 
       const res = await fetchWithAuth("/api/sw-matrix", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beaconModels, releases }),
       });

@@ -77,7 +77,7 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
     setError(null);
     try {
       const res = await fetchWithAuth("/api/sw-matrix", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beaconModels: models, releases: rows }),
       });
