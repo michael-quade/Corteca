@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { DeviceMarker } from "@/app/api/network-map/locate/route";
 import type { NetworkDeviceInfo } from "@/app/api/network-map/device-info/[mac]/route";
+import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 
 type L = typeof import("leaflet");
 
@@ -197,7 +198,7 @@ export function GlobalNetworkMap({ devices, progress, flyToTarget, resetViewTrig
 
         void (async () => {
           try {
-            const res = await fetch(`/api/network-map/device-info/${encodeURIComponent(d.mac)}`);
+            const res = await fetchWithAuth(`/api/network-map/device-info/${encodeURIComponent(d.mac)}`);
             if (res.ok) {
               const info = await res.json() as NetworkDeviceInfo;
               detailsRef.current.set(d.mac, info);
