@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs';
-import * as XLSX from 'xlsx';
-import path from 'path';
-import { getSwMatrix, saveSwMatrix, clearSwMatrixCache } from '@/web/lib/swMatrix';
+import { getSwMatrix, clearSwMatrixCache } from '@/web/lib/swMatrix';
 
 export interface SwMatrixRow {
   name: string;
@@ -13,8 +10,6 @@ export interface SwMatrixData {
   beaconModels: string[];
   releases: SwMatrixRow[];
 }
-
-const FILE_PATH = path.join(process.cwd(), 'docs', 'SW Release Matrix.xlsx');
 
 export async function GET() {
   try {
@@ -35,23 +30,6 @@ export async function GET() {
   }
 }
 
-async function saveToDatabase(beaconModels: string[], releases: SwMatrixRow[]) {
-  await saveSwMatrix(beaconModels, releases);
-}
-
-function saveToXlsx(beaconModels: string[], releases: SwMatrixRow[]) {
-  const wsData: string[][] = [
-    ['', ...beaconModels],
-    ...releases.map((r) => [r.name, ...beaconModels.map((m) => r.builds[m] ?? '')]),
-  ];
-  const wb = XLSX.read(fs.readFileSync(FILE_PATH), { type: 'buffer' });
-  const wsName = wb.SheetNames[0];
-  // origin not in AOA2SheetOpts typings; cast to bypass
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  wb.Sheets[wsName] = (XLSX.utils.aoa_to_sheet as any)(wsData, { origin: 'B1' });
-  fs.writeFileSync(FILE_PATH, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-}
-
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json() as SwMatrixData;
@@ -62,9 +40,31 @@ export async function PUT(req: NextRequest) {
     }
 
     if (process.env.DATABASE_URL) {
-      await saveToDatabase(beaconModels, releases);
+      const { prisma } = await import('../../../web/lib/prisma');
+      const data = {
+        beaconModels: JSON.parse(JSON.stringify(beaconModels)),
+        releases:     JSON.parse(JSON.stringify(releases)),
+      };
+      await prisma.swMatrix.upsert({
+        where:  { id: 1 },
+        create: { id: 1, ...data },
+        update: data,
+      });
     } else {
-      saveToXlsx(beaconModels, releases);
+      // Local dev only — write back to the XLSX file
+      const fs   = await import('fs');
+      const XLSX = await import('xlsx');
+      const path = await import('path');
+      const filePath = path.join(process.cwd(), 'docs', 'SW Release Matrix.xlsx');
+      const wsData: string[][] = [
+        ['', ...beaconModels],
+        ...releases.map((r) => [r.name, ...beaconModels.map((m) => r.builds[m] ?? '')]),
+      ];
+      const wb     = XLSX.read(fs.readFileSync(filePath), { type: 'buffer' });
+      const wsName = wb.SheetNames[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      wb.Sheets[wsName] = (XLSX.utils.aoa_to_sheet as any)(wsData, { origin: 'B1' });
+      fs.writeFileSync(filePath, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
     }
 
     clearSwMatrixCache();
