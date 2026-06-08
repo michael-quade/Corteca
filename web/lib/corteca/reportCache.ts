@@ -64,14 +64,14 @@ export async function hydrateFromDb(maxAgeMs: number): Promise<void> {
     }
 
     cache = {
-      devices:  row.devices  as ReportDevice[],
-      headers:  row.headers  as string[],
-      rawRows:  row.rawRows  as Record<string, string>[],
-      stats:    row.stats    as { total: number; online: number; offline: number },
+      devices:  row.devices  as unknown as ReportDevice[],
+      headers:  row.headers  as unknown as string[],
+      rawRows:  row.rawRows  as unknown as Record<string, string>[],
+      stats:    row.stats    as unknown as { total: number; online: number; offline: number },
       cachedAt: row.cachedAt.getTime(),
     };
     bySerial.clear();
-    for (const [k, v] of Object.entries(row.uspMap as Record<string, string>)) {
+    for (const [k, v] of Object.entries(row.uspMap as unknown as Record<string, string>)) {
       bySerial.set(k, v);
     }
     console.log(`[report-cache] hydrated from DB (age: ${Math.round(ageMs / 60_000)}m, ${cache.devices.length} devices)`);
