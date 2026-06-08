@@ -4,7 +4,7 @@ import type { SessionRecord } from '@/web/lib/sessionHistory';
 export async function GET() {
   if (!process.env.DATABASE_URL) return NextResponse.json([]);
   try {
-    const { prisma } = await import('../../web/lib/prisma');
+    const { prisma } = await import('../../../web/lib/prisma');
     const rows = await prisma.apiSession.findMany({
       orderBy: { startTime: 'desc' },
       take: 500,
@@ -27,7 +27,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   if (!process.env.DATABASE_URL) return NextResponse.json({ ok: true });
   try {
-    const { prisma } = await import('../../web/lib/prisma');
+    const { prisma } = await import('../../../web/lib/prisma');
     const s = await req.json() as SessionRecord;
     await prisma.apiSession.upsert({
       where: { id: s.id },
