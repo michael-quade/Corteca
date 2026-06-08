@@ -3,7 +3,7 @@
 
 import { cortecaFetch } from './cortecaFetch';
 import {
-  getReportCache, setReportCache,
+  getReportCache, setReportCache, hydrateFromDb, persistToDb,
   type ReportDevice, type ReportCache,
 } from './reportCache';
 
@@ -47,6 +47,9 @@ export async function ensureDeploymentReport(
   authHeaders: Record<string, string>,
   { force = false, maxAgeMs = REPORT_MAX_AGE_MS }: { force?: boolean; maxAgeMs?: number } = {},
 ): Promise<FetchReportResult> {
+  // On cold start, try to warm the in-memory cache from DB before checking staleness
+  if (!force && !getReportCache()) await hydrateFromDb(maxAgeMs);
+
   const existing = getReportCache();
   if (!force && existing && (Date.now() - existing.cachedAt) < maxAgeMs) {
     return { ok: true };
@@ -129,5 +132,6 @@ export async function ensureDeploymentReport(
     cachedAt,
   };
   setReportCache(newCache, uspSerialMap);
+  await persistToDb();
   return { ok: true };
 }

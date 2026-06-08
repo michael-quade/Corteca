@@ -17,6 +17,18 @@ model SwMatrix {
   @@map("sw_matrix")
 }
 
+model DeploymentReport {
+  id       Int      @id @default(1)
+  devices  Json     @default("[]")
+  headers  Json     @default("[]")
+  rawRows  Json     @default("[]")  @map("raw_rows")
+  stats    Json     @default("{}")
+  uspMap   Json     @default("{}") @map("usp_map")
+  cachedAt DateTime @map("cached_at")
+
+  @@map("deployment_report")
+}
+
 model ApiSession {
   id            String    @id
   startTime     DateTime  @map("start_time")
