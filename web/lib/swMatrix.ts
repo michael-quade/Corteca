@@ -100,8 +100,21 @@ function readFromXlsx(): SwMatrix {
 async function readFromDatabase(): Promise<SwMatrix> {
   // Dynamic import keeps prisma out of the bundle when DATABASE_URL is absent
   const { prisma } = await import('./prisma');
-  const row = await prisma.swMatrix.findUnique({ where: { id: 1 } });
-  if (!row) throw new Error('SW matrix not found in database — run: npm run seed-matrix');
+  let row = await prisma.swMatrix.findUnique({ where: { id: 1 } });
+
+  // Auto-seed from XLSX on first ever request if the table is empty
+  if (!row) {
+    console.log('[sw-matrix] no data in DB — seeding from XLSX');
+    const seed = readFromXlsx();
+    const releases: ReleaseRow[] = seed.releases.map((name) => ({
+      name,
+      builds: seed.buildsByRelease[name] ?? {},
+    }));
+    row = await prisma.swMatrix.create({
+      data: { id: 1, beaconModels: seed.beaconModels, releases },
+    });
+    console.log(`[sw-matrix] seeded: ${seed.releases.length} releases`);
+  }
 
   const result = assembleMatrix(
     row.beaconModels as string[],
