@@ -58,7 +58,10 @@ export function AssignFirmwareModal({ open, onClose, firmware, initialRelease, o
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beaconModels, releases }),
       });
-      const json = await res.json() as { ok?: boolean; error?: string };
+      const ct = res.headers.get("content-type") ?? "";
+      const json = ct.includes("application/json")
+        ? (await res.json() as { ok?: boolean; error?: string })
+        : { error: `Server error ${res.status}` };
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       onAssigned();
       onClose();

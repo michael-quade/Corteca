@@ -81,7 +81,10 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beaconModels: models, releases: rows }),
       });
-      const json = await res.json() as { ok?: boolean; error?: string };
+      const ct = res.headers.get("content-type") ?? "";
+      const json = ct.includes("application/json")
+        ? (await res.json() as { ok?: boolean; error?: string })
+        : { error: `Server error ${res.status}` };
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       onSaved();
       onClose();
