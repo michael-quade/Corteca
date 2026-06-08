@@ -18,7 +18,7 @@ const FILE_PATH = path.join(process.cwd(), 'docs', 'SW Release Matrix.xlsx');
 
 export async function GET() {
   try {
-    const matrix = getSwMatrix();
+    const matrix = await getSwMatrix();
     const data: SwMatrixData = {
       beaconModels: matrix.beaconModels,
       releases: matrix.releases.map((name) => ({
@@ -35,6 +35,28 @@ export async function GET() {
   }
 }
 
+async function saveToDatabase(beaconModels: string[], releases: SwMatrixRow[]) {
+  const { prisma } = await import('@/web/lib/prisma');
+  await prisma.swMatrix.upsert({
+    where:  { id: 1 },
+    create: { id: 1, beaconModels, releases },
+    update: { beaconModels, releases },
+  });
+}
+
+function saveToXlsx(beaconModels: string[], releases: SwMatrixRow[]) {
+  const wsData: string[][] = [
+    ['', ...beaconModels],
+    ...releases.map((r) => [r.name, ...beaconModels.map((m) => r.builds[m] ?? '')]),
+  ];
+  const wb = XLSX.read(fs.readFileSync(FILE_PATH), { type: 'buffer' });
+  const wsName = wb.SheetNames[0];
+  // origin not in AOA2SheetOpts typings; cast to bypass
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  wb.Sheets[wsName] = (XLSX.utils.aoa_to_sheet as any)(wsData, { origin: 'B1' });
+  fs.writeFileSync(FILE_PATH, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+}
+
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json() as SwMatrixData;
@@ -44,18 +66,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid matrix data' }, { status: 400 });
     }
 
-    // Build 2-D array matching the original spreadsheet layout (origin B1)
-    const wsData: string[][] = [
-      ['', ...beaconModels],
-      ...releases.map((r) => [r.name, ...beaconModels.map((m) => r.builds[m] ?? '')]),
-    ];
-
-    const wb = XLSX.read(fs.readFileSync(FILE_PATH), { type: 'buffer' });
-    const wsName = wb.SheetNames[0];
-    // origin not in AOA2SheetOpts typings; cast to bypass
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    wb.Sheets[wsName] = (XLSX.utils.aoa_to_sheet as any)(wsData, { origin: 'B1' });
-    XLSX.writeFile(wb, FILE_PATH);
+    if (process.env.DATABASE_URL) {
+      await saveToDatabase(beaconModels, releases);
+    } else {
+      saveToXlsx(beaconModels, releases);
+    }
 
     clearSwMatrixCache();
     console.log(`[sw-matrix] saved: ${releases.length} releases × ${beaconModels.length} models`);

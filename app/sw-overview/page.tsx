@@ -8,8 +8,9 @@ import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { SwHeatmap } from "@/web/components/SwHeatmap";
 import { SwDrilldown } from "@/web/components/SwDrilldown";
 import { SwMatrixModal } from "@/web/components/modals/SwMatrixModal";
+import { UnknownFirmwareList } from "@/web/components/UnknownFirmwareList";
 import type { NetworkSwEntry, SwSelection } from "@/web/components/SwOverview.types";
-import type { SwOverviewResponse, UnknownFirmwareEntry } from "@/app/api/sw-overview/route";
+import type { SwOverviewResponse } from "@/app/api/sw-overview/route";
 
 type Filter = "all" | "online" | "offline";
 
@@ -28,62 +29,6 @@ function formatAge(ms: number): string {
   if (mins < 60) return `${mins} min ago`;
   const hrs = Math.round(mins / 60);
   return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
-}
-
-function UnknownFirmwareList({ items }: { items: UnknownFirmwareEntry[] }) {
-  const [open, setOpen] = useState(false);
-  if (items.length === 0) return null;
-
-  return (
-    <section className="rounded-lg border border-amber-200 bg-amber-50">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-5 py-4 text-left"
-      >
-        <div>
-          <span className="text-sm font-semibold text-amber-900">
-            Unknown SW builds ({items.length})
-          </span>
-          <span className="ml-2 text-xs text-amber-600">
-            Firmware strings not matched to any BBDR release
-          </span>
-        </div>
-        <svg
-          width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className={`text-amber-700 transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <path d="M4 6l4 4 4-4" />
-        </svg>
-      </button>
-      {open && (
-        <div className="border-t border-amber-200 px-5 pb-4">
-          <div className="mt-3 space-y-2">
-            {items.map((item) => (
-              <div key={item.firmware} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-white px-4 py-2.5 text-xs shadow-sm ring-1 ring-amber-100">
-                <span className="font-mono font-semibold text-neutral-800 flex-1 min-w-[180px]">
-                  {item.firmware || "(empty)"}
-                </span>
-                <span className="text-neutral-500">
-                  {item.total} device{item.total !== 1 ? "s" : ""}
-                  <span className="ml-1 text-emerald-600">({item.online} online)</span>
-                </span>
-                {item.derivedRelease && (
-                  <span className="rounded bg-amber-100 px-2 py-0.5 font-mono text-amber-700">
-                    hint: {item.derivedRelease}
-                  </span>
-                )}
-                {item.models.length > 0 && (
-                  <span className="text-neutral-400">{item.models.join(", ")}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
 }
 
 export default function SwOverviewPage() {
@@ -154,7 +99,7 @@ export default function SwOverviewPage() {
 
   const busy = fetching || refreshing;
   const networks: NetworkSwEntry[] = data?.networks ?? [];
-  const unknownFirmwares: UnknownFirmwareEntry[] = data?.unknownFirmwares ?? [];
+  const unknownFirmwares = data?.unknownFirmwares ?? [];
 
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-8">
@@ -257,7 +202,7 @@ export default function SwOverviewPage() {
           />
 
           {/* Unknown builds */}
-          <UnknownFirmwareList items={unknownFirmwares} />
+          <UnknownFirmwareList items={unknownFirmwares} onAssigned={() => void fetchOverview()} />
         </div>
       )}
 

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   }
 
   const reportCache = getReportCache()!;
-  const matrix = getSwMatrix();
+  const matrix = await getSwMatrix();
   const now = Date.now();
 
   const seen = new Set<string>();

@@ -1,10 +1,18 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // pooled (PgBouncer) — used at runtime
+  directUrl = env("DIRECT_URL")         // direct connection — used by prisma db push / migrate
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Add your models here
+model SwMatrix {
+  id           Int      @id @default(1)
+  beaconModels Json     @default("[]") @map("beacon_models")
+  releases     Json     @default("[]")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("sw_matrix")
+}

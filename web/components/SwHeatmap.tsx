@@ -57,7 +57,8 @@ export function SwHeatmap({ beaconModels, networks, filter, onSelect, activeSele
   // Build counts per (releaseName × beaconModel)
   const { activeReleases, cellMap, releaseTotals, modelTotals } = useMemo(() => {
     const raw = new Map<string, Map<string, CellCounts>>();
-    const releasesSet = new Set<string>();
+    // Seed from all matrix releases so newly added rows appear even with 0 devices
+    const releasesSet = new Set<string>(Object.keys(buildMatrix));
 
     for (const n of networks) {
       if (!n.releaseName || !n.beaconModel) continue;

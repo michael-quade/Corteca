@@ -1,5 +1,5 @@
 // Server-side module — do NOT add "use client".
-// Parses the SW Release Matrix XLSX and provides firmware-to-release lookup.
+// Reads the SW Release Matrix from Supabase (production) or the local XLSX file (dev fallback).
 
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
@@ -14,9 +14,16 @@ export interface SwMatrix {
   buildsByRelease: Record<string, Record<string, string>>;
 }
 
-let cached: SwMatrix | null = null;
+type ReleaseRow = { name: string; builds: Record<string, string> };
 
-export function clearSwMatrixCache() { cached = null; }
+let cached: SwMatrix | null = null;
+let cachedAt = 0;
+const CACHE_TTL_MS = 60_000; // 1 minute — callers also call clearSwMatrixCache() after writes
+
+export function clearSwMatrixCache() {
+  cached = null;
+  cachedAt = 0;
+}
 
 function normalizeBuild(raw: string): string {
   let s = raw.trim().toUpperCase();
@@ -24,53 +31,93 @@ function normalizeBuild(raw: string): string {
   return s;
 }
 
-export function getSwMatrix(): SwMatrix {
-  if (cached) return cached;
+function assembleMatrix(beaconModels: string[], releaseRows: ReleaseRow[]): SwMatrix {
+  const releases: string[] = [];
+  const lookup = new Map<string, { releaseName: string; beaconModel: string }>();
+  const buildsByRelease: Record<string, Record<string, string>> = {};
 
+  for (const row of releaseRows) {
+    releases.push(row.name);
+    for (const [model, build] of Object.entries(row.builds)) {
+      if (!build || build.toUpperCase() === 'N/A') continue;
+      const key = normalizeBuild(build);
+      if (key) {
+        lookup.set(key, { releaseName: row.name, beaconModel: model });
+        if (!buildsByRelease[row.name]) buildsByRelease[row.name] = {};
+        buildsByRelease[row.name][model] = build;
+      }
+    }
+  }
+
+  return { beaconModels, releases, lookup, buildsByRelease };
+}
+
+function readFromXlsx(): SwMatrix {
   const filePath = path.join(process.cwd(), 'docs', 'SW Release Matrix.xlsx');
+
+  try {
+    const mtime = fs.statSync(filePath).mtimeMs;
+    if (cached && cachedAt === mtime) return cached;
+    cachedAt = mtime;
+  } catch {
+    cached = null;
+    cachedAt = 0;
+  }
+
   const wb = XLSX.read(fs.readFileSync(filePath), { type: 'buffer' });
   const ws = wb.Sheets[wb.SheetNames[0]];
 
-  // Use the worksheet's actual used range so added rows/columns are always picked up.
-  // Data is anchored at B1: col B = release names, row 1 = beacon model headers.
   const wsRef = ws['!ref'] as string | undefined;
   const fullRange = wsRef ? XLSX.utils.decode_range(wsRef) : XLSX.utils.decode_range('B1:N38');
-  const range = { s: { r: 0, c: 1 }, e: fullRange.e }; // force start at B1
+  const range = { s: { r: 0, c: 1 }, e: fullRange.e };
 
-  // Row 1 (index 0): beacon model headers in columns C onwards
   const beaconModels: string[] = [];
   for (let ci = range.s.c + 1; ci <= range.e.c; ci++) {
     const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c: ci })];
     if (cell?.v != null) beaconModels.push(String(cell.v).trim());
   }
 
-  const releases: string[] = [];
-  const lookup = new Map<string, { releaseName: string; beaconModel: string }>();
-  const buildsByRelease: Record<string, Record<string, string>> = {};
-
-  // Rows 2+ (index 1+): release name in col B, build strings in cols C onwards
+  const releaseRows: ReleaseRow[] = [];
   for (let ri = range.s.r + 1; ri <= range.e.r; ri++) {
     const releaseCell = ws[XLSX.utils.encode_cell({ r: ri, c: range.s.c })];
     if (!releaseCell?.v) continue;
     const releaseName = String(releaseCell.v).trim();
-    releases.push(releaseName);
-
+    const builds: Record<string, string> = {};
     for (let mi = 0; mi < beaconModels.length; mi++) {
       const cell = ws[XLSX.utils.encode_cell({ r: ri, c: range.s.c + 1 + mi })];
       if (!cell?.v) continue;
       const raw = String(cell.v).trim();
-      if (!raw || raw.toUpperCase() === 'N/A') continue;
-      const key = normalizeBuild(raw);
-      if (key) {
-        lookup.set(key, { releaseName, beaconModel: beaconModels[mi] });
-        if (!buildsByRelease[releaseName]) buildsByRelease[releaseName] = {};
-        buildsByRelease[releaseName][beaconModels[mi]] = raw;
-      }
+      if (raw && raw.toUpperCase() !== 'N/A') builds[beaconModels[mi]] = raw;
     }
+    releaseRows.push({ name: releaseName, builds });
   }
 
-  cached = { beaconModels, releases, lookup, buildsByRelease };
-  return cached;
+  const result = assembleMatrix(beaconModels, releaseRows);
+  cached = result;
+  return result;
+}
+
+async function readFromDatabase(): Promise<SwMatrix> {
+  // Dynamic import keeps prisma out of the bundle when DATABASE_URL is absent
+  const { prisma } = await import('./prisma');
+  const row = await prisma.swMatrix.findUnique({ where: { id: 1 } });
+  if (!row) throw new Error('SW matrix not found in database — run: npm run seed-matrix');
+
+  const result = assembleMatrix(
+    row.beaconModels as string[],
+    row.releases as ReleaseRow[],
+  );
+  cached = result;
+  cachedAt = Date.now();
+  return result;
+}
+
+export async function getSwMatrix(): Promise<SwMatrix> {
+  if (cached && process.env.DATABASE_URL && Date.now() - cachedAt < CACHE_TTL_MS) {
+    return cached;
+  }
+  if (process.env.DATABASE_URL) return readFromDatabase();
+  return readFromXlsx();
 }
 
 export function matchFirmware(
@@ -85,9 +132,7 @@ export function matchFirmware(
 /** Extracts a BBDR release hint from "1.2403.395" → "BBDR2403" */
 export function deriveRelease(formattedVersion: string): string | null {
   if (!formattedVersion) return null;
-  // Format: <major>.<YYMM>.<build>
   const match = formattedVersion.match(/^\d+\.(\d{4})\.\d+/);
   if (!match) return null;
-  const yymm = match[1]; // e.g. "2403"
-  return `BBDR${yymm}`;
+  return `BBDR${match[1]}`;
 }
