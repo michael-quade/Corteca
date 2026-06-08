@@ -1,6 +1,7 @@
 // Server-side module — do NOT add "use client".
 // Reads the SW Release Matrix from Supabase (production) or the local XLSX file (dev fallback).
 
+
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
 import path from 'path';
@@ -111,7 +112,7 @@ async function readFromDatabase(): Promise<SwMatrix> {
       builds: seed.buildsByRelease[name] ?? {},
     }));
     row = await prisma.swMatrix.create({
-      data: { id: 1, beaconModels: seed.beaconModels, releases },
+      data: { id: 1, beaconModels: JSON.parse(JSON.stringify(seed.beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
     });
     console.log(`[sw-matrix] seeded: ${seed.releases.length} releases`);
   }

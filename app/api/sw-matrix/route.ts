@@ -39,8 +39,8 @@ async function saveToDatabase(beaconModels: string[], releases: SwMatrixRow[]) {
   const { prisma } = await import('@/web/lib/prisma');
   await prisma.swMatrix.upsert({
     where:  { id: 1 },
-    create: { id: 1, beaconModels, releases },
-    update: { beaconModels, releases },
+    create: { id: 1, beaconModels: JSON.parse(JSON.stringify(beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
+    update: { beaconModels: JSON.parse(JSON.stringify(beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
   });
 }
 
