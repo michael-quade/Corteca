@@ -16,10 +16,8 @@ function fmtBytes(n: number): string {
 }
 
 const NAV_LINKS = [
-  { href: "/dashboard",      label: "Dashboard"   },
-  { href: "/devices",        label: "Devices"     },
-  { href: "/reboot-report",  label: "Reboot Report" },
-  { href: "/api-usage",      label: "API Usage"   },
+  { href: "/dashboard",  label: "Dashboard"  },
+  { href: "/api-usage",  label: "API Usage"  },
 ];
 
 export function Navbar() {
@@ -39,16 +37,16 @@ export function Navbar() {
         </Link>
 
         {isAuthenticated && (
-          <nav className="ml-6 flex items-center gap-1">
+          <nav className="ml-6 flex items-center gap-2">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-sm transition-colors",
+                  "rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors",
                   pathname === link.href
-                    ? "bg-neutral-100 font-medium text-neutral-900"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900"
                 )}
               >
                 {link.label}
