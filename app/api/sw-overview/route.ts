@@ -60,9 +60,13 @@ export async function GET(req: NextRequest) {
   const unknownMap = new Map<string, { total: number; online: number; models: Set<string> }>();
 
   for (const row of reportCache.rawRows) {
-    const mac = (row['Home WiFi ID'] || row['MAC'] || '').trim();
-    if (!mac || seen.has(mac)) continue;
-    seen.add(mac);
+    const mac    = (row['Home WiFi ID'] || row['MAC'] || '').trim();
+    const serial = (row['Serial Number'] || row['Serial'] || row['SN'] || row['Device Serial'] || '').trim();
+    // Deduplicate per physical device (serial), falling back to network MAC so
+    // mesh APs with their own serial numbers are each counted separately.
+    const dedupeKey = serial || mac;
+    if (!dedupeKey || seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
 
     const firmware = (row['Firmware version'] || row['Firmware Version'] || '').trim();
     const formattedVersion = (
