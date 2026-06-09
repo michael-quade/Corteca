@@ -23,7 +23,7 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
   return (
     <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-center">
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-neutral-500">{label}</p>
+      <p className="mt-0.5 text-sm text-neutral-900">{label}</p>
     </div>
   );
 }
@@ -50,14 +50,14 @@ export function NetworkMapControls({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button" onClick={onNewReport} disabled={isBusy(phase)}
-            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 disabled:opacity-40"
             title="Fetch a fresh deployment report from Corteca"
           >
             New Report
           </button>
           <button
             type="button" onClick={onRefreshLocations} disabled={isBusy(phase)}
-            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+            className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:border-neutral-400 disabled:opacity-40"
             title="Re-locate all devices (clears location cache)"
           >
             Refresh Locations

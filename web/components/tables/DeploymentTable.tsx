@@ -99,7 +99,7 @@ export function DeploymentTable({ rows, headers, pinnedFirst = ["Account Name", 
   }, []);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 rounded-xl border border-neutral-200 bg-white p-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
         <span>
