@@ -66,12 +66,13 @@ export function ReportTable({ rows, columns }: ReportTableProps) {
           {displayed.length} of {rows.length} record{rows.length !== 1 ? "s" : ""}
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-50">
+      {/* overflow-auto (both axes) + max-h so sticky thead works within this container */}
+      <div className="max-h-[60vh] overflow-auto">
+        <table className="min-w-max w-full text-sm">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-neutral-200 bg-neutral-100 shadow-[0_1px_0_0_#e5e7eb]">
               {columns.map((col) => (
-                <th key={col} className="px-4 py-3 text-left">
+                <th key={col} className="whitespace-nowrap px-4 py-3 text-left">
                   <div className="flex flex-col gap-1">
                     <button
                       type="button"
@@ -88,7 +89,7 @@ export function ReportTable({ rows, columns }: ReportTableProps) {
                       placeholder="Filter…"
                       value={filters[col] ?? ""}
                       onChange={(e) => setFilters((f) => ({ ...f, [col]: e.target.value }))}
-                      className="w-full min-w-[80px] rounded border border-neutral-200 px-2 py-1 text-xs text-neutral-700 placeholder:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                      className="w-full min-w-[80px] rounded border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 placeholder:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-neutral-400"
                     />
                   </div>
                 </th>
