@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { cn } from "@/web/lib/utils";
 import type { UnknownFirmwareEntry } from "@/app/api/sw-overview/route";
 import { AssignFirmwareModal } from "@/web/components/modals/AssignFirmwareModal";
+
+const CONSOLE_BASE = process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? 'https://console.demo2.homewifi.nokia.com';
+
+function consoleUrl(mac: string): string {
+  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${mac.toUpperCase().replace(/:/g, '-')}`;
+}
 
 interface AssignTarget {
   firmware: string;
@@ -34,9 +41,10 @@ function ChevronIcon({ open, className = "" }: { open: boolean; className?: stri
 }
 
 export function UnknownFirmwareList({ items, onAssigned }: Props) {
-  const [outerOpen, setOuterOpen]       = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
+  const [outerOpen, setOuterOpen]             = useState(false);
+  const [expandedGroups, setExpandedGroups]   = useState<Set<string>>(new Set());
+  const [expandedFirmwares, setExpandedFirmwares] = useState<Set<string>>(new Set());
+  const [assignTarget, setAssignTarget]       = useState<AssignTarget | null>(null);
 
   const groups: HwGroup[] = useMemo(() => {
     const map = new Map<string, UnknownFirmwareEntry[]>();
@@ -61,6 +69,14 @@ export function UnknownFirmwareList({ items, onAssigned }: Props) {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(model)) next.delete(model); else next.add(model);
+      return next;
+    });
+  }
+
+  function toggleFirmware(fw: string) {
+    setExpandedFirmwares((prev) => {
+      const next = new Set(prev);
+      if (next.has(fw)) next.delete(fw); else next.add(fw);
       return next;
     });
   }
@@ -91,10 +107,10 @@ export function UnknownFirmwareList({ items, onAssigned }: Props) {
         <div className="border-t border-amber-200 px-4 pb-4">
           <div className="mt-3 space-y-2">
             {groups.map((group) => {
-              const isOpen = expandedGroups.has(group.model);
+              const isGroupOpen = expandedGroups.has(group.model);
               return (
                 <div key={group.model} className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-                  {/* Group header */}
+                  {/* HW model header */}
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.model)}
@@ -105,45 +121,90 @@ export function UnknownFirmwareList({ items, onAssigned }: Props) {
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
                         {group.items.length} build{group.items.length !== 1 ? "s" : ""}
                       </span>
-                      {!isOpen && (
+                      {!isGroupOpen && (
                         <span className="text-xs text-neutral-500">
                           {group.total} device{group.total !== 1 ? "s" : ""}{" "}
                           &middot; <span className="text-emerald-600">{group.online} online</span>
                         </span>
                       )}
                     </div>
-                    <ChevronIcon open={isOpen} className="text-neutral-400" />
+                    <ChevronIcon open={isGroupOpen} className="text-neutral-400" />
                   </button>
 
-                  {/* Group entries */}
-                  {isOpen && (
+                  {/* Firmware entries */}
+                  {isGroupOpen && (
                     <div className="space-y-1.5 border-t border-amber-100 px-4 pb-3 pt-2">
-                      {group.items.map((item) => (
-                        <div
-                          key={item.firmware}
-                          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-neutral-50 px-3 py-2 text-xs ring-1 ring-neutral-100"
-                        >
-                          <span className="min-w-[160px] flex-1 font-mono font-semibold text-neutral-800">
-                            {item.firmware || "(empty)"}
-                          </span>
-                          <span className="text-neutral-500">
-                            {item.total} device{item.total !== 1 ? "s" : ""}
-                            <span className="ml-1 text-emerald-600">({item.online} online)</span>
-                          </span>
-                          {item.derivedRelease && (
-                            <span className="rounded bg-amber-100 px-2 py-0.5 font-mono text-amber-700">
-                              hint: {item.derivedRelease}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setAssignTarget({ firmware: item.firmware, derivedRelease: item.derivedRelease })}
-                            className="ml-auto shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:border-amber-400 hover:bg-amber-50"
+                      {group.items.map((item) => {
+                        const isFwOpen = expandedFirmwares.has(item.firmware);
+                        return (
+                          <div
+                            key={item.firmware}
+                            className="overflow-hidden rounded-md bg-neutral-50 ring-1 ring-neutral-100"
                           >
-                            Assign
-                          </button>
-                        </div>
-                      ))}
+                            {/* Firmware header row */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => toggleFirmware(item.firmware)}
+                                className="shrink-0"
+                                title={isFwOpen ? "Hide devices" : "Show devices"}
+                              >
+                                <ChevronIcon open={isFwOpen} className="text-neutral-400" />
+                              </button>
+                              <span className="min-w-[160px] flex-1 font-mono font-semibold text-neutral-800">
+                                {item.firmware || "(empty)"}
+                              </span>
+                              <span className="text-neutral-500">
+                                {item.total} device{item.total !== 1 ? "s" : ""}
+                                <span className="ml-1 text-emerald-600">({item.online} online)</span>
+                              </span>
+                              {item.derivedRelease && (
+                                <span className="rounded bg-amber-100 px-2 py-0.5 font-mono text-amber-700">
+                                  hint: {item.derivedRelease}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setAssignTarget({ firmware: item.firmware, derivedRelease: item.derivedRelease })}
+                                className="ml-auto shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:border-amber-400 hover:bg-amber-50"
+                              >
+                                Assign
+                              </button>
+                            </div>
+
+                            {/* Device list */}
+                            {isFwOpen && item.devices.length > 0 && (
+                              <div className="border-t border-neutral-100 bg-white px-3 py-1">
+                                {item.devices.map((device) => (
+                                  <button
+                                    key={device.mac}
+                                    type="button"
+                                    onClick={() => window.open(consoleUrl(device.mac), '_blank', 'noopener,noreferrer')}
+                                    className="group flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-blue-50"
+                                  >
+                                    <span className={cn(
+                                      "h-2 w-2 shrink-0 rounded-full",
+                                      device.online ? "bg-emerald-500" : "bg-neutral-300"
+                                    )} />
+                                    <span className="font-mono text-neutral-600">{device.mac}</span>
+                                    {device.customerId && (
+                                      <span className="text-neutral-400">{device.customerId}</span>
+                                    )}
+                                    <svg
+                                      width="10" height="10" viewBox="0 0 12 12" fill="none"
+                                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                      className="ml-auto shrink-0 text-neutral-300 transition-colors group-hover:text-blue-400"
+                                    >
+                                      <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/>
+                                      <path d="M8 1h3v3M11 1 6 6"/>
+                                    </svg>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

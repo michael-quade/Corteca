@@ -14,12 +14,19 @@ export interface NetworkSwEntry {
   customerId: string;
 }
 
+export interface UnknownDevice {
+  mac: string;
+  online: boolean;
+  customerId: string;
+}
+
 export interface UnknownFirmwareEntry {
   firmware: string;
   total: number;
   online: number;
   models: string[];
   derivedRelease: string | null;
+  devices: UnknownDevice[];
 }
 
 export interface SwOverviewResponse {
@@ -57,7 +64,7 @@ export async function GET(req: NextRequest) {
 
   const seen = new Set<string>();
   const networks: NetworkSwEntry[] = [];
-  const unknownMap = new Map<string, { total: number; online: number; models: Set<string> }>();
+  const unknownMap = new Map<string, { total: number; online: number; models: Set<string>; devices: UnknownDevice[] }>();
 
   for (const row of reportCache.rawRows) {
     const mac    = (row['Home WiFi ID'] || row['MAC'] || '').trim();
@@ -102,16 +109,18 @@ export async function GET(req: NextRequest) {
       });
 
       if (firmware) {
-        const existing = unknownMap.get(firmware);
-        if (existing) {
-          existing.total += 1;
-          if (online) existing.online += 1;
-          if (deviceModel) existing.models.add(deviceModel);
+        const entry = unknownMap.get(firmware);
+        if (entry) {
+          entry.total += 1;
+          if (online) entry.online += 1;
+          if (deviceModel) entry.models.add(deviceModel);
+          entry.devices.push({ mac, online, customerId });
         } else {
           unknownMap.set(firmware, {
             total: 1,
             online: online ? 1 : 0,
             models: new Set(deviceModel ? [deviceModel] : []),
+            devices: [{ mac, online, customerId }],
           });
         }
       }
@@ -125,9 +134,12 @@ export async function GET(req: NextRequest) {
       online: stats.online,
       models: Array.from(stats.models),
       derivedRelease: deriveRelease(
-        // Try to get formattedVersion from any network entry with this firmware
         networks.find((n) => n.firmware === firmware)?.formattedVersion ?? '',
       ),
+      devices: stats.devices.sort((a, b) => {
+        if (a.online !== b.online) return a.online ? -1 : 1;
+        return a.mac.localeCompare(b.mac);
+      }),
     }),
   );
 
