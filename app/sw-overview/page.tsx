@@ -14,11 +14,13 @@ import type { SwOverviewResponse } from "@/app/api/sw-overview/route";
 
 type Filter = "all" | "online" | "offline";
 
-function RefreshIcon() {
+function NewReportIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 7a6 6 0 1 0 6-6 6 6 0 0 0-4.24 1.76L1 4.5" />
-      <path d="M1 1v3.5H4.5" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/>
+      <line x1="9" y1="15" x2="15" y2="15"/>
     </svg>
   );
 }
@@ -139,12 +141,12 @@ export default function SwOverviewPage() {
           <button
             onClick={handleRefresh}
             disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 disabled:opacity-50"
           >
             {busy ? (
-              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />Refreshing…</>
+              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Fetching report…</>
             ) : (
-              <><RefreshIcon />Refresh</>
+              <><NewReportIcon />New Report</>
             )}
           </button>
         </div>
