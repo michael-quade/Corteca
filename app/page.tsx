@@ -56,11 +56,11 @@ export default function HomePage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/70">Email</label>
+              <label className="mb-1 block text-xs font-medium text-white/70">Username</label>
               <input
-                type="email" required autoFocus
+                type="text" autoComplete="username" required autoFocus
                 value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="Username"
                 className="w-full rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-sm text-white placeholder-white/40 outline-none focus:border-white/50 focus:bg-white/20"
               />
             </div>
