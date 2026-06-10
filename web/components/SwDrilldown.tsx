@@ -149,7 +149,7 @@ export function SwDrilldown({ selection, networks, filter, onClose }: SwDrilldow
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex flex-1 flex-col overflow-hidden px-6 py-4">
           {filtered.length === 0 ? (
             <p className="py-12 text-center text-sm text-neutral-400">
               No networks in this selection.

@@ -53,8 +53,8 @@ function getVal(entry: NetworkSwEntry, accountNames: Map<string, string>, col: C
 }
 
 export function SwNetworkTable({ entries, accountNames }: SwNetworkTableProps) {
-  const [sortCol, setSortCol] = useState<Col>("Release");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortCol, setSortCol] = useState<Col>("Account Name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filters, setFilters] = useState<Partial<Record<Col, string>>>({});
 
   function handleSort(col: Col) {
@@ -85,16 +85,16 @@ export function SwNetworkTable({ entries, accountNames }: SwNetworkTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200">
-      <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
+    <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200">
+      <div className="shrink-0 border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
         <span className="text-xs font-medium text-neutral-500">
           {displayed.length} of {entries.length} record{entries.length !== 1 ? "s" : ""}
         </span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="flex-1 overflow-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-50">
+            <tr className="sticky top-0 z-10 border-b border-neutral-200 bg-neutral-50">
               {COLUMNS.map((col) => (
                 <th key={col} className="px-4 py-3 text-left">
                   <div className="flex flex-col gap-1">
