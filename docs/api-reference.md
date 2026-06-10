@@ -4,6 +4,10 @@
 **Base URL pattern:** `https://l1api.{instance}.homewifi.nokia.com`  
 **Swagger UI:** `https://edge.{instance}.homewifi.nokia.com/v3/swagger-ui/index.html`
 
+> **Path format:** Every endpoint URL includes the microservice name as the first path segment.  
+> Example: `GET /devicehub/devices/{device_id}/system/status`  
+> Path parameters use **snake_case** (`device_id`, `home_wifi_id`, `member_id`) in actual requests.
+
 ---
 
 ## Table of Contents
@@ -49,6 +53,12 @@
 39. [Firmware Upgrade](#firmware-upgrade)
 40. [Container Apps Management](#container-apps-management)
 41. [L2 API (Metrics, Alarms, Steering)](#l2-api)
+42. [Onboarding (Third-Party CPE)](#onboarding-third-party-cpe)
+43. [JavaScript Extension Management](#javascript-extension-management)
+44. [Event Analyzer](#event-analyzer)
+45. [Fault Manager (Tenant Alarms)](#fault-manager-tenant-alarms)
+46. [Application Management (Container Registry)](#application-management-container-registry)
+47. [Proactive Engine](#proactive-engine)
 
 ---
 
@@ -153,7 +163,12 @@ POST /auth/token
 | acs-proxy | `acs-proxy` | HDM server (TR-069) integration |
 | ouife | `ouife` | L2 metrics, alarms, DFS, steering |
 | shardhub | `shardhub` | Shard management |
-| application-management | `application-management` | Container assets |
+| application-management | `application-management` | Container asset registry (apps, versions, assets) |
+| extension-management | `extension-management` | JavaScript provisioning for USP devices |
+| event-analyzer | `event-analyzer` | Device event statistics tracking |
+| fmserver | `fmserver` | Tenant-level fault management / alarms |
+| proactive-engine | `proactive-engine` | Condition-based automation rules (e.g. auto-reboot) |
+| onboarding | `onboarding` | Third-party CPE onboarding transactions (Home Agent) |
 | usp-mqtt-logger | `usp-mqtt-logger` | Fetch device logs, async op status |
 
 ---
@@ -1416,41 +1431,58 @@ Called by mobile app after account creation and email verification.
 
 **Microservice:** `scheduler`
 
-### Create a campaign rule/schedule
+> **Note:** Paths use `/schedules` (not `/rules` as some older docs may show).
+
+### Schedule CRUD
 
 ```
-POST /scheduler/rules
+GET    /schedules                          # list all schedules (filter: ?type=RDOF &action=INSTALL_CONTAINER)
+POST   /schedules                          # create schedule
+GET    /schedules/{schedule_id}            # get one schedule
+PATCH  /schedules/{schedule_id}            # update schedule
+DELETE /schedules/{schedule_id}            # delete schedule
+PUT    /schedules/{schedule_id}/pause      # pause or unpause (body: {"pause": true})
 ```
 
-**Swagger:** `scheduler#/...`
+**Schedule body fields:**
 
-**Campaign types:** firmware upgrade, configuration push, JavaScript scripting (zero-touch onboarding).
-
-### Manage campaign rules
-
-| Action | Swagger |
+| Field | Description |
 |---|---|
-| List all rules | `scheduler#/.../getRules` |
-| Delete a rule | `scheduler#/.../deleteRule` |
-| Update a rule | `scheduler#/.../updateRule` |
-| Pause / resume rule | `scheduler#/.../pauseResumeRule` |
-| Get rule report | `scheduler#/.../getRuleReport` |
+| `name` | Schedule name |
+| `enabled` | true/false |
+| `cron` | Cron expression (unix epoch int) |
+| `time_zone` | e.g. `"Asia/Kolkata"` |
+| `type` | `RDOF` (FCC) or other |
+| `action` | `INSTALL_CONTAINER`, `UPGRADE_FIRMWARE`, etc. |
+| `data` | Action-specific data (`test_type`, `max_rx_rate`, etc.) |
+| `events` | Trigger on device events: `["NEW_DEVICE"]` |
+| `apply_on_boot` | Apply when device boots |
+| `duration_in_hours` | Campaign window duration |
+
+**Campaign types:** firmware upgrade, configuration push, JavaScript scripting (zero-touch onboarding), RDOF speed testing.
 
 ### Device assignment
 
-| Action | Swagger |
-|---|---|
-| Associate devices to rule | `scheduler#/.../associateDevices` |
-| Get devices in rule | `scheduler#/.../getDevicesInRule` |
-| Remove device from rule | `scheduler#/.../deleteDeviceFromRule` |
+```
+GET    /schedules/{schedule_id}/devices                      # list devices in schedule
+POST   /schedules/{schedule_id}/devices                      # add devices (CSV or model filter)
+DELETE /schedules/{schedule_id}/devices/{device_id}          # remove device from schedule
+```
 
-### Utility
+### Reports & trends
 
-| Action | Swagger |
-|---|---|
-| Get unique device models | `scheduler#/.../getUniqueModels` |
-| Get unique firmware versions | `scheduler#/.../getUniqueFirmwareVersions` |
-| Campaign metrics | `scheduler#/.../getCampaignMetrics` |
+```
+GET /schedules/{schedule_id}/reports                         # CSV report for schedule
+GET /schedules/{schedule_id}/devices/{device_id}/reports     # per-device report
+GET /schedules/{schedule_id}/trends                          # intent trends (params: from, to)
+GET /schedules/{schedule_id}/compliance                      # compliance score (Nokia BB only)
+```
+
+### Configuration
+
+```
+POST /configs                              # create scheduler config (e.g. latency_server_url for RDOF)
+```
 
 ---
 
@@ -1946,15 +1978,62 @@ PUT /devices/{deviceId}/qos/priority/{stationMac}
 
 **Microservice:** `acs-proxy`
 
+Wraps Nokia ACS/HDM (TR-069) server operations. *Nokia Broadband (finepoint) devices only unless noted.*
+
+### Device search & retrieval
+
+```
+GET /devices                              # search ACS devices (?search=column:value e.g. serial_number:ALCLFC383F22)
+GET /devices/{device_id}                  # get device details from ACS
+DELETE /devices/{device_id}               # delete device from ACS
+```
+
+### Device data access
+
+```
+GET /devices/{device_id}/config           # full device configuration from ACS
+GET /devices/{device_id}/config_tags      # filtered config name/value pairs (?params=[...])
+GET /devices/{device_id}/cached_params    # cached parameter tags (?refresh=true &params=[...])
+GET /devices/{device_id}/browse/{data_model_path}  # browse TR-069 data model tree
+GET /devices/{device_id}/log              # device log entries (?size=1000 &sort=descending &start_dt &end_dt)
+GET /devices/{device_id}/firmwares        # firmware history list
+```
+
+### Device operations
+
+```
+PUT  /devices/{device_id}/refresh         # refresh device params in ACS (?full_refresh=true)
+POST /devices/{device_id}/system/reboot   # reboot device via ACS
+POST /devices/{device_id}/system/factory_reset  # factory reset via ACS
+POST /devices/{device_id}/sync_operations   # synchronous TR-069 Get/Set (body: {rpc, parameters})
+POST /devices/{device_id}/async_operations  # asynchronous TR-069 Get/Set (body: {rpc, parameters})
+```
+
+**sync/async_operations body:**
+```json
+{
+  "rpc": "Get",
+  "parameters": {
+    "parameter": [
+      { "name": "string", "type": "string", "value": "string" }
+    ]
+  }
+}
+```
+
+### Backup & restore (finepoint only)
+
+```
+PUT /devices/{device_id}/system/backup    # trigger backup (body: {backup: {url, fms, username, password}})
+PUT /devices/{device_id}/system/restore   # trigger restore with download (body: {restore: {url, ...}})
+```
+
+### Provisioning (legacy Swagger names)
+
 | Action | Swagger |
 |---|---|
 | Provision device into HDM | `acs-proxy#/.../provisionDevice` |
 | Validate HDM provision | `acs-proxy#/.../validateProvision` |
-| Delete device from HDM | `acs-proxy#/.../deleteDevice` |
-| Get device backups | `acs-proxy#/.../getBackups` |
-| Trigger backup | `acs-proxy#/.../triggerBackup` |
-| Trigger restore | `acs-proxy#/.../triggerRestore` |
-| List firmware versions in HDM | `acs-proxy#/.../listFirmwareVersions` |
 | Trigger firmware upgrade via HDM | `acs-proxy#/.../triggerUpgrade` |
 | Get operation status | `acs-proxy#/.../getOperationStatus` |
 
@@ -1977,18 +2056,13 @@ PUT /devices/{deviceId}/qos/priority/{stationMac}
 
 **Microservice:** `scheduler`
 
-| Action | Notes |
-|---|---|
-| Create schedule | Set `model: "RDOF"` in speed test config; `time_duration: 15` seconds |
-| List schedules | |
-| Delete schedule | |
-| Update schedule | |
-| Associate devices | |
-| Get devices in schedule | |
-| Remove device from schedule | |
-| Get schedule test report | |
-| Get per-device test report | |
-| Pause / resume schedule | |
+FCC RDOF compliance uses the same `/schedules` API (see [Campaigns](#campaigns)) with `type: "RDOF"`.
+
+1. Set speed test config: `PUT /speedtest/configs` with `model: "RDOF"` and `time_duration: 15` seconds
+2. Create schedule: `POST /schedules` with `type: "RDOF"` and `data.test_type: "SPEED"`
+3. Add devices: `POST /schedules/{schedule_id}/devices`
+4. Reports: `GET /schedules/{schedule_id}/reports` and per-device `GET /schedules/{schedule_id}/devices/{device_id}/reports`
+5. Compliance score: `GET /schedules/{schedule_id}/compliance` (Nokia BB only)
 
 ---
 
@@ -2156,6 +2230,181 @@ DELETE /proactive/rules/{ruleId} # delete rule
 ```
 
 **Swagger:** `proactive-engine#/...`
+
+---
+
+## Onboarding (Third-Party CPE)
+
+**Microservice:** `onboarding`
+
+*Third-party CPEs integrated through the Home Agent only.*
+
+```
+GET   /networks/{home_wifi_id}/onboard           # list onboarding processes (?status &state)
+POST  /networks/{home_wifi_id}/onboard           # start new onboarding transaction
+GET   /networks/{home_wifi_id}/onboard/{id}      # get transaction status
+PATCH /networks/{home_wifi_id}/onboard/{id}      # validate/advance transaction (body: {"status": "WAITING"})
+```
+
+**POST body:**
+```json
+{
+  "timeout": 0,
+  "validation": true,
+  "server_id": "string",
+  "device_id": "string"
+}
+```
+
+---
+
+## JavaScript Extension Management
+
+**Microservice:** `extension-management`
+
+*USP-enabled Wi-Fi points only.*
+
+### Execute a provisioned JavaScript API
+
+```
+POST /devices/{device_id}/api/{api_id}
+```
+
+`api_id` is formed from the target endpoint: e.g. `GET_DEVICEHUB_DEVICES_FINGERPRINT_STATIONS`.  
+Body includes `pathVariables`, `queryParams`, `requestBody`, `headers`.
+
+### Provision (manage JavaScript scripts)
+
+```
+GET    /provision                          # list all JavaScript metadata
+POST   /provision                          # create JavaScript metadata + hooks
+GET    /provision/{provision_id}           # get one script's metadata
+PATCH  /provision/{provision_id}           # update metadata
+DELETE /provision/{provision_id}           # delete
+POST   /provision/{provision_id}/upload    # upload JavaScript file (?modules=comma-separated)
+```
+
+**POST /provision body fields:**
+
+| Field | Description |
+|---|---|
+| `name` | Script name |
+| `usage` | `generic` or specific use-case |
+| `models` | Device models this script applies to |
+| `firmwares` | Compatible firmware versions |
+| `arguments` | Input argument definitions |
+| `hooks` | Trigger conditions: `{ type: "DEVICE_OPERATIONS", apis: [...] }` |
+| `enable` | Active state |
+
+---
+
+## Event Analyzer
+
+**Microservice:** `event-analyzer`
+
+Tracks and aggregates device event statistics.
+
+```
+GET  /event/stats         # get event statistics (?devices=comma-sep-MACs &tenantId=string; max 10 devices)
+POST /event/stats         # record an event (body: {deviceId, eventName})
+GET  /event/stats/download  # download all stats as CSV (columns: MacAddr, EventName, Count, Timestamps, service)
+```
+
+---
+
+## Fault Manager (Tenant Alarms)
+
+**Microservice:** `fmserver`
+
+```
+GET /alarms/{severity}    # tenant-level alarms by severity (critical/major/minor/clear/all)
+                          # params: date_start, date_end (yyyy-MM-dd'T'HH:mm:ss UTC), device_id, page, size, categories
+GET /unsupportedmodels    # list of unsupported device models from S3
+```
+
+**Alarm categories:** `lowMemory`, `lowFlash`, `lowRAM`, `wirelessInterface2.4G`, `wirelessInterface5G`, `cloudConnectionLost`, `watchDog`, `zombie`, `cpuUtilization`, `radioUptime`, `noiseInterference2G`, `noiseInterference5G`, `generalErrorMsg`
+
+> Max time range per query: 7 days. Start date must be after 2016-12-31.
+
+---
+
+## Application Management (Container Registry)
+
+**Microservice:** `application-management`
+
+Manages the Corteca application/container registry (apps and their versioned assets).
+
+### Application CRUD
+
+```
+GET    /apps                               # list apps (?category &device_model &firmware)
+POST   /apps                               # create app (body: {fqdn, name})
+GET    /apps/{app-uuid}                    # get app details
+PUT    /apps/{app-uuid}                    # update app (body: {categories, description, maintainer_name, maintainer_url, metadata})
+DELETE /apps/{app-uuid}                    # delete app
+GET    /categories                         # list all app categories
+```
+
+### Version management
+
+```
+GET    /apps/{app-uuid}/versions           # list all versions
+POST   /apps/{app-uuid}/versions           # create version (body: {label, metadata, released, summary})
+GET    /apps/{app-uuid}/download-info/{version-label}  # get download info for a version
+```
+
+### Asset management
+
+```
+GET    /apps/{app-uuid}/assets             # list assets
+POST   /apps/{app-uuid}/assets             # upload new asset (multipart/form-data)
+GET    /apps/{app-uuid}/assets/{asset-uuid}  # get asset details
+PUT    /apps/{app-uuid}/assets/{asset-uuid}  # edit asset (multipart/form-data)
+DELETE /apps/{app-uuid}/assets/{asset-uuid}  # delete asset
+```
+
+---
+
+## Proactive Engine
+
+**Microservice:** `proactive-engine`
+
+Condition-based automation rules (e.g. reboot if CPU > X%). Multi-tenant: use `X-Realm-Id` header.
+
+### Rules CRUD
+
+```
+GET    /rules                              # list all rules
+POST   /rules                              # create rule
+GET    /rules/{rule_id}                    # get rule
+PUT    /rules/{rule_id}                    # full update
+PATCH  /rules/{rule_id}                    # update status only (body: {"enabled": true})
+DELETE /rules/{rule_id}                    # delete rule
+POST   /rules/sync                         # sync rules across shards
+GET    /rules/conditions                   # list available condition types and possible values
+```
+
+**Rule body fields:**
+
+| Field | Description |
+|---|---|
+| `type` | Rule action type, e.g. `REBOOT` |
+| `name` | Display name |
+| `enabled` | Active state |
+| `condition` | `{ type: "CPU_USAGE", value: "string" }` — see `/conditions` for options |
+| `cron` | Schedule (unix epoch int) |
+| `duration_in_hours` | Campaign window |
+| `tz` | Timezone e.g. `"Asia/Kolkata"` |
+| `wan_threshold` | `{ ul_kbps, dl_kbps }` — only trigger if WAN traffic is below threshold |
+| `model` | Filter by device model |
+| `maclist` | Comma-separated MAC list |
+
+### Reports & trends
+
+```
+GET /rules/{rule_id}/reports               # execution results for last 30 days (default)
+GET /rules/{rule_id}/trends                # trends for a rule (?from &to — ISO 8601, max 30 days)
+```
 
 ---
 
