@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { AlarmTable } from "@/web/components/tables/AlarmTable";
+import { AlarmCrossRefTable } from "@/web/components/tables/AlarmCrossRefTable";
 import type { AlarmsResponse, AlarmEntry } from "@/app/api/alarms/route";
 import { cn } from "@/web/lib/utils";
 
@@ -68,6 +69,10 @@ export default function AlarmsPage() {
   const [error,   setError]   = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<Set<string>>(new Set());
 
+  const [crossRefRows,    setCrossRefRows]    = useState<Record<string, string>[] | null>(null);
+  const [crossRefLoading, setCrossRefLoading] = useState(false);
+  const [crossRefError,   setCrossRefError]   = useState<string | null>(null);
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isAuthenticated, isLoading, router]);
@@ -96,6 +101,8 @@ export default function AlarmsPage() {
     setError(null);
     setData(null);
     setActiveFilter(new Set());
+    setCrossRefRows(null);
+    setCrossRefError(null);
     try {
       const params = new URLSearchParams({
         date_start: toUtcString(dateStart),
@@ -116,6 +123,23 @@ export default function AlarmsPage() {
       setLoading(false);
     }
   }, [canFetch, dateStart, dateEnd, selectedSeverities, deviceMac]);
+
+  const handleCrossRef = async () => {
+    setCrossRefLoading(true);
+    setCrossRefError(null);
+    setCrossRefRows(null);
+    try {
+      const res = await fetchWithAuth("/api/reboot-report");
+      const json = await res.json() as unknown;
+      if (!res.ok) throw new Error((json as Record<string, string>).error ?? `Error ${res.status}`);
+      const rows = Array.isArray(json) ? (json as Record<string, string>[]) : [];
+      setCrossRefRows(rows);
+    } catch (e) {
+      setCrossRefError(e instanceof Error ? e.message : "Failed to fetch reboot report.");
+    } finally {
+      setCrossRefLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -244,7 +268,7 @@ export default function AlarmsPage() {
           </p>
         )}
 
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => void handleFetch()}
@@ -262,6 +286,36 @@ export default function AlarmsPage() {
               </>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => void handleCrossRef()}
+            disabled={!data || loading || crossRefLoading}
+            title={!data ? "Fetch alarms first" : "Cross-reference alarm AP MACs against the latest reboot report"}
+            className="inline-flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-5 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {crossRefLoading ? (
+              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700" />Fetching Reboot Report…</>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12h12M2 8h8M2 4h5"/><circle cx="13" cy="6" r="2.5"/><path d="m15 8.5-1.5-1.5"/>
+                </svg>
+                Cross Reference Reboot Report
+              </>
+            )}
+          </button>
+
+          {crossRefRows && (
+            <button
+              type="button"
+              onClick={() => { setCrossRefRows(null); setCrossRefError(null); }}
+              className="text-xs text-neutral-400 hover:text-neutral-700"
+            >
+              ✕ Clear cross-reference
+            </button>
+          )}
+
           {data && !loading && (
             <span className="text-xs text-neutral-400">
               {data.total} result{data.total !== 1 ? "s" : ""}
@@ -270,7 +324,15 @@ export default function AlarmsPage() {
         </div>
       </section>
 
-      {/* Error */}
+      {/* Cross-reference error */}
+      {crossRefError && (
+        <div className="rounded-md bg-orange-50 px-4 py-3">
+          <p className="text-sm font-medium text-orange-700">Reboot Report Error</p>
+          <p className="mt-1 font-mono text-xs text-orange-500">{crossRefError}</p>
+        </div>
+      )}
+
+      {/* Alarm fetch error */}
       {error && (
         <div className="rounded-md bg-red-50 px-4 py-3">
           <p className="text-sm font-medium text-red-700">Error</p>
@@ -318,10 +380,14 @@ export default function AlarmsPage() {
         </div>
       )}
 
-      {/* Results table */}
+      {/* Results */}
       {data && (
         <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "400px" }}>
-          <AlarmTable alarms={data.alarms} severityFilter={activeFilter} />
+          {crossRefRows ? (
+            <AlarmCrossRefTable alarms={data.alarms} rebootRows={crossRefRows} />
+          ) : (
+            <AlarmTable alarms={data.alarms} severityFilter={activeFilter} />
+          )}
         </div>
       )}
     </main>
