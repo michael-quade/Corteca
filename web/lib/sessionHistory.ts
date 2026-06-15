@@ -70,8 +70,56 @@ function bucketLabel(ts: number, p: Period): string {
   return `${mon.toLocaleDateString('en', { month: 'short', day: 'numeric' })}`;
 }
 
-export function aggregateSessions(sessions: SessionRecord[], period: Period): PeriodBucket[] {
+const emptyBucket = (key: string, label: string): PeriodBucket =>
+  ({ key, label, authEvents: 0, calls: 0, bytesSent: 0, bytesReceived: 0, rateLimitHits: 0 });
+
+// Build a pre-filled scaffold of empty buckets covering a fixed window per period
+// so each tab always shows a meaningful time range even with sparse data.
+function scaffoldBuckets(period: Period): Map<string, PeriodBucket> {
   const map = new Map<string, PeriodBucket>();
+  const now = Date.now();
+
+  if (period === 'day') {
+    // Last 14 days
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = localDateStr(d);
+      map.set(key, emptyBucket(key, bucketLabel(d.getTime(), 'day')));
+    }
+  } else if (period === 'week') {
+    // Last 8 weeks
+    const seen = new Set<string>();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i * 7);
+      const key = bucketKey(d.getTime(), 'week');
+      if (!seen.has(key)) {
+        seen.add(key);
+        map.set(key, emptyBucket(key, bucketLabel(d.getTime(), 'week')));
+      }
+    }
+  } else if (period === 'month') {
+    // Last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      const key = bucketKey(d.getTime(), 'month');
+      map.set(key, emptyBucket(key, bucketLabel(d.getTime(), 'month')));
+    }
+  }
+  // 'year': no scaffold — show all actual years found in data
+
+  return map;
+}
+
+export function aggregateSessions(sessions: SessionRecord[], period: Period): PeriodBucket[] {
+  // Scaffold fills in empty buckets for the recent window so each period tab
+  // looks visually distinct. Sessions older than the window still get their
+  // own bucket added below — no history is discarded.
+  const map = scaffoldBuckets(period);
+
   for (const s of sessions) {
     const key = bucketKey(s.startTime, period);
     const ex  = map.get(key);
@@ -85,5 +133,6 @@ export function aggregateSessions(sessions: SessionRecord[], period: Period): Pe
       map.set(key, { key, label: bucketLabel(s.startTime, period), authEvents: 1, calls: s.calls, bytesSent: s.bytesSent, bytesReceived: s.bytesReceived, rateLimitHits: s.rateLimitHits });
     }
   }
+
   return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
 }
