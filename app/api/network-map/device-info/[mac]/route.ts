@@ -37,7 +37,7 @@ function extractModelName(params: Record<string, string>): string {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { mac: string } },
+  { params }: { params: Promise<{ mac: string }> },
 ) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -45,7 +45,7 @@ export async function GET(
   const baseUrl = process.env.CORTECA_API_BASE_URL;
   if (!baseUrl) return NextResponse.json({ error: 'API not configured' }, { status: 503 });
 
-  const { mac } = params;
+  const { mac } = await params;
 
   const cached = infoCache.get(mac);
   if (cached && Date.now() - cached.ts < INFO_TTL) return NextResponse.json(cached.data);

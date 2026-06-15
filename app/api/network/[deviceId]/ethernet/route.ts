@@ -16,7 +16,7 @@ export interface EthernetPort {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { deviceId: string } },
+  { params }: { params: Promise<{ deviceId: string }> },
 ) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -24,7 +24,7 @@ export async function GET(
   const baseUrl = process.env.CORTECA_API_BASE_URL;
   if (!baseUrl) return NextResponse.json({ error: 'API not configured' }, { status: 503 });
 
-  const { deviceId } = params;
+  const { deviceId } = await params;
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const provided = req.nextUrl.searchParams.get('endpointId');

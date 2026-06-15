@@ -46,7 +46,7 @@ function matchesType(actual: string, candidates: string[]): boolean {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { reportType: string } }
+  { params }: { params: Promise<{ reportType: string }> }
 ) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -54,16 +54,17 @@ export async function GET(
   const baseUrl = process.env.CORTECA_API_BASE_URL;
   if (!baseUrl) return NextResponse.json({ error: 'API not configured' }, { status: 503 });
 
-  const config = REPORT_CONFIGS[params.reportType];
+  const { reportType } = await params;
+  const config = REPORT_CONFIGS[reportType];
   if (!config) {
-    return NextResponse.json({ error: `Unknown report type: ${params.reportType}` }, { status: 400 });
+    return NextResponse.json({ error: `Unknown report type: ${reportType}` }, { status: 400 });
   }
 
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   // ── Step 1: list reports ──────────────────────────────────────────────────
   const listUrl = `${baseUrl}/measures/reports?page=0&size=210&shard_id=1`;
-  console.log(`[report:${params.reportType}] listing:`, listUrl);
+  console.log(`[report:${reportType}] listing:`, listUrl);
 
   let listRes: Response;
   try {
@@ -74,7 +75,7 @@ export async function GET(
 
   if (!listRes.ok) {
     const body = await listRes.text();
-    console.error(`[report:${params.reportType}] list error:`, listRes.status, body);
+    console.error(`[report:${reportType}] list error:`, listRes.status, body);
     return NextResponse.json(
       { error: `Corteca error listing reports (${listRes.status}): ${body}` },
       { status: listRes.status >= 500 ? 502 : listRes.status }
@@ -82,7 +83,7 @@ export async function GET(
   }
 
   const reports: ReportMeta[] = await listRes.json();
-  console.log(`[report:${params.reportType}] total reports:`, reports.length);
+  console.log(`[report:${reportType}] total reports:`, reports.length);
 
   // ── Step 2: find latest matching report ───────────────────────────────────
   const matches = reports
@@ -93,12 +94,12 @@ export async function GET(
         new Date(a.date_range.end_date).getTime()
     );
 
-  console.log(`[report:${params.reportType}] matching reports:`, matches.length, matches.map(r => r.type));
+  console.log(`[report:${reportType}] matching reports:`, matches.length, matches.map(r => r.type));
 
   if (matches.length === 0) {
     const available = [...new Set(reports.map((r) => r.type))].join(', ');
     return NextResponse.json(
-      { error: `No "${params.reportType}" report found. Available types: ${available}` },
+      { error: `No "${reportType}" report found. Available types: ${available}` },
       { status: 404 }
     );
   }
@@ -115,7 +116,7 @@ export async function GET(
 
   // ── Step 3: download CSV ──────────────────────────────────────────────────
   const dlUrl = `${baseUrl}/measures/reports/${reportId}/download?shard_id=1`;
-  console.log(`[report:${params.reportType}] downloading:`, dlUrl);
+  console.log(`[report:${reportType}] downloading:`, dlUrl);
 
   let dlRes: Response;
   try {
@@ -126,7 +127,7 @@ export async function GET(
 
   if (!dlRes.ok) {
     const body = await dlRes.text();
-    console.error(`[report:${params.reportType}] download error:`, dlRes.status, body);
+    console.error(`[report:${reportType}] download error:`, dlRes.status, body);
     return NextResponse.json(
       { error: `Corteca error downloading report (${dlRes.status}): ${body}` },
       { status: dlRes.status >= 500 ? 502 : dlRes.status }
@@ -136,7 +137,7 @@ export async function GET(
   const csv = await dlRes.text();
   const rows = parseCsv(csv);
   const meta = { reportId, type: latest.type, start: latest.date_range.start_date, end: latest.date_range.end_date };
-  console.log(`[report:${params.reportType}] rows:`, rows.length, '| meta:', meta);
+  console.log(`[report:${reportType}] rows:`, rows.length, '| meta:', meta);
 
   return NextResponse.json({ rows, meta });
 }

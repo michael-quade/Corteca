@@ -3,7 +3,7 @@ import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { networkId: string } }
+  { params }: { params: Promise<{ networkId: string }> }
 ) {
   const token = req.cookies.get('corteca_token')?.value;
   if (!token) {
@@ -15,7 +15,7 @@ export async function GET(
     return NextResponse.json({ error: 'API not configured' }, { status: 503 });
   }
 
-  const { networkId } = params;
+  const { networkId } = await params;
   const url = `${baseUrl}/home-hub/networks/${networkId}/members`;
 
   console.log('[corteca members] GET', url);
