@@ -80,8 +80,8 @@ function scaffoldBuckets(period: Period): Map<string, PeriodBucket> {
   const now = Date.now();
 
   if (period === 'day') {
-    // Last 14 days
-    for (let i = 13; i >= 0; i--) {
+    // Last 7 days (today + 6 previous)
+    for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const key = localDateStr(d);
