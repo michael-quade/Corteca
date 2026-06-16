@@ -44,7 +44,7 @@ export function UsageChart({ buckets }: Props) {
             <YAxis tick={tick} {...axisL} width={36} allowDecimals={false} />
             <Tooltip wrapperStyle={{ fontSize: 12 }} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="Auth Events" fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Auth Events" fill="#10b981" radius={[3, 3, 0, 0]} />
             <Bar dataKey="API Calls"   fill="#3b82f6" radius={[3, 3, 0, 0]} />
             <Bar dataKey="Throttled"   fill="#f59e0b" radius={[3, 3, 0, 0]} />
           </BarChart>
