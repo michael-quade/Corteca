@@ -131,6 +131,7 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/sw-overview` | GET | SW fleet overview (wraps deployment report) |
 | `/api/stats` | GET | In-memory API call stats for current process |
 | `/api/sessions` | GET / PUT | List or update API session records in DB |
+| `/api/cron/keepalive` | GET | Pings Supabase via Prisma to prevent auto-pause; called by Vercel Cron |
 
 ---
 
@@ -185,6 +186,14 @@ npm run db:studio     # open Prisma Studio
 npm run seed-matrix   # seed initial SW matrix data
 ```
 
+### Supabase Keepalive Cron
+
+Supabase free-tier projects auto-pause after 7 days with no database activity. `vercel.json` defines a daily Vercel Cron job (`0 8 * * *`) that hits `GET /api/cron/keepalive`, which runs `SELECT 1` via Prisma to register activity.
+
+- Authenticated via `CRON_SECRET` — Vercel automatically sends `Authorization: Bearer $CRON_SECRET` on cron-triggered requests; the route checks it if the env var is set (skipped in local dev).
+- `middleware.ts` allows `/api/cron/*` through the site gate unconditionally, since cron requests carry no `site_auth` cookie.
+- Cron jobs only fire on deployed Vercel environments (Hobby plan: once/day max), not in local dev.
+
 ---
 
 ## Key Server-Side Library Modules (`web/lib/`)
@@ -228,6 +237,7 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | `DIRECT_URL` | Direct PostgreSQL URI (port 5432) — used only by `prisma db push` and seed scripts |
 | `SITE_USERNAME` | Gate username protecting the entire app |
 | `SITE_PASSWORD` | Gate password |
+| `CRON_SECRET` | Bearer token Vercel Cron sends to `/api/cron/*` routes; optional, skips auth check if unset (local dev) |
 
 ---
 

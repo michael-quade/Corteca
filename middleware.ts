@@ -8,6 +8,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Always allow Vercel Cron requests (e.g. the Supabase keepalive ping) —
+  // they have no site_auth cookie and authenticate via CRON_SECRET instead.
+  if (pathname.startsWith('/api/cron/')) {
+    return NextResponse.next();
+  }
+
   // If gate credentials are not configured (local dev), skip the check
   const siteUser = process.env.SITE_USERNAME;
   const sitePass = process.env.SITE_PASSWORD;
