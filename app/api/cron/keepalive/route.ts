@@ -14,5 +14,20 @@ export async function GET(req: NextRequest) {
 
   await prisma.$queryRaw`SELECT 1`;
 
-  return NextResponse.json({ ok: true, timestamp: new Date().toISOString() });
+  // Supabase's free-tier pause detection only watches requests through its
+  // REST API (PostgREST) or dashboard access — a direct Postgres connection
+  // (the query above, via Prisma/PgBouncer) does NOT reset the inactivity
+  // timer. Ping the REST API too so the project registers real activity.
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let restPing: 'ok' | 'skipped' | 'failed' = 'skipped';
+
+  if (supabaseUrl && supabaseKey) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/sw_matrix?select=id&limit=1`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+    });
+    restPing = res.ok ? 'ok' : 'failed';
+  }
+
+  return NextResponse.json({ ok: true, restPing, timestamp: new Date().toISOString() });
 }

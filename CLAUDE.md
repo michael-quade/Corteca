@@ -188,11 +188,15 @@ npm run seed-matrix   # seed initial SW matrix data
 
 ### Supabase Keepalive Cron
 
-Supabase free-tier projects auto-pause after 7 days with no database activity. `vercel.json` defines a daily Vercel Cron job (`0 8 * * *`) that hits `GET /api/cron/keepalive`, which runs `SELECT 1` via Prisma to register activity.
+Supabase free-tier projects auto-pause after 7 days with no database activity. `vercel.json` defines a daily Vercel Cron job (`0 8 * * *`) that hits `GET /api/cron/keepalive`.
+
+**Important:** Supabase's pause detection only counts requests through its REST API (PostgREST) or dashboard access — a direct Postgres connection (Prisma/PgBouncer) does **not** reset the inactivity timer, confirmed by Supabase staff. The route therefore does two things:
+1. `prisma.$queryRaw\`SELECT 1\`` — harmless, but does not affect pause detection on its own.
+2. `fetch` to `${SUPABASE_URL}/rest/v1/sw_matrix?select=id&limit=1` using `SUPABASE_SERVICE_ROLE_KEY` — this is the part that actually registers as activity with Supabase. If `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` are unset, this step is skipped (`restPing: "skipped"` in the response) and the pause countdown will **not** be reset.
 
 - Authenticated via `CRON_SECRET` — Vercel automatically sends `Authorization: Bearer $CRON_SECRET` on cron-triggered requests; the route checks it if the env var is set (skipped in local dev).
 - `middleware.ts` allows `/api/cron/*` through the site gate unconditionally, since cron requests carry no `site_auth` cookie.
-- Cron jobs only fire on deployed Vercel environments (Hobby plan: once/day max), not in local dev.
+- Cron jobs only fire on deployed Vercel environments (Hobby plan: once/day max, logs retained 1 hour), not in local dev.
 
 ---
 
@@ -238,6 +242,8 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | `SITE_USERNAME` | Gate username protecting the entire app |
 | `SITE_PASSWORD` | Gate password |
 | `CRON_SECRET` | Bearer token Vercel Cron sends to `/api/cron/*` routes; optional, skips auth check if unset (local dev) |
+| `SUPABASE_URL` | Supabase project REST URL (e.g. `https://<ref>.supabase.co`) — required for the keepalive cron to actually prevent auto-pause |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key, used by the keepalive cron to hit the REST API (the only kind of request Supabase's pause detection counts) |
 
 ---
 
