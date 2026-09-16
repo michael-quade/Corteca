@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from "react";
 import { cn } from "@/web/lib/utils";
 import type { AlarmEntry } from "@/app/api/alarms/route";
+import { exportRowsToXlsx } from "@/web/lib/exportXlsx";
+import { useToast } from "@/web/contexts/ToastContext";
 
 const CONSOLE_BASE =
   process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? "https://console.demo2.homewifi.nokia.com";
@@ -64,10 +66,32 @@ interface Props {
   severityFilter?: Set<string>;
 }
 
+const EXPORT_HEADERS = [
+  "Created", "AP MAC", "Severity", "Category", "Message",
+  "Model", "Customer ID", "Serial Number", "Entity", "Tenant", "Last Updated",
+];
+
+function toExportRow(alarm: AlarmEntry): Record<string, unknown> {
+  return {
+    "Created": fmtEpoch(alarm.createdTime),
+    "AP MAC": alarm.ap ?? "",
+    "Severity": alarm.severity ?? "",
+    "Category": alarm.category ?? "",
+    "Message": alarm.message ?? "",
+    "Model": alarm.model ?? "",
+    "Customer ID": alarm.customerId ?? "",
+    "Serial Number": alarm.sn ?? "",
+    "Entity": alarm.entity ?? "",
+    "Tenant": alarm.tenantId ?? "",
+    "Last Updated": fmtEpoch(alarm.updatedTime),
+  };
+}
+
 export function AlarmTable({ alarms, severityFilter }: Props) {
   const [sortCol, setSortCol] = useState<SortCol>("created");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const toast = useToast();
 
   function handleSort(col: SortCol) {
     if (col === sortCol) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -113,11 +137,25 @@ export function AlarmTable({ alarms, severityFilter }: Props) {
 
   const hiddenCount = alarms.length - sorted.length;
 
+  function handleExport() {
+    exportRowsToXlsx("alarms", EXPORT_HEADERS, sorted.map(toExportRow));
+    toast.success(`Exported ${sorted.length} alarm${sorted.length !== 1 ? "s" : ""} to Excel.`);
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className="shrink-0 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
-        {sorted.length} of {alarms.length} alarm{alarms.length !== 1 ? "s" : ""}
-        {hiddenCount > 0 && <span className="ml-1 text-neutral-400">({hiddenCount} filtered out)</span>}
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+        <span>
+          {sorted.length} of {alarms.length} alarm{alarms.length !== 1 ? "s" : ""}
+          {hiddenCount > 0 && <span className="ml-1 text-neutral-400">({hiddenCount} filtered out)</span>}
+        </span>
+        <button
+          type="button"
+          onClick={handleExport}
+          className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 shadow-sm transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          Export to Excel
+        </button>
       </div>
       <div className="flex-1 overflow-auto">
         <table className="w-full min-w-[960px] border-collapse text-sm">

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "@/web/lib/utils";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
+import { useToast } from "@/web/contexts/ToastContext";
 import type { SwMatrixData, SwMatrixRow } from "@/app/api/sw-matrix/route";
 
 interface Props {
@@ -18,6 +19,7 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -86,10 +88,13 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
         ? (await res.json() as { ok?: boolean; error?: string })
         : { error: `Server error ${res.status}` };
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      toast.success("SW Matrix saved.");
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      const message = e instanceof Error ? e.message : "Save failed";
+      setError(message);
+      toast.error(`Failed to save SW Matrix: ${message}`);
     } finally {
       setSaving(false);
     }

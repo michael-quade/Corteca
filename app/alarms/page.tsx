@@ -9,6 +9,7 @@ import { AlarmTable } from "@/web/components/tables/AlarmTable";
 import { AlarmCrossRefTable } from "@/web/components/tables/AlarmCrossRefTable";
 import type { AlarmsResponse, AlarmEntry } from "@/app/api/alarms/route";
 import { cn } from "@/web/lib/utils";
+import { useToast } from "@/web/contexts/ToastContext";
 
 const SEVERITIES = ["critical", "major", "minor", "clear"] as const;
 type Severity = (typeof SEVERITIES)[number];
@@ -57,6 +58,7 @@ function countBySeverity(alarms: AlarmEntry[]): Record<string, number> {
 export default function AlarmsPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [dateStart, setDateStart] = useState(defaultStart);
   const [dateEnd,   setDateEnd]   = useState(defaultEnd);
@@ -135,7 +137,9 @@ export default function AlarmsPage() {
       const rows = Array.isArray(json) ? (json as Record<string, string>[]) : [];
       setCrossRefRows(rows);
     } catch (e) {
-      setCrossRefError(e instanceof Error ? e.message : "Failed to fetch reboot report.");
+      const message = e instanceof Error ? e.message : "Failed to fetch reboot report.";
+      setCrossRefError(message);
+      toast.error(`Cross-reference failed: ${message}`);
     } finally {
       setCrossRefLoading(false);
     }

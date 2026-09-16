@@ -1,13 +1,14 @@
 "use client";
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
+import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
 import { cn } from "@/web/lib/utils";
 import type { Subscriber } from "@/web/lib/corteca/types";
 
@@ -173,6 +174,21 @@ export default function NetworkVisualizerPage() {
       setFetching(false);
     }
   }
+
+  // Deep-link from the command palette: a subscriber selected there is handed
+  // off via sessionStorage since it can't travel through a URL param.
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(PALETTE_SUBSCRIBER_KEY);
+      if (raw) sessionStorage.removeItem(PALETTE_SUBSCRIBER_KEY);
+    } catch { /* sessionStorage unavailable */ }
+    if (!raw) return;
+    try {
+      void handleSubscriberSelect(JSON.parse(raw) as Subscriber);
+    } catch { /* malformed handoff — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isLoading || !isAuthenticated) {
     return (

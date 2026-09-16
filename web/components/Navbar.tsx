@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/web/components/ui/Button";
 import { LoginModal } from "@/web/components/modals/LoginModal";
+import { NavMenu } from "@/web/components/NavMenu";
+import { OPEN_PALETTE_EVENT } from "@/web/components/CommandPalette";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { useApiStats } from "@/web/contexts/ApiStatsContext";
 import { cn } from "@/web/lib/utils";
@@ -38,6 +40,7 @@ export function Navbar() {
 
         {isAuthenticated && (
           <nav className="ml-6 flex items-center gap-2">
+            <NavMenu />
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -53,6 +56,23 @@ export function Navbar() {
               </Link>
             ))}
           </nav>
+        )}
+
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
+            className="ml-3 flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-600"
+            title="Search pages or subscribers"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-neutral-400">
+              ⌘K
+            </kbd>
+          </button>
         )}
 
         {isAuthenticated && (

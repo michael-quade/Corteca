@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/web/lib/utils";
 import type { ReportRow } from "@/web/components/ReportChart";
+import { exportRowsToXlsx } from "@/web/lib/exportXlsx";
+import { useToast } from "@/web/contexts/ToastContext";
 
 type SortDir = "asc" | "desc";
 
@@ -30,12 +32,19 @@ function displayCell(col: string, val: unknown): string {
 interface ReportTableProps {
   rows: ReportRow[];
   columns: string[];
+  exportFilename?: string;
 }
 
-export function ReportTable({ rows, columns }: ReportTableProps) {
+export function ReportTable({ rows, columns, exportFilename = "report" }: ReportTableProps) {
   const [sortCol, setSortCol] = useState<string>(columns[0] ?? "");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const toast = useToast();
+
+  function handleExport() {
+    exportRowsToXlsx(exportFilename, columns, displayed as Record<string, unknown>[]);
+    toast.success(`Exported ${displayed.length} row${displayed.length !== 1 ? "s" : ""} to Excel.`);
+  }
 
   function handleSort(col: string) {
     if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -61,10 +70,17 @@ export function ReportTable({ rows, columns }: ReportTableProps) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200">
-      <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
+      <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
         <span className="text-xs font-medium text-neutral-500">
           {displayed.length} of {rows.length} record{rows.length !== 1 ? "s" : ""}
         </span>
+        <button
+          type="button"
+          onClick={handleExport}
+          className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 shadow-sm transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          Export to Excel
+        </button>
       </div>
       {/* overflow-auto (both axes) + max-h so sticky thead works within this container */}
       <div className="max-h-[60vh] overflow-auto">

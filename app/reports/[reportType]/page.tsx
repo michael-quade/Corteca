@@ -208,7 +208,7 @@ export default function ReportPage() {
                 <span className="text-xs text-neutral-400">{accountNames.size} account name{accountNames.size !== 1 ? 's' : ''} resolved</span>
               )}
             </div>
-            <ReportTable rows={enrichedRows as ReportRow[]} columns={enrichedColumns} />
+            <ReportTable rows={enrichedRows as ReportRow[]} columns={enrichedColumns} exportFilename={config.displayName} />
           </div>
         </div>
       )}
