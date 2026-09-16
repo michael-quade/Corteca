@@ -48,7 +48,12 @@ export async function GET(req: NextRequest) {
     // (True = custom alarms, False = standard system alarms).
     const isCustomAlarm = sp.get('isCustomAlarm') ?? 'False';
 
-    const params = new URLSearchParams({ date_start, date_end, severities, isCustomAlarm });
+    // ouife's `severities` param is not documented as comma-separated (unlike
+    // `categories`, which explicitly is) — send it as repeated keys instead.
+    const params = new URLSearchParams({ date_start, date_end, isCustomAlarm });
+    for (const s of severities.split(',').map((s) => s.trim()).filter(Boolean)) {
+      params.append('severities', s);
+    }
     const device_mac = sp.get('device_mac');
     if (device_mac) params.set('device_mac', device_mac);
     const page  = sp.get('page');
