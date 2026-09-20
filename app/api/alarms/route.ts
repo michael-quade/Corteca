@@ -85,7 +85,8 @@ export async function GET(req: NextRequest) {
       } catch {
         errorDetail = `HTTP ${res.status}`;
       }
-      console.error(`[alarms] upstream error ${res.status}:`, errorDetail);
+      const headerDump = Object.fromEntries(res.headers.entries());
+      console.error(`[alarms] upstream error ${res.status}:`, errorDetail, 'headers:', JSON.stringify(headerDump));
       return NextResponse.json(
         { error: `Corteca API error (${res.status}): ${errorDetail}` },
         { status: res.status },
