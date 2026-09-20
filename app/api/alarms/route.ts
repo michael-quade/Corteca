@@ -48,12 +48,14 @@ export async function GET(req: NextRequest) {
     // (True = custom alarms, False = standard system alarms).
     const isCustomAlarm = sp.get('isCustomAlarm') ?? 'False';
 
-    // ouife's `severities` param is not documented as comma-separated (unlike
-    // `categories`, which explicitly is) — send it as repeated keys instead.
-    const params = new URLSearchParams({ date_start, date_end, isCustomAlarm });
-    for (const s of severities.split(',').map((s) => s.trim()).filter(Boolean)) {
-      params.append('severities', s);
-    }
+    // ouife's `severities` param only accepts a single value per request —
+    // sending more than one (comma-joined or as repeated keys) returns a bare
+    // 400 with no detail. For a multi-severity request, ask for everything
+    // (`all`) and filter down to the requested severities ourselves below.
+    const requestedSeverities = severities.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const upstreamSeverity = requestedSeverities.length === 1 ? requestedSeverities[0] : 'all';
+
+    const params = new URLSearchParams({ date_start, date_end, isCustomAlarm, severities: upstreamSeverity });
     const device_mac = sp.get('device_mac');
     if (device_mac) params.set('device_mac', device_mac);
     const page  = sp.get('page');
@@ -110,6 +112,10 @@ export async function GET(req: NextRequest) {
       alarms = Array.isArray(candidate) ? (candidate as AlarmEntry[]) : [obj as AlarmEntry];
     } else {
       alarms = [];
+    }
+
+    if (upstreamSeverity === 'all' && !requestedSeverities.includes('all')) {
+      alarms = alarms.filter((a) => requestedSeverities.includes((a.severity ?? '').toLowerCase()));
     }
 
     const response: AlarmsResponse = {
