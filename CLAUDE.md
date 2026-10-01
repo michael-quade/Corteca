@@ -2,7 +2,7 @@
 
 ## What This App Is
 
-**Corteca Vibe Project** — a Next.js 14 internal dashboard that wraps the Nokia Corteca Home Controller (HomeWifi Edge) API. It gives operators a browser-based UI to search subscribers, visualize home networks, inspect devices, run fleet reports, monitor alarms, and track software deployments — all without using the raw API or the Nokia Corteca Console directly.
+**Corteca Vibe Project** — a Next.js 15 internal dashboard that wraps the Nokia Corteca Home Controller (HomeWifi Edge) API. It gives operators a browser-based UI to search subscribers, visualize home networks, inspect devices, run fleet reports, monitor alarms, and track software deployments — all without using the raw API or the Nokia Corteca Console directly.
 
 The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia API calls happen server-side (Next.js API routes), so credentials never reach the browser.
 
@@ -253,7 +253,7 @@ All required. Copy `.env.example` to `.env.local` to get started.
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 15 (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 3 — utility classes only, `cn()` for conditionals |
 | UI Components | Radix UI (Dialog, Popover, Tabs, Slot) |
