@@ -18,5 +18,9 @@ deploy_production:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
+    # The Vercel CLI reads commit SHA/message/branch from git to label the deployment;
+    # alpine has no git, and GitLab checks out a detached HEAD, so fix both first.
+    - apk add --no-cache git
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
     - npm install --global vercel@latest
     - vercel deploy --prod --yes --token "$VERCEL_TOKEN"
