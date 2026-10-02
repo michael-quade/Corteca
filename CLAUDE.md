@@ -416,6 +416,19 @@ All data tables must:
 
 ---
 
+## Deployment (GitLab CI → Vercel)
+
+Source lives on Nokia GitLab (`gitlabe1.ext.net.nokia.com/mquade/corteca-dashboards`, remote `gitlab`; local `main` tracks it). The GitHub remote (`origin`) is legacy — the corporate network (Zscaler) blocks pushes to GitHub.
+
+`.gitlab-ci.yml` deploys every push to `main` to Vercel production with `vercel deploy --prod` on the `docker`-tagged instance runner. Vercel builds remotely using the env vars configured in the Vercel project.
+
+- **GitLab CI/CD variables:** `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (masked, not protected).
+- **Commit details in Vercel:** the job installs git, marks the checkout as a safe directory, and checks out the branch by name so the CLI can read commit metadata; it also passes GitLab-style `--meta gitlab*` fields, which is what makes the Vercel dashboard show the commit message/SHA/branch.
+- **Deploy history:** GitLab → Operate → Environments → `production`.
+- Vercel Cron (`vercel.json`) keeps working — crons are registered from the deployed `vercel.json`.
+
+---
+
 ## Building From Scratch
 
 ```bash

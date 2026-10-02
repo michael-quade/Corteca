@@ -31,8 +31,10 @@ deploy_production:
     # The CI clone URL embeds a job token; the CLI sends the origin URL to Vercel.
     - git remote set-url origin "$CI_PROJECT_URL.git"
     - npm install --global vercel@latest
-    # Experimental: the Vercel dashboard ignores CLI git metadata from a self-hosted GitLab,
-    # so mimic the meta fields Vercel's own GitLab integration sets.
+    # The Vercel dashboard ignores CLI git metadata from a self-hosted GitLab, so also send
+    # the meta fields Vercel's own GitLab integration sets — these make the commit message,
+    # SHA and branch show in Vercel's Deployments list. (Its commit links point to gitlab.com
+    # and won't resolve; use GitLab → Operate → Environments for links.)
     - >-
       vercel deploy --prod --yes --token "$VERCEL_TOKEN"
       --meta gitlabDeployment=1
