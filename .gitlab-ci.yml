@@ -1,0 +1,20 @@
+# Deploys to Vercel on every push to the default branch.
+# Vercel builds remotely using the env vars configured in the Vercel project,
+# and registers the cron jobs from vercel.json as usual.
+#
+# Required CI/CD variables (Settings → CI/CD → Variables, masked):
+#   VERCEL_TOKEN       — Vercel account token
+#   VERCEL_ORG_ID      — Vercel team/user ID
+#   VERCEL_PROJECT_ID  — Vercel project ID
+
+stages:
+  - deploy
+
+deploy_production:
+  stage: deploy
+  image: node:24-alpine
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - npm install --global vercel@latest
+    - vercel deploy --prod --yes --token "$VERCEL_TOKEN"
