@@ -171,7 +171,7 @@ export function SwHeatmap({ beaconModels, networks, filter, onSelect, activeSele
                       <button
                         type="button"
                         onClick={() => onSelect({ type: "cell", releaseName: release, beaconModel: model })}
-                        className="flex flex-col items-center gap-0.5"
+                        className="mx-auto flex flex-col items-center gap-0.5"
                         title={`${counts.online} online, ${counts.offline} offline`}
                       >
                         <CellBadge counts={counts} isActive={isActive} />
