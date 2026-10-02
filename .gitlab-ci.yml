@@ -13,6 +13,8 @@ stages:
 deploy_production:
   stage: deploy
   image: node:24-alpine
+  tags:
+    - docker
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
