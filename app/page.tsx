@@ -48,7 +48,7 @@ export default function HomePage() {
 
       <div className="relative z-10 w-full max-w-sm">
         <h1 className="mb-8 text-center text-3xl font-bold tracking-tight text-white drop-shadow-lg">
-          Corteca Vibe Project
+          Corteca Dashboard Vibe Project
         </h1>
 
         <div className="rounded-2xl border border-white/10 bg-white/10 p-8 shadow-2xl backdrop-blur-md">
