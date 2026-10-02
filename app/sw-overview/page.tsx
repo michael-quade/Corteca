@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
+import { cn } from "@/web/lib/utils";
 import { SwHeatmap } from "@/web/components/SwHeatmap";
 import { SwDrilldown } from "@/web/components/SwDrilldown";
 import { SwMatrixModal } from "@/web/components/modals/SwMatrixModal";
@@ -159,27 +160,41 @@ export default function SwOverviewPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMatrixOpen(true)}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            SW Matrix
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 disabled:opacity-50"
-          >
-            {busy ? (
-              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Fetching report…</>
-            ) : (
-              <><NewReportIcon />New Report</>
-            )}
-          </button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMatrixOpen(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              SW Matrix
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {busy ? (
+                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Fetching report…</>
+              ) : (
+                <><NewReportIcon />New Report</>
+              )}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-neutral-500">
+            {[
+              ["bg-emerald-100", "All online"],
+              ["bg-amber-100", "Some offline"],
+              ["bg-neutral-100", "All offline"],
+            ].map(([swatch, label]) => (
+              <span key={label} className="inline-flex items-center gap-1.5">
+                <span className={cn("h-3 w-3 rounded-sm border border-neutral-200", swatch)} />
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
