@@ -21,6 +21,18 @@ deploy_production:
     # The Vercel CLI reads commit SHA/message/branch from git to label the deployment;
     # alpine has no git, and GitLab checks out a detached HEAD, so fix both first.
     - apk add --no-cache git
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+    # The CI clone URL embeds a job token; the CLI sends the origin URL to Vercel.
+    - git remote set-url origin "$CI_PROJECT_URL.git"
+    # Same checks the CLI runs — any failure here means Vercel gets no git metadata.
+    - git rev-parse --show-toplevel --abbrev-ref HEAD
+    - git log -1 --format='%H %s'
+    - git status -s
     - npm install --global vercel@latest
-    - vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+    - |
+      status=0
+      vercel deploy --prod --yes --token "$VERCEL_TOKEN" --debug > /tmp/deploy.log 2>&1 || status=$?
+      grep -iE "git|commit" /tmp/deploy.log || echo "(no git lines in CLI debug output)"
+      tail -n 15 /tmp/deploy.log
+      exit $status
