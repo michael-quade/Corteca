@@ -17,6 +17,10 @@ deploy_production:
     - docker
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  # Deploy history (commit, author, time) under Operate → Environments in GitLab
+  environment:
+    name: production
+    url: https://corteca.vercel.app
   script:
     # The Vercel CLI labels the deployment with commit SHA/message/branch read via git.
     # It silently skips this if git is missing, refuses the checkout (owned by another
@@ -27,4 +31,17 @@ deploy_production:
     # The CI clone URL embeds a job token; the CLI sends the origin URL to Vercel.
     - git remote set-url origin "$CI_PROJECT_URL.git"
     - npm install --global vercel@latest
-    - vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+    # Experimental: the Vercel dashboard ignores CLI git metadata from a self-hosted GitLab,
+    # so mimic the meta fields Vercel's own GitLab integration sets.
+    - >-
+      vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+      --meta gitlabDeployment=1
+      --meta "gitlabCommitMessage=$CI_COMMIT_TITLE"
+      --meta "gitlabCommitSha=$CI_COMMIT_SHA"
+      --meta "gitlabCommitRef=$CI_COMMIT_REF_NAME"
+      --meta "gitlabCommitAuthorName=$GITLAB_USER_NAME"
+      --meta "gitlabCommitAuthorLogin=$GITLAB_USER_LOGIN"
+      --meta "gitlabProjectId=$CI_PROJECT_ID"
+      --meta "gitlabProjectName=$CI_PROJECT_NAME"
+      --meta "gitlabProjectNamespace=$CI_PROJECT_NAMESPACE"
+      --meta "gitlabProjectPath=$CI_PROJECT_PATH"
