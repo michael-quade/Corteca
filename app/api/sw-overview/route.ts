@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getReportCache } from '@/web/lib/corteca/reportCache';
 import { ensureDeploymentReport, REPORT_MAX_AGE_MS } from '@/web/lib/corteca/deploymentReport';
 import { getSwMatrix, matchFirmware, deriveRelease } from '@/web/lib/swMatrix';
+import type { ModelWifiMap } from '@/web/lib/wifiGeneration';
 
 export interface NetworkSwEntry {
   mac: string;
@@ -31,6 +32,7 @@ export interface UnknownFirmwareEntry {
 
 export interface SwOverviewResponse {
   beaconModels: string[];
+  modelWifi: ModelWifiMap;
   /** raw build string per [releaseName][beaconModel] from the SW Release Matrix */
   buildMatrix: Record<string, Record<string, string>>;
   networks: NetworkSwEntry[];
@@ -148,6 +150,7 @@ export async function GET(req: NextRequest) {
 
   const response: SwOverviewResponse = {
     beaconModels: matrix.beaconModels,
+    modelWifi: matrix.modelWifi,
     buildMatrix: matrix.buildsByRelease,
     networks,
     unknownFirmwares,

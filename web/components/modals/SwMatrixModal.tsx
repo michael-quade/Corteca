@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "@/web/lib/utils";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useToast } from "@/web/contexts/ToastContext";
+import { WIFI_GENERATIONS, isWifiGeneration, type ModelWifiMap } from "@/web/lib/wifiGeneration";
 import type { SwMatrixData, SwMatrixRow } from "@/app/api/sw-matrix/route";
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 export function SwMatrixModal({ open, onClose, onSaved }: Props) {
   const [models, setModels]   = useState<string[]>([]);
   const [rows, setRows]       = useState<SwMatrixRow[]>([]);
+  const [modelWifi, setModelWifi] = useState<ModelWifiMap>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -27,13 +29,20 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
     setError(null);
     fetchWithAuth("/api/sw-matrix")
       .then((r) => r.json())
-      .then((d: SwMatrixData) => { setModels(d.beaconModels); setRows(d.releases); })
+      .then((d: SwMatrixData) => { setModels(d.beaconModels); setRows(d.releases); setModelWifi(d.modelWifi ?? {}); })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [open]);
 
   const updateModel = useCallback((idx: number, newName: string) => {
     setModels((prev) => prev.map((m, i) => (i === idx ? newName : m)));
+    setModelWifi((prev) => {
+      const oldName = models[idx];
+      if (!(oldName in prev)) return prev;
+      const next = { ...prev, [newName]: prev[oldName] };
+      delete next[oldName];
+      return next;
+    });
     setRows((prev) =>
       prev.map((row) => {
         const oldName = models[idx];
@@ -44,6 +53,14 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
       }),
     );
   }, [models]);
+
+  const updateWifi = (model: string, value: string) =>
+    setModelWifi((prev) => {
+      const next = { ...prev };
+      if (isWifiGeneration(value)) next[model] = value;
+      else delete next[model];
+      return next;
+    });
 
   const updateReleaseName = (idx: number, name: string) =>
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, name } : r)));
@@ -65,6 +82,11 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
   const deleteModel = (idx: number) => {
     const name = models[idx];
     setModels((prev) => prev.filter((_, i) => i !== idx));
+    setModelWifi((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     setRows((prev) =>
       prev.map((r) => {
         const builds = { ...r.builds };
@@ -81,7 +103,7 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
       const res = await fetchWithAuth("/api/sw-matrix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beaconModels: models, releases: rows }),
+        body: JSON.stringify({ beaconModels: models, modelWifi, releases: rows }),
       });
       const ct = res.headers.get("content-type") ?? "";
       const json = ct.includes("application/json")
@@ -113,7 +135,7 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
             <div>
               <Dialog.Title className="text-base font-semibold text-neutral-900">SW Release Matrix</Dialog.Title>
               <Dialog.Description className="mt-0.5 text-xs text-neutral-500">
-                Edit beacon models (columns) and SW releases (rows). Build strings go in each cell.
+                Edit beacon models (columns), their WiFi generation, and SW releases (rows). Build strings go in each cell.
               </Dialog.Description>
             </div>
             <div className="flex items-center gap-2">
@@ -156,6 +178,15 @@ export function SwMatrixModal({ open, onClose, onSaved }: Props) {
                               className={headerInputCls}
                               placeholder="Model name"
                             />
+                            <select
+                              value={modelWifi[model] ?? ""}
+                              onChange={(e) => updateWifi(model, e.target.value)}
+                              className={cn(inputCls, "text-neutral-600")}
+                              aria-label={`WiFi generation for ${model}`}
+                            >
+                              <option value="">WiFi: not set</option>
+                              {WIFI_GENERATIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+                            </select>
                             <button
                               type="button"
                               onClick={() => deleteModel(mi)}

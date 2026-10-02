@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
@@ -9,6 +9,8 @@ import { SwHeatmap } from "@/web/components/SwHeatmap";
 import { SwDrilldown } from "@/web/components/SwDrilldown";
 import { SwMatrixModal } from "@/web/components/modals/SwMatrixModal";
 import { UnknownFirmwareList } from "@/web/components/UnknownFirmwareList";
+import { WifiFilterPills } from "@/web/components/WifiFilterPills";
+import type { WifiGeneration } from "@/web/lib/wifiGeneration";
 import type { NetworkSwEntry, SwSelection } from "@/web/components/SwOverview.types";
 import type { SwOverviewResponse } from "@/app/api/sw-overview/route";
 
@@ -44,6 +46,7 @@ export default function SwOverviewPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [selection, setSelection] = useState<SwSelection | null>(null);
   const [matrixOpen, setMatrixOpen] = useState(false);
+  const [wifiFilter, setWifiFilter] = useState<WifiGeneration[]>([]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
@@ -88,6 +91,34 @@ export default function SwOverviewPage() {
   useEffect(() => {
     if (!isLoading && isAuthenticated) void fetchOverview();
   }, [isLoading, isAuthenticated, fetchOverview]);
+
+  // WiFi filter: with no pills selected every model column is shown; otherwise only
+  // models tagged with a selected generation, and only networks/releases for those models.
+  const { visibleModels, visibleNetworks, visibleBuildMatrix } = useMemo(() => {
+    const allNetworks = data?.networks ?? [];
+    if (!data || wifiFilter.length === 0) {
+      return { visibleModels: data?.beaconModels ?? [], visibleNetworks: allNetworks, visibleBuildMatrix: data?.buildMatrix ?? {} };
+    }
+    const models = data.beaconModels.filter((m) => {
+      const gen = data.modelWifi?.[m];
+      return gen !== undefined && wifiFilter.includes(gen);
+    });
+    const modelSet = new Set(models);
+    const buildMatrix: Record<string, Record<string, string>> = {};
+    for (const [release, builds] of Object.entries(data.buildMatrix)) {
+      if (Object.keys(builds).some((m) => modelSet.has(m))) buildMatrix[release] = builds;
+    }
+    return {
+      visibleModels: models,
+      visibleNetworks: allNetworks.filter((n) => n.beaconModel !== null && modelSet.has(n.beaconModel)),
+      visibleBuildMatrix: buildMatrix,
+    };
+  }, [data, wifiFilter]);
+
+  const handleWifiFilterChange = (next: WifiGeneration[]) => {
+    setWifiFilter(next);
+    setSelection(null);
+  };
 
   if (isLoading) {
     return (
@@ -193,15 +224,28 @@ export default function SwOverviewPage() {
             </span>
           </div>
 
-          {/* Heatmap */}
-          <SwHeatmap
+          <WifiFilterPills
             beaconModels={data.beaconModels}
-            buildMatrix={data.buildMatrix}
-            networks={networks}
-            filter={filter}
-            onSelect={setSelection}
-            activeSelection={selection}
+            modelWifi={data.modelWifi ?? {}}
+            selected={wifiFilter}
+            onChange={handleWifiFilterChange}
           />
+
+          {/* Heatmap */}
+          {visibleModels.length === 0 ? (
+            <p className="rounded-lg border border-neutral-200 py-12 text-center text-sm text-neutral-400">
+              No Beacon models are tagged with the selected WiFi type. Set WiFi types in the SW Matrix.
+            </p>
+          ) : (
+            <SwHeatmap
+              beaconModels={visibleModels}
+              buildMatrix={visibleBuildMatrix}
+              networks={visibleNetworks}
+              filter={filter}
+              onSelect={setSelection}
+              activeSelection={selection}
+            />
+          )}
 
           {/* Unknown builds */}
           <UnknownFirmwareList items={unknownFirmwares} onAssigned={() => void fetchOverview()} />
@@ -211,7 +255,7 @@ export default function SwOverviewPage() {
       {/* Drilldown panel */}
       <SwDrilldown
         selection={selection}
-        networks={networks}
+        networks={visibleNetworks}
         filter={filter}
         onClose={() => setSelection(null)}
       />

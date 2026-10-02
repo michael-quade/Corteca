@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSwMatrix, clearSwMatrixCache } from '@/web/lib/swMatrix';
+import { getSwMatrix, clearSwMatrixCache, encodeBeaconModels, WIFI_SHEET_NAME } from '@/web/lib/swMatrix';
+import { sanitizeModelWifi, type ModelWifiMap } from '@/web/lib/wifiGeneration';
 
 export interface SwMatrixRow {
   name: string;
@@ -8,6 +9,8 @@ export interface SwMatrixRow {
 
 export interface SwMatrixData {
   beaconModels: string[];
+  /** Optional on POST — when omitted, existing WiFi generations are kept */
+  modelWifi?: ModelWifiMap;
   releases: SwMatrixRow[];
 }
 
@@ -16,6 +19,7 @@ export async function GET() {
     const matrix = await getSwMatrix();
     const data: SwMatrixData = {
       beaconModels: matrix.beaconModels,
+      modelWifi: matrix.modelWifi,
       releases: matrix.releases.map((name) => ({
         name,
         builds: matrix.buildsByRelease[name] ?? {},
@@ -39,10 +43,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid matrix data' }, { status: 400 });
     }
 
+    // Callers that don't edit WiFi generations (e.g. Assign Firmware) omit modelWifi
+    const modelWifi = sanitizeModelWifi(
+      body.modelWifi ?? (await getSwMatrix()).modelWifi,
+      beaconModels,
+    );
+
     if (process.env.DATABASE_URL) {
       const { prisma } = await import('../../../web/lib/prisma');
       const data = {
-        beaconModels: JSON.parse(JSON.stringify(beaconModels)),
+        beaconModels: JSON.parse(JSON.stringify(encodeBeaconModels(beaconModels, modelWifi))),
         releases:     JSON.parse(JSON.stringify(releases)),
       };
       await prisma.swMatrix.upsert({
@@ -64,6 +74,9 @@ export async function POST(req: NextRequest) {
       const wsName = wb.SheetNames[0];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       wb.Sheets[wsName] = (XLSX.utils.aoa_to_sheet as any)(wsData, { origin: 'B1' });
+      const wifiSheet = XLSX.utils.aoa_to_sheet(Object.entries(modelWifi));
+      if (wb.Sheets[WIFI_SHEET_NAME]) wb.Sheets[WIFI_SHEET_NAME] = wifiSheet;
+      else XLSX.utils.book_append_sheet(wb, wifiSheet, WIFI_SHEET_NAME);
       fs.writeFileSync(filePath, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
     }
 

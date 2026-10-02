@@ -23,7 +23,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
 | `/reboot-report` | Reboot Report | Dedicated page for the reboot report with Recharts bar chart and sortable/sticky-header table. |
-| `/sw-overview` | Beacon SW Overview | Heatmap matrix of active Beacon firmware versions across the fleet by model. Drilldown modal per cell, unknown firmware list, deployment report table. |
+| `/sw-overview` | Beacon SW Overview | Heatmap matrix of active Beacon firmware versions across the fleet by model. WiFi filter pills (WiFi 5 / WiFi 6/6E / WiFi 7, multi-select) limit columns to models of those generations. Drilldown modal per cell, unknown firmware list, deployment report table. |
 | `/device-browser` | Device Data Model Browser | USP TR-369 data model explorer. Search for a device by MAC, browse the full parameter tree, set parameters via modal with confirmation. |
 | `/alarms` | Network Alarms | Query the ouife fault manager for open alarms by date range, severity (critical/major/minor/clear), optional device MAC, and alarm type (standard vs. custom). Results in a sortable table with clickable severity filter chips and per-row Corteca Console launch button. Includes "Cross Reference Reboot Report" — fetches the latest reboot report and cross-matches alarm AP MACs; matched APs are shown grouped with their alarm rows and reboot events, color-coded per AP. |
 | `/api-usage` | API Usage Dashboard | Live stats on Corteca API calls, bytes sent/received, rate limit hits for the current session. Persisted per-session in PostgreSQL via Prisma. |
@@ -174,7 +174,7 @@ Uses Prisma with a Supabase PostgreSQL database. Three models:
 
 | Model | Purpose |
 |---|---|
-| `SwMatrix` | Singleton (id=1). Stores the Beacon firmware release matrix: `beaconModels` (JSON array) and `releases` (JSON array). Seeded via `prisma/seed.js`. |
+| `SwMatrix` | Singleton (id=1). Stores the Beacon firmware release matrix: `beaconModels` (JSON array — entries are a model name string, or `{ name, wifi }` when a WiFi generation is set) and `releases` (JSON array). Seeded via `prisma/seed.js`. |
 | `DeploymentReport` | Singleton (id=1). Cached deployment report: device list, column headers, raw rows, stats, USP map. Updated when SW Overview fetches fresh data. Shared across serverless instances via DB. |
 | `ApiSession` | One row per login session. Tracks call count, bytes sent/received, rate limit hits. Persisted via `PUT /api/sessions` with debounce; final flush on logout using `keepalive`. |
 
@@ -223,6 +223,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `networkMembers.ts` | Fetches and normalises connected client members for a network |
 | `sessionHistory.ts` | LocalStorage session record helpers for the API usage dashboard |
 | `swMatrix.ts` | Beacon SW release matrix helpers |
+| `wifiGeneration.ts` | WiFi generation list/type for Beacon models (client + server safe) |
 | `geoUtils.ts` | Latitude/longitude helpers for the network map |
 | `prisma.ts` | Prisma client singleton (avoids too-many-connections in serverless) |
 | `utils.ts` | `cn()` — clsx + tailwind-merge for conditional Tailwind classes |
@@ -337,6 +338,7 @@ web/
     SwDrilldown.tsx
     SwHeatmap.tsx
     UnknownFirmwareList.tsx
+    WifiFilterPills.tsx
     UsageChart.tsx
     modals/
       AssignFirmwareModal.tsx
@@ -385,6 +387,7 @@ web/
     sessionHistory.ts
     swMatrix.ts
     utils.ts
+    wifiGeneration.ts
 
 middleware.ts                     # Site gate enforcer — redirects to /gate if no cookie
 ```

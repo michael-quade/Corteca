@@ -5,9 +5,12 @@
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
 import path from 'path';
+import { isWifiGeneration, sanitizeModelWifi, type ModelWifiMap } from './wifiGeneration';
 
 export interface SwMatrix {
   beaconModels: string[];
+  /** WiFi generation per beacon model, for models that have one assigned */
+  modelWifi: ModelWifiMap;
   releases: string[];
   /** keyed by normalized build string (no leading "3", trimmed, uppercased) */
   lookup: Map<string, { releaseName: string; beaconModel: string }>;
@@ -16,6 +19,33 @@ export interface SwMatrix {
 }
 
 type ReleaseRow = { name: string; builds: Record<string, string> };
+
+/** Sheet in the local-dev XLSX holding [model, WiFi generation] rows */
+export const WIFI_SHEET_NAME = 'WiFi';
+
+/**
+ * The beacon_models DB column holds either plain model names (legacy) or
+ * { name, wifi } objects for models with a WiFi generation assigned.
+ */
+type StoredBeaconModel = string | { name: string; wifi?: string };
+
+export function encodeBeaconModels(beaconModels: string[], modelWifi: ModelWifiMap): StoredBeaconModel[] {
+  return beaconModels.map((name) => (modelWifi[name] ? { name, wifi: modelWifi[name] } : name));
+}
+
+function decodeBeaconModels(stored: unknown): { beaconModels: string[]; modelWifi: ModelWifiMap } {
+  const beaconModels: string[] = [];
+  const modelWifi: ModelWifiMap = {};
+  for (const entry of Array.isArray(stored) ? (stored as StoredBeaconModel[]) : []) {
+    if (typeof entry === 'string') {
+      beaconModels.push(entry);
+    } else if (entry && typeof entry.name === 'string') {
+      beaconModels.push(entry.name);
+      if (isWifiGeneration(entry.wifi)) modelWifi[entry.name] = entry.wifi;
+    }
+  }
+  return { beaconModels, modelWifi };
+}
 
 let cached: SwMatrix | null = null;
 let cachedAt = 0;
@@ -32,7 +62,7 @@ function normalizeBuild(raw: string): string {
   return s;
 }
 
-function assembleMatrix(beaconModels: string[], releaseRows: ReleaseRow[]): SwMatrix {
+function assembleMatrix(beaconModels: string[], releaseRows: ReleaseRow[], modelWifi: ModelWifiMap): SwMatrix {
   const releases: string[] = [];
   const lookup = new Map<string, { releaseName: string; beaconModel: string }>();
   const buildsByRelease: Record<string, Record<string, string>> = {};
@@ -50,7 +80,7 @@ function assembleMatrix(beaconModels: string[], releaseRows: ReleaseRow[]): SwMa
     }
   }
 
-  return { beaconModels, releases, lookup, buildsByRelease };
+  return { beaconModels, modelWifi, releases, lookup, buildsByRelease };
 }
 
 function readFromXlsx(): SwMatrix {
@@ -93,7 +123,16 @@ function readFromXlsx(): SwMatrix {
     releaseRows.push({ name: releaseName, builds });
   }
 
-  const result = assembleMatrix(beaconModels, releaseRows);
+  const wifiRaw: Record<string, unknown> = {};
+  const wifiSheet = wb.Sheets[WIFI_SHEET_NAME];
+  if (wifiSheet) {
+    const wifiRows = XLSX.utils.sheet_to_json<unknown[]>(wifiSheet, { header: 1 });
+    for (const [model, gen] of wifiRows) {
+      if (model != null) wifiRaw[String(model).trim()] = gen;
+    }
+  }
+
+  const result = assembleMatrix(beaconModels, releaseRows, sanitizeModelWifi(wifiRaw, beaconModels));
   cached = result;
   return result;
 }
@@ -112,15 +151,17 @@ async function readFromDatabase(): Promise<SwMatrix> {
       builds: seed.buildsByRelease[name] ?? {},
     }));
     row = await prisma.swMatrix.create({
-      data: { id: 1, beaconModels: JSON.parse(JSON.stringify(seed.beaconModels)), releases: JSON.parse(JSON.stringify(releases)) },
+      data: {
+        id: 1,
+        beaconModels: JSON.parse(JSON.stringify(encodeBeaconModels(seed.beaconModels, seed.modelWifi))),
+        releases: JSON.parse(JSON.stringify(releases)),
+      },
     });
     console.log(`[sw-matrix] seeded: ${seed.releases.length} releases`);
   }
 
-  const result = assembleMatrix(
-    row.beaconModels as string[],
-    row.releases as ReleaseRow[],
-  );
+  const { beaconModels, modelWifi } = decodeBeaconModels(row.beaconModels);
+  const result = assembleMatrix(beaconModels, row.releases as ReleaseRow[], modelWifi);
   cached = result;
   cachedAt = Date.now();
   return result;
