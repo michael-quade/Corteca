@@ -11,7 +11,13 @@ function formatRate(mbps: number): string {
 
 export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">>) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props;
-  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const [path] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  // Label sits 70% of the way to the child: links fanning out of one AP all
+  // share a parent, so their midpoints crowd together under it. x follows the
+  // vertical bezier's ease (3t² − 2t³); y is close to linear.
+  const t = 0.7;
+  const labelX = sourceX + (targetX - sourceX) * (3 * t * t - 2 * t * t * t);
+  const labelY = sourceY + (targetY - sourceY) * t;
   if (!data) return null;
 
   const { link } = data;

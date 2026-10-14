@@ -2,7 +2,7 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
-import { CLUSTER_W, type Band, type ClusterFlowNode } from "@/web/lib/topologyFlow";
+import { CLUSTER_W, type Band, type ClientSection, type ClusterFlowNode } from "@/web/lib/topologyFlow";
 import { QUALITY_BG, QUALITY_LABEL } from "./qualityStyles";
 
 const BAND_CHIP: Record<Band, string> = {
@@ -13,13 +13,10 @@ const BAND_CHIP: Record<Band, string> = {
   Other: "bg-neutral-100 text-neutral-600",
 };
 
-export function ClientClusterNode({ data }: NodeProps<ClusterFlowNode>) {
-  const { band, total, pills, hidden, expanded, onToggle } = data;
-
+function Section({ section, onToggle }: { section: ClientSection; onToggle: () => void }) {
+  const { band, total, pills, hidden, expanded } = section;
   return (
-    <div style={{ width: CLUSTER_W }} className="rounded-xl border border-neutral-200 bg-neutral-50/90 p-3">
-      <Handle type="target" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-
+    <div>
       <div className="mb-2 flex h-[14px] items-center gap-2">
         <span className={cn("rounded px-1.5 text-[10px] font-semibold leading-[14px]", BAND_CHIP[band])}>{band}</span>
         <span className="text-[11px] text-neutral-500">{total} client{total === 1 ? "" : "s"}</span>
@@ -51,6 +48,21 @@ export function ClientClusterNode({ data }: NodeProps<ClusterFlowNode>) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// One node per AP: its connected clients, stacked by band.
+export function ClientClusterNode({ data }: NodeProps<ClusterFlowNode>) {
+  const { sections, onToggle } = data;
+
+  return (
+    <div style={{ width: CLUSTER_W }} className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/90 p-3">
+      {sections.map((s) => (
+        <Section key={s.id} section={s} onToggle={() => onToggle(s.id)} />
+      ))}
+      {/* Last child so space-y doesn't push the first section down. */}
+      <Handle type="target" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
     </div>
   );
 }

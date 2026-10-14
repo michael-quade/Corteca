@@ -109,7 +109,8 @@ function Canvas({ network }: { network: McpNetwork }) {
             position="bottom-right"
             pannable
             zoomable
-            nodeClassName={(n) => (n.type === "ap" ? "fill-indigo-500" : "fill-neutral-300")}
+            // MiniMap sets fill inline, so a Tailwind class can't override it.
+            nodeColor={(n) => (n.type === "ap" ? "rgb(99 102 241)" : "rgb(212 212 212)")}
             className="!rounded-lg !border !border-neutral-200"
           />
           <Panel position="top-left">
