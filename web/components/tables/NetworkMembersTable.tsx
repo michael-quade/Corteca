@@ -138,8 +138,10 @@ function FilterPopover({ value, onChange, active }: FilterPopoverProps) {
   );
 }
 
-function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort }: {
+function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort, selectedId, onSelect }: {
   members: Member[];
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
   filters: Record<SortKey, string>;
   setFilters: (fn: (f: Record<SortKey, string>) => Record<SortKey, string>) => void;
   sortKey: SortKey;
@@ -200,7 +202,16 @@ function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort }:
           </tr>
         ) : (
           rows.map((m) => (
-            <tr key={m.id} className="bg-white transition-colors hover:bg-neutral-50">
+            <tr
+              key={m.id}
+              onClick={onSelect ? () => onSelect(m.id) : undefined}
+              data-selected={selectedId === m.id || undefined}
+              className={cn(
+                "transition-colors",
+                selectedId === m.id ? "bg-violet-50 hover:bg-violet-100" : "bg-white hover:bg-neutral-50",
+                onSelect && "cursor-pointer"
+              )}
+            >
               <td className="px-4 py-3">
                 <p className="font-medium text-neutral-900">{m.alias ?? "—"}</p>
                 <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
@@ -221,9 +232,12 @@ function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort }:
 
 interface NetworkMembersTableProps {
   members: Member[];
+  /** Optional row selection, used by the MCP visualizer to sync with its graph. */
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
 }
 
-export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
+export function NetworkMembersTable({ members, selectedId, onSelect }: NetworkMembersTableProps) {
   const [activeTab, setActiveTab] = useState<TabId>("connected");
   const [sortKey, setSortKey] = useState<SortKey>("alias");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -293,6 +307,8 @@ export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
             sortKey={sortKey}
             sortDir={sortDir}
             onSort={handleSort}
+            selectedId={selectedId}
+            onSelect={onSelect}
           />
         </Tabs.Content>
 
@@ -304,6 +320,8 @@ export function NetworkMembersTable({ members }: NetworkMembersTableProps) {
             sortKey={sortKey}
             sortDir={sortDir}
             onSort={handleSort}
+            selectedId={selectedId}
+            onSelect={onSelect}
           />
         </Tabs.Content>
       </div>

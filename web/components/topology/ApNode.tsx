@@ -1,8 +1,9 @@
 "use client";
 
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, type NodeProps } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
 import { AP_H, AP_W, type ApFlowNode } from "@/web/lib/topologyFlow";
+import { HIDDEN_HANDLE, handleLayout, isSelected, useTopologyUi } from "./TopologyContext";
 
 function GatewayGlyph() {
   return (
@@ -25,16 +26,23 @@ function BeaconGlyph() {
 export function ApNode({ data }: NodeProps<ApFlowNode>) {
   const { ap } = data;
   const isRoot = ap.role === "root";
+  const ui = useTopologyUi();
+  const selected = isSelected(ui, "ap", ap.mac);
+  const handles = handleLayout(ui.layout);
 
   return (
     <div
+      role="button"
+      aria-pressed={selected}
+      aria-label={`${isRoot ? "Gateway" : "Beacon"} ${ap.model} ${ap.mac}`}
       style={{ width: AP_W, height: AP_H }}
       className={cn(
-        "relative flex items-center gap-3 rounded-xl border bg-white px-3 shadow-sm",
-        ap.online ? "border-neutral-200" : "border-dashed border-neutral-300 opacity-60"
+        "relative flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 shadow-sm transition-shadow hover:shadow-md",
+        ap.online ? "border-neutral-200" : "border-dashed border-neutral-300 opacity-60",
+        selected && "border-violet-500 ring-2 ring-violet-500/40"
       )}
     >
-      <Handle type="target" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="target" position={handles.target} style={handles.style} className={HIDDEN_HANDLE} />
 
       <div
         className={cn(
@@ -64,7 +72,7 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
         {ap.clientCount}
       </span>
 
-      <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" position={handles.source} style={handles.style} className={HIDDEN_HANDLE} />
     </div>
   );
 }

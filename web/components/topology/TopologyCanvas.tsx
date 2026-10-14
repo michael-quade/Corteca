@@ -1,40 +1,52 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Background, BackgroundVariant, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
   type Edge, type EdgeTypes, type NodeTypes,
 } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
-import { buildFlowGraph, layoutFlowGraph, type FlowNode } from "@/web/lib/topologyFlow";
+import { buildFlowGraph, clientBand, layoutFlowGraph, type FlowNode, type LayoutMode } from "@/web/lib/topologyFlow";
+import {
+  anchorNodeId, clientMatches, filtersActive, highlightFor, navigationOrder,
+  type ClientFilters, type Selection, type Viewport,
+} from "@/web/lib/topologySelection";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import { ApNode } from "./ApNode";
 import { ClientClusterNode } from "./ClientClusterNode";
 import { BackhaulEdge } from "./BackhaulEdge";
 import { TopologyLegend } from "./TopologyLegend";
+import { TopologyToolbar } from "./TopologyToolbar";
+import { NodeDetailPanel } from "./NodeDetailPanel";
+import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 
 const nodeTypes: NodeTypes = { ap: ApNode, cluster: ClientClusterNode };
 const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge };
+const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
 
-function FullscreenIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {active
-        ? <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
-        : <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />}
-    </svg>
-  );
+export interface TopologyCanvasProps {
+  network: McpNetwork;
+  selection: Selection | null;
+  onSelect: (sel: Selection | null) => void;
+  filters: ClientFilters;
+  onFiltersChange: (f: ClientFilters) => void;
+  layout: LayoutMode;
+  onLayoutChange: (l: LayoutMode) => void;
+  initialViewport: Viewport | null;
+  onViewportChange: (v: Viewport) => void;
 }
 
-function Canvas({ network }: { network: McpNetwork }) {
+function Canvas(props: TopologyCanvasProps) {
+  const { network, selection, onSelect, filters, onFiltersChange, layout, onLayoutChange, initialViewport, onViewportChange } = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const { fitView } = useReactFlow();
+  const flowRef = useRef<HTMLDivElement>(null);
+  const { fitView, getViewport, setCenter, getNode } = useReactFlow();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [nodes, setNodes] = useState<FlowNode[] | null>(null);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
-  const firstLayout = useRef(true);
+  const lastLayoutMode = useRef(layout);
 
   const toggleCluster = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -44,21 +56,74 @@ function Canvas({ network }: { network: McpNetwork }) {
     });
   }, []);
 
-  const graph = useMemo(() => buildFlowGraph(network, expanded, toggleCluster), [network, expanded, toggleCluster]);
+  // A client selected from outside the graph may sit in a collapsed "+N" section.
+  useEffect(() => {
+    if (selection?.kind !== "client") return;
+    const m = network.members.find((x) => x.id === selection.id);
+    if (!m?.device_id) return;
+    const section = `${m.device_id}:${clientBand(m)}`;
+    setExpanded((prev) => (prev.has(section) ? prev : new Set(prev).add(section)));
+  }, [selection, network]);
+
+  const graph = useMemo(
+    () => buildFlowGraph(network, expanded, toggleCluster, layout),
+    [network, expanded, toggleCluster, layout]
+  );
 
   useEffect(() => {
     let cancelled = false;
-    layoutFlowGraph(graph.nodes, graph.edges).then((laidOut) => {
+    layoutFlowGraph(graph.nodes, graph.edges, layout).then((laidOut) => {
       if (cancelled) return;
       setNodes(laidOut);
       setEdges(graph.edges);
-      if (firstLayout.current) {
-        firstLayout.current = false;
-        requestAnimationFrame(() => fitView({ padding: 0.15, duration: 0 }));
-      }
+      // The first view comes from ReactFlow's fitView/defaultViewport props;
+      // switching layout refits.
+      if (lastLayoutMode.current !== layout) requestAnimationFrame(() => fitView({ padding: 0.15, duration: 400 }));
+      lastLayoutMode.current = layout;
     });
     return () => { cancelled = true; };
-  }, [graph, fitView]);
+  }, [graph, layout, fitView]);
+
+  const highlight = useMemo(() => highlightFor(network, selection), [network, selection]);
+
+  const visibleClients = useMemo(() => {
+    if (!filtersActive(filters)) return null;
+    return new Set(network.members.filter((m) => m.connected && clientMatches(m, filters)).map((m) => m.id));
+  }, [network, filters]);
+
+  const ui: TopologyUi = useMemo(() => ({
+    selection, highlight, filters, layout, select: onSelect,
+    clientVisible: (id) => !visibleClients || visibleClients.has(id),
+  }), [selection, highlight, filters, layout, onSelect, visibleClients]);
+
+  const styledNodes = useMemo(
+    () => nodes?.map((n) => ({ ...n, className: highlight && !highlight.nodes.has(n.id) ? "opacity-30" : undefined })) ?? null,
+    [nodes, highlight]
+  );
+  const styledEdges = useMemo(
+    () => edges.map((e) => (e.type === "backhaul" ? e : {
+      ...e, className: cn("cluster-edge", highlight && !highlight.edges.has(e.id) && "opacity-25"),
+    })),
+    [edges, highlight]
+  );
+
+  // Pan to the selection only when it is off-screen (or under the detail panel).
+  useEffect(() => {
+    if (!selection || !nodes) return;
+    const id = anchorNodeId(network, selection);
+    const node = id ? getNode(id) : undefined;
+    const box = flowRef.current?.getBoundingClientRect();
+    if (!node || !box) return;
+    const { x, y, zoom } = getViewport();
+    const w = node.width ?? 0, h = node.height ?? 0;
+    const left = node.position.x * zoom + x, top = node.position.y * zoom + y;
+    const fits = left >= 0 && top >= 0 && left + w * zoom <= box.width - PANEL_W && top + h * zoom <= box.height;
+    if (!fits) {
+      const z = Math.max(zoom, 0.8);
+      // Offset the centre left by half the panel so the node lands in the visible area.
+      setCenter(node.position.x + w / 2 + PANEL_W / 2 / z, node.position.y + h / 2, { zoom: z, duration: 400 });
+    }
+  }, [selection, nodes, network, getNode, getViewport, setCenter]);
 
   useEffect(() => {
     const onChange = () => {
@@ -74,69 +139,114 @@ function Canvas({ network }: { network: McpNetwork }) {
     else void wrapperRef.current?.requestFullscreen();
   }
 
+  // Arrow keys step through APs and their clients in tree order; Esc clears.
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") { onSelect(null); return; }
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const order = navigationOrder(network);
+    if (!order.length) return;
+    const i = selection ? order.findIndex((s) => s.kind === selection.kind && s.id === selection.id) : -1;
+    const next = i < 0 ? (step > 0 ? 0 : order.length - 1) : (i + step + order.length) % order.length;
+    onSelect(order.at(next) ?? null);
+  }
+
   return (
-    <div
-      ref={wrapperRef}
-      className={cn(
-        "relative overflow-hidden rounded-xl border border-neutral-200 bg-white",
-        fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-14rem)] min-h-[560px]",
-        // Smooth re-layout when clusters expand or data refreshes.
-        "[&_.react-flow__node]:transition-transform [&_.react-flow__node]:duration-500 motion-reduce:[&_.react-flow__node]:transition-none",
-        "[&_.cluster-edge_path]:!stroke-neutral-300"
-      )}
-    >
-      {!nodes ? (
-        <div className="flex h-full items-center justify-center">
-          <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-violet-600" />
-        </div>
-      ) : (
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          minZoom={0.15}
-          maxZoom={2.5}
-          fitView
-          fitViewOptions={{ padding: 0.15 }}
+    <TopologyUiContext.Provider value={ui}>
+      <div
+        ref={wrapperRef}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        aria-label="Network topology. Arrow keys move between devices, Escape clears the selection."
+        className={cn(
+          "flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
+          fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-12rem)] min-h-[600px]"
+        )}
+      >
+        <TopologyToolbar
+          network={network}
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          matchCount={visibleClients?.size ?? 0}
+          layout={layout}
+          onLayoutChange={onLayoutChange}
+          onSelect={onSelect}
+          fullscreen={fullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
+        <div
+          ref={flowRef}
+          className={cn(
+            "relative flex-1",
+            // Smooth re-layout and dimming.
+            "[&_.react-flow__node]:transition-[transform,opacity] [&_.react-flow__node]:duration-500 motion-reduce:[&_.react-flow__node]:transition-none",
+            "[&_.cluster-edge]:transition-opacity [&_.cluster-edge_path]:!stroke-neutral-300"
+          )}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} className="!bg-neutral-50" />
-          <Controls showInteractive={false} position="bottom-left" />
-          <MiniMap
-            position="bottom-right"
-            pannable
-            zoomable
-            // MiniMap sets fill inline, so a Tailwind class can't override it.
-            nodeColor={(n) => (n.type === "ap" ? "rgb(99 102 241)" : "rgb(212 212 212)")}
-            className="!rounded-lg !border !border-neutral-200"
-          />
-          <Panel position="top-left">
-            <TopologyLegend />
-          </Panel>
-          <Panel position="top-right">
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
+          {!styledNodes ? (
+            <div className="flex h-full items-center justify-center">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-violet-600" />
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={styledNodes}
+              edges={styledEdges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              elementsSelectable={false}
+              // Registering click handlers also keeps React Flow from turning off
+              // pointer events on non-selectable nodes/edges (pills, "+N", labels).
+              onNodeClick={(_, node) => {
+                if (node.type !== "ap") return;
+                onSelect(selection?.kind === "ap" && selection.id === node.id ? null : { kind: "ap", id: node.id });
+              }}
+              onEdgeClick={(_, edge) => {
+                if (edge.type !== "backhaul") return;
+                const child = edge.target;
+                onSelect(selection?.kind === "link" && selection.id === child ? null : { kind: "link", id: child });
+              }}
+              onPaneClick={() => onSelect(null)}
+              fitView={!initialViewport}
+              fitViewOptions={{ padding: 0.15 }}
+              defaultViewport={initialViewport ?? undefined}
+              onMoveEnd={(_, v) => onViewportChange(v)}
+              minZoom={0.15}
+              maxZoom={2.5}
             >
-              <FullscreenIcon active={fullscreen} />
-              {fullscreen ? "Exit full screen" : "Full screen"}
-            </button>
-          </Panel>
-        </ReactFlow>
-      )}
-    </div>
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} className="!bg-neutral-50" />
+              <Controls showInteractive={false} position="bottom-left" />
+              {!selection && (
+                <MiniMap
+                  position="bottom-right"
+                  pannable
+                  zoomable
+                  // MiniMap sets fill inline, so a Tailwind class can't override it.
+                  nodeColor={(n) => (n.type === "ap" ? "rgb(99 102 241)" : "rgb(212 212 212)")}
+                  className="!rounded-lg !border !border-neutral-200"
+                />
+              )}
+              <Panel position="top-left">
+                <TopologyLegend />
+              </Panel>
+            </ReactFlow>
+          )}
+          {selection && (
+            <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} />
+          )}
+        </div>
+      </div>
+    </TopologyUiContext.Provider>
   );
 }
 
-export function TopologyCanvas({ network }: { network: McpNetwork }) {
+export function TopologyCanvas(props: TopologyCanvasProps) {
   return (
     <ReactFlowProvider>
       {/* Keyed by network so expansion state resets when a different network loads. */}
-      <Canvas key={network.topology.rootDeviceId} network={network} />
+      <Canvas key={props.network.topology.rootDeviceId} {...props} />
     </ReactFlowProvider>
   );
 }

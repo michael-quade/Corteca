@@ -18,7 +18,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function McpAccessPointCards({ aps }: { aps: McpAccessPoint[] }) {
+export function McpAccessPointCards({ aps, selectedMac, onSelect }: {
+  aps: McpAccessPoint[];
+  selectedMac?: string | null;
+  onSelect?: (mac: string) => void;
+}) {
   if (aps.length === 0) {
     return <p className="text-sm text-neutral-400">No access points returned by MCP.</p>;
   }
@@ -28,7 +32,19 @@ export function McpAccessPointCards({ aps }: { aps: McpAccessPoint[] }) {
         const isRoot = ap.role === "root";
         const quality = ap.backhaulQuality?.toLowerCase();
         return (
-          <div key={ap.mac} className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div
+            key={ap.mac}
+            role={onSelect ? "button" : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            aria-pressed={onSelect ? selectedMac === ap.mac : undefined}
+            onClick={onSelect ? () => onSelect(ap.mac) : undefined}
+            onKeyDown={onSelect ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(ap.mac); } } : undefined}
+            className={cn(
+              "rounded-xl border bg-white p-4",
+              selectedMac === ap.mac ? "border-violet-500 ring-2 ring-violet-500/30" : "border-neutral-200",
+              onSelect && "cursor-pointer transition-colors hover:border-neutral-400"
+            )}
+          >
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-neutral-900">{ap.model}</p>

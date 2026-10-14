@@ -20,6 +20,7 @@ export function TopologyLegend() {
         <span className="flex items-center gap-1.5"><LineSample className="stroke-amber-500" />Fair</span>
         <span className="flex items-center gap-1.5"><LineSample className="stroke-red-500" dashed width={2} />Poor</span>
         <span className="flex items-center gap-1.5"><LineSample className="stroke-neutral-500" />Ethernet</span>
+        <span className="col-span-2 flex items-center gap-1.5"><LineSample className="stroke-amber-500" />Ethernet below 1 Gbps</span>
       </div>
       <p className="mt-1.5 text-neutral-500">Line width = data rate</p>
       <p className="mb-1 mt-2 font-semibold text-neutral-700">Client signal</p>

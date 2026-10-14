@@ -19,7 +19,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/dashboard` | Dashboard | Card grid linking to all features. |
 | `/devices` | Device Search | Search subscribers by name, email, MAC, UUID, or serial. Shows all devices on their home network with status, model, and IP. |
 | `/network-visualizer` | Home Network Visualizer | Search a subscriber, then renders: interactive D3 topology graph, Leaflet map pin, ethernet port panels per AP (with live/config/spec fallback), and a raw API debug panel. Subscriber card includes a blue "Launch Corteca Console" button linked to the gateway MAC. |
-| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, one client card per AP with stacked band sections (6/5/2.4 GHz, wired) collapsing to "+N", legend, minimap, full screen; ELK layout), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). |
+| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, one client card per AP with stacked band sections (6/5/2.4 GHz, wired) collapsing to "+N", legend, minimap, full screen; ELK layout; Ethernet backhaul below 1 Gbps flagged amber), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). Interaction: click an AP, client pill or link to open a detail side panel and highlight its path to the gateway; AP cards and table rows select the same node; client search (name/MAC/IP); filter chips (band, SSID, weak signal < -70 dBm) fade non-matching clients; Tree / Sideways / Radial layouts; arrow keys step through devices, Esc clears. View state lives in the URL (`?network=…&sel=client:…&band=5,2.4&ssid=…&weak=1&layout=radial&v=x,y,zoom`) — `?network=<root MAC>` deep-links straight to a network without a subscriber search. |
 | `/network-map` | Global Network Map | Leaflet map of every managed network in the fleet, clustered by location. Color-coded online/offline. Sidebar with deployment stats, search, and per-network detail panel. |
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
@@ -250,6 +250,8 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `reportTypes.ts` | `REPORT_CONFIGS` — display name, chart color, Corteca type strings for all 8 report types |
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured) and `layoutFlowGraph()` (ELK layered, top-down) |
+| `topologySelection.ts` | Selection types, path highlight (`highlightFor`), client filters, search, keyboard order, and URL (de)serialisation for the MCP visualizer |
+| `useTopologyViewState.ts` | Hook that mirrors the MCP visualizer's view state into the query string via `history.replaceState` |
 | `mcpNetwork.ts` | `normaliseMcpNetwork()` — turns an MCP `retrieve-network-data` payload into `NetworkTopologyData` (synthesising the AP tree from `meshbackhaulnodes`), AP summaries, and `Member[]` |
 | `networkMembers.ts` | Fetches and normalises connected client members for a network |
 | `sessionHistory.ts` | LocalStorage session record helpers for the API usage dashboard |
@@ -362,12 +364,16 @@ web/
     EthernetPortPanel.tsx
     GlobalNetworkMap.tsx
     McpAccessPointCards.tsx
+    McpNetworkHeader.tsx          # Subscriber / shared-link header with Console button
     topology/                     # React Flow canvas for the MCP visualizer
       TopologyCanvas.tsx          # ReactFlow + ELK layout, legend, minimap, full screen
       ApNode.tsx                  # AP card node
       ClientClusterNode.tsx       # Per-AP client card, sections stacked by band
       BackhaulEdge.tsx            # Quality-coloured, rate-weighted backhaul edge
       TopologyLegend.tsx
+      TopologyToolbar.tsx         # Client search, filter chips, layout switch, full screen
+      TopologyContext.tsx         # Selection/highlight/filter/layout context read by nodes & edges
+      NodeDetailPanel.tsx         # Side panel: AP / link details (+ ClientDetails.tsx, DetailParts.tsx)
       qualityStyles.ts            # Shared good/fair/poor Tailwind classes
     Navbar.tsx
     NetworkMap.tsx
@@ -425,6 +431,8 @@ web/
     geoUtils.ts
     mcpNetwork.ts
     topologyFlow.ts
+    topologySelection.ts
+    useTopologyViewState.ts
     networkMembers.ts
     networkTopology.ts
     prisma.ts

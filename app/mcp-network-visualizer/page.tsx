@@ -1,23 +1,18 @@
 "use client";
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
+import { McpNetworkHeader } from "@/web/components/McpNetworkHeader";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
-import { cn } from "@/web/lib/utils";
+import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
+import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
 import type { Subscriber } from "@/web/lib/corteca/types";
-
-const CONSOLE_BASE =
-  process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? "https://console.demo2.homewifi.nokia.com";
-
-function consoleUrl(mac: string): string {
-  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${mac.toUpperCase().replace(/:/g, "-")}`;
-}
 
 interface McpResponse {
   homeWifiId: string;
@@ -82,6 +77,7 @@ function McpDebugPanel({ response }: { response: McpResponse }) {
 
 export default function McpNetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { view, update, ready } = useTopologyViewState();
 
   const [selected, setSelected] = useState<Subscriber | null>(null);
   const [response, setResponse] = useState<McpResponse | null>(null);
@@ -95,12 +91,16 @@ export default function McpNetworkVisualizerPage() {
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     setSelected(subscriber);
+    const networkId = subscriber.home_wifis?.[0]?.id;
+    if (!networkId) { setResponse(null); setError("No network ID found for this subscriber."); return; }
+    // A new network starts from a clean view; the layout choice carries over.
+    update({ network: networkId, selection: null, filters: EMPTY_FILTERS, viewport: null });
+    await loadNetwork(networkId);
+  }
+
+  async function loadNetwork(networkId: string) {
     setResponse(null);
     setError(null);
-
-    const networkId = subscriber.home_wifis?.[0]?.id;
-    if (!networkId) { setError("No network ID found for this subscriber."); return; }
-
     setFetching(true);
     try {
       const res = await fetchWithAuth(`/api/mcp/network/${encodeURIComponent(networkId)}`);
@@ -114,6 +114,22 @@ export default function McpNetworkVisualizerPage() {
     }
   }
 
+  // Shared link: ?network=… loads straight away, without a subscriber search.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (!ready || !isAuthenticated || deepLinked.current || !view.network) return;
+    deepLinked.current = true;
+    void loadNetwork(view.network);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, isAuthenticated, view.network]);
+
+  const select = useCallback((selection: Selection | null) => update({ selection }), [update]);
+  // Picks from the AP cards or clients table bring the graph back into view.
+  const selectAndReveal = (selection: Selection) => {
+    select(selection);
+    document.getElementById("topology")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   if (isLoading || !isAuthenticated) {
     return (
       <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
@@ -122,11 +138,7 @@ export default function McpNetworkVisualizerPage() {
     );
   }
 
-  const networkId = selected?.home_wifis?.[0]?.id;
-  const online    = selected?.home_wifis?.[0]?.status?.online;
-  const fullName  = selected
-    ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
-    : null;
+  const networkId = selected?.home_wifis?.[0]?.id ?? view.network;
   const failedApis = network?.results.filter((r) => !r.ok) ?? [];
 
   return (
@@ -150,37 +162,7 @@ export default function McpNetworkVisualizerPage() {
         />
       </div>
 
-      {selected && (
-        <div className="mb-6 flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">{fullName}</p>
-            {selected.email && <p className="text-xs text-neutral-500">{selected.email}</p>}
-            {networkId && <p className="mt-0.5 font-mono text-xs text-neutral-400">Network: {networkId}</p>}
-          </div>
-          <div className="flex items-center gap-4">
-            {networkId && (
-              <span className={cn("flex items-center gap-1.5 text-sm", online ? "text-green-700" : "text-neutral-400")}>
-                <span className={cn("h-2 w-2 rounded-full", online ? "bg-green-500" : "bg-neutral-300")} />
-                {online ? "Online" : "Offline"}
-              </span>
-            )}
-            {networkId && (
-              <button
-                type="button"
-                onClick={() => window.open(consoleUrl(networkId), "_blank", "noopener,noreferrer")}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
-              >
-                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor"
-                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/>
-                  <path d="M8 1h3v3M11 1 6 6"/>
-                </svg>
-                Launch Corteca Console
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {networkId && <McpNetworkHeader subscriber={selected} networkId={networkId} />}
 
       {fetching && (
         <div className="flex flex-col items-center justify-center gap-3 py-20">
@@ -202,9 +184,19 @@ export default function McpNetworkVisualizerPage() {
           )}
 
           {network.aps.length > 0 ? (
-            <section className="space-y-3">
+            <section id="topology" className="scroll-mt-4 space-y-3">
               <h2 className="text-sm font-semibold text-neutral-700">Network Topology</h2>
-              <TopologyCanvas network={network} />
+              <TopologyCanvas
+                network={network}
+                selection={view.selection}
+                onSelect={select}
+                filters={view.filters}
+                onFiltersChange={(filters) => update({ filters })}
+                layout={view.layout}
+                onLayoutChange={(layout) => update({ layout })}
+                initialViewport={view.viewport}
+                onViewportChange={(viewport) => update({ viewport })}
+              />
             </section>
           ) : (
             <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>
@@ -212,13 +204,23 @@ export default function McpNetworkVisualizerPage() {
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-neutral-700">Access Points ({network.aps.length})</h2>
-            <McpAccessPointCards aps={network.aps} />
+            <McpAccessPointCards
+              aps={network.aps}
+              selectedMac={view.selection?.kind === "ap" ? view.selection.id : null}
+              onSelect={(mac) => selectAndReveal({ kind: "ap", id: mac })}
+            />
           </section>
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-neutral-700">Clients ({network.members.length})</h2>
             {network.members.length > 0
-              ? <NetworkMembersTable members={network.members} />
+              ? (
+                <NetworkMembersTable
+                  members={network.members}
+                  selectedId={view.selection?.kind === "client" ? view.selection.id : null}
+                  onSelect={(id) => selectAndReveal({ kind: "client", id })}
+                />
+              )
               : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}
           </section>
 

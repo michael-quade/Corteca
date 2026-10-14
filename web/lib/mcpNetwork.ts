@@ -28,6 +28,8 @@ export interface McpBackhaulLink {
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
   quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor")
+  errorsTx: number | null;  // endpoint error counters
+  errorsRx: number | null;
 }
 
 export interface McpNetwork {
@@ -101,6 +103,8 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
         rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
         rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
         quality: quality ? String(quality).toLowerCase() : null,
+        errorsTx: typeof ep?.["errors-tx"] === "number" ? ep["errors-tx"] : null,
+        errorsRx: typeof ep?.["errors-rx"] === "number" ? ep["errors-rx"] : null,
       });
       walk(child);
     }

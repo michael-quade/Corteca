@@ -18,6 +18,7 @@ export const CLUSTER_COLLAPSE_AT = 6;
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type Quality = "good" | "fair" | "poor" | "unknown";
+export type LayoutMode = "tree" | "horizontal" | "radial";
 export type Band = "2.4 GHz" | "5 GHz" | "6 GHz" | "Wired" | "Other";
 
 export interface ClientPill {
@@ -56,7 +57,7 @@ export function linkQuality(link: McpBackhaulLink): Quality {
 
 export const isEthernet = (link: McpBackhaulLink) => link.medium.includes("eth");
 
-function clientBand(m: Member): Band {
+export function clientBand(m: Member): Band {
   if (String(m.type ?? "").toLowerCase() === "ethernet") return "Wired";
   const f = Number(m.frequency ?? 0);
   if (f >= 2400 && f < 2500) return "2.4 GHz";
@@ -65,15 +66,23 @@ function clientBand(m: Member): Band {
   return "Other";
 }
 
+export const isWired = (m: Member) => String(m.type ?? "").toLowerCase() === "ethernet";
+
+export function clientSignalDbm(m: Member): number | null {
+  if (isWired(m)) return null;
+  const s = Number((m as unknown as { signal?: number }).signal ?? m.rssi);
+  return Number.isFinite(s) && s !== 0 ? s : null;
+}
+
 // Client signal uses the same three-step scale as the links.
 function clientSignal(m: Member): Quality | null {
-  if (String(m.type ?? "").toLowerCase() === "ethernet") return null;
-  const s = Number((m as unknown as { signal?: number }).signal ?? m.rssi);
-  if (!Number.isFinite(s) || s === 0) return "unknown";
+  if (isWired(m)) return null;
+  const s = clientSignalDbm(m);
+  if (s == null) return "unknown";
   return s >= -65 ? "good" : s >= -75 ? "fair" : "poor";
 }
 
-function clientName(m: Member): string {
+export function clientName(m: Member): string {
   const host = (m as unknown as { hostname?: string }).hostname;
   return (m.alias || host || m.id).trim();
 }
@@ -118,6 +127,7 @@ export function buildFlowGraph(
   network: McpNetwork,
   expanded: Set<string>,
   onToggle: (clusterId: string) => void,
+  mode: LayoutMode = "tree",
 ): { nodes: FlowNode[]; edges: Edge[] } {
   const nodes: FlowNode[] = [];
   const edges: Edge[] = [];
@@ -153,7 +163,8 @@ export function buildFlowGraph(
       const members = bands.get(band);
       if (!members?.length) continue;
       const id = `${apMac}:${band}`;
-      const isOpen = expanded.has(id);
+      // Only collapsible sections can be "expanded" (avoids a stray "less" toggle).
+      const isOpen = expanded.has(id) && members.length > CLUSTER_COLLAPSE_AT;
       const all = members.map(toPill).sort((a, b) => a.name.localeCompare(b.name));
       const shown = isOpen || all.length <= CLUSTER_COLLAPSE_AT ? all : all.slice(0, CLUSTER_COLLAPSE_AT - 1);
       const showToggle = shown.length < all.length || (isOpen && all.length > CLUSTER_COLLAPSE_AT);
@@ -170,7 +181,7 @@ export function buildFlowGraph(
       height,
       data: { sections, onToggle },
     });
-    edges.push({ id: `ce:${id}`, source: apMac, target: id, type: "smoothstep", className: "cluster-edge" });
+    edges.push({ id: `ce:${id}`, source: apMac, target: id, type: mode === "radial" ? "straight" : "smoothstep", className: "cluster-edge" });
   }
 
   return { nodes, edges };
@@ -178,19 +189,37 @@ export function buildFlowGraph(
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 
-export async function layoutFlowGraph(nodes: FlowNode[], edges: Edge[]): Promise<FlowNode[]> {
+const LAYOUT_OPTIONS: Record<LayoutMode, Record<string, string>> = {
+  tree: {
+    "elk.algorithm": "layered",
+    "elk.direction": "DOWN",
+    "elk.layered.spacing.nodeNodeBetweenLayers": "88",
+    "elk.spacing.nodeNode": "28",
+    "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+    "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+  },
+  horizontal: {
+    "elk.algorithm": "layered",
+    "elk.direction": "RIGHT",
+    "elk.layered.spacing.nodeNodeBetweenLayers": "200",
+    "elk.spacing.nodeNode": "24",
+    "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+    "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+  },
+  radial: {
+    "elk.algorithm": "radial",
+    // Wide enough that a link label fits between two linked cards.
+    "elk.spacing.nodeNode": "120",
+    "elk.radial.compactor": "WEDGE_COMPACTION",
+  },
+};
+
+export async function layoutFlowGraph(nodes: FlowNode[], edges: Edge[], mode: LayoutMode = "tree"): Promise<FlowNode[]> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
   const elk = new ELK();
   const graph = await elk.layout({
     id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "88",
-      "elk.spacing.nodeNode": "28",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
-    },
+    layoutOptions: LAYOUT_OPTIONS[mode],
     children: nodes.map((n) => ({ id: n.id, width: n.width ?? AP_W, height: n.height ?? AP_H })),
     edges: edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
   });
