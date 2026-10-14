@@ -19,6 +19,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/dashboard` | Dashboard | Card grid linking to all features. |
 | `/devices` | Device Search | Search subscribers by name, email, MAC, UUID, or serial. Shows all devices on their home network with status, model, and IP. |
 | `/network-visualizer` | Home Network Visualizer | Search a subscriber, then renders: interactive D3 topology graph, Leaflet map pin, ethernet port panels per AP (with live/config/spec fallback), and a raw API debug panel. Subscriber card includes a blue "Launch Corteca Console" button linked to the gateway MAC. |
+| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders the shared `NetworkTopologyMap`, per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). |
 | `/network-map` | Global Network Map | Leaflet map of every managed network in the fleet, clustered by location. Color-coded online/offline. Sidebar with deployment stats, search, and per-network detail panel. |
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
@@ -120,6 +121,7 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/network/[deviceId]/datamodel` | GET | USP TR-369 data model for a device |
 | `/api/network/[deviceId]/datamodel/set` | POST | Set a USP parameter value |
 | `/api/networks/[networkId]/members` | GET | Connected client devices for a network |
+| `/api/mcp/network/[homeWifiId]` | GET | Calls the MCP `retrieve-network-data` tool (mesh + clients) for a root node MAC; optional `query` param overrides the natural-language query |
 | `/api/network-map` | GET | Fleet-wide deployment report (cached in DB + memory) |
 | `/api/network-map/account-names` | GET | Batch subscriber name lookup by MAC or ID |
 | `/api/network-map/locate` | GET | Geolocate a network by IP |
@@ -132,6 +134,12 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/stats` | GET | In-memory API call stats for current process |
 | `/api/sessions` | GET / PUT | List or update API session records in DB |
 | `/api/cron/keepalive` | GET | Pings Supabase via Prisma to prevent auto-pause; called by Vercel Cron |
+
+### Corteca AI MCP Server
+- Endpoint `${CORTECA_API_BASE_URL}/ai/mcp` (Streamable HTTP, responses as SSE). The same bearer token as the Corteca APIs is accepted — no separate OAuth.
+- Tools: `retrieve-network-data`, `analyze-network`, `troubleshoot-network`. All take `homeWifiId` = root node MAC, **uppercase hyphen-separated**.
+- `retrieve-network-data` runs an AI sub-agent server-side and takes ~10–20s; the route sets `maxDuration = 60`. Its payload is `{ results: [{ apiId: "mesh" | "members", ok, status, data }] }` — the agent chooses which APIs to call, so handle missing entries.
+- Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials.
 
 ---
 
@@ -151,6 +159,7 @@ Console launch buttons appear in:
 - `AlarmTable` — per alarm row
 - `AlarmCrossRefTable` — group header per AP
 - `app/network-visualizer/page.tsx` — subscriber card after network is loaded
+- `app/mcp-network-visualizer/page.tsx` — subscriber card
 
 ---
 
@@ -209,6 +218,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `corteca/cortecaFetch.ts` | Wraps `fetch` with timeout, stats tracking, and rate-limit detection |
 | `corteca/apiStats.ts` | In-memory counters (calls, bytes, rate limits) reset on login |
 | `corteca/reportCache.ts` | In-memory + DB cache for the fleet deployment report; avoids re-fetching on every request |
+| `corteca/mcpClient.ts` | Minimal Streamable-HTTP MCP client (`callMcpTool`) for the Corteca AI MCP server; uses the user's `corteca_token` as bearer |
 | `corteca/nameCache.ts` | Server-side MAC→accountName cache shared between API routes |
 | `corteca/deploymentReport.ts` | Fetches and normalises the Corteca deployment report; populates `reportCache` and DB |
 | `corteca/networkTopology.ts` | Normalises raw mesh topology API shapes into a consistent tree structure |
@@ -220,6 +230,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `reportNameEnrichment.ts` | `findDeviceIdInfo()` heuristic to find MAC/serial columns in CSV report rows; `injectAccountNames()` to prepend account name column |
 | `reportTypes.ts` | `REPORT_CONFIGS` — display name, chart color, Corteca type strings for all 8 report types |
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
+| `mcpNetwork.ts` | `normaliseMcpNetwork()` — turns an MCP `retrieve-network-data` payload into `NetworkTopologyData` (synthesising the AP tree from `meshbackhaulnodes`), AP summaries, and `Member[]` |
 | `networkMembers.ts` | Fetches and normalises connected client members for a network |
 | `sessionHistory.ts` | LocalStorage session record helpers for the API usage dashboard |
 | `swMatrix.ts` | Beacon SW release matrix helpers |
@@ -242,6 +253,7 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | `NEXT_PUBLIC_CORTECA_CONSOLE_URL` | Nokia Console base URL — public, safe for browser (e.g. `https://console.demo2.homewifi.nokia.com`) |
 | `DATABASE_URL` | Pooled PostgreSQL URI (PgBouncer port 6543) — used by the app at runtime |
 | `DIRECT_URL` | Direct PostgreSQL URI (port 5432) — used only by `prisma db push` and seed scripts |
+| `CORTECA_MCP_URL` | Optional. Corteca AI MCP endpoint; defaults to `${CORTECA_API_BASE_URL}/ai/mcp` |
 | `SITE_USERNAME` | Gate username protecting the entire app |
 | `SITE_PASSWORD` | Gate password |
 | `CRON_SECRET` | Bearer token Vercel Cron sends to `/api/cron/*` routes; optional, skips auth check if unset (local dev) |
@@ -296,6 +308,7 @@ app/
   dashboard/page.tsx
   devices/page.tsx
   network-visualizer/page.tsx
+  mcp-network-visualizer/page.tsx
   network-map/page.tsx
   reports/page.tsx
   reports/[reportType]/page.tsx
@@ -309,6 +322,7 @@ app/
     gate/route.ts
     subscribers/route.ts
     network/[deviceId]/{route,ethernet,datamodel,datamodel/set}.ts
+    mcp/network/[homeWifiId]/route.ts
     networks/[networkId]/members/route.ts
     network-map/{route,account-names,locate,device-info/[mac]}.ts
     reports/[reportType]/route.ts
@@ -326,6 +340,7 @@ web/
     DataModelBrowser.tsx
     EthernetPortPanel.tsx
     GlobalNetworkMap.tsx
+    McpAccessPointCards.tsx
     Navbar.tsx
     NetworkMap.tsx
     NetworkMapControls.tsx
@@ -370,6 +385,7 @@ web/
       cortecaFetch.ts
       deploymentReport.ts
       devices.ts
+      mcpClient.ts
       nameCache.ts
       network.ts
       provisioning.ts
@@ -379,6 +395,7 @@ web/
       usp.ts
     fetchWithAuth.ts
     geoUtils.ts
+    mcpNetwork.ts
     networkMembers.ts
     networkTopology.ts
     prisma.ts

@@ -23,6 +23,18 @@ function NetworkVisualizerIcon() {
   );
 }
 
+function McpNetworkVisualizerIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="5" rx="1" />
+      <rect x="1" y="15" width="6" height="5" rx="1" />
+      <rect x="17" y="15" width="6" height="5" rx="1" />
+      <path d="M12 7v4M4 15V9a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6" />
+      <path d="M12 14l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function NetworkMapIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -142,6 +154,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/network-visualizer",
   },
   {
+    title: "Home Network Visualizer (MCP)",
+    description: "Subscriber home network topology, access points, and clients fetched live through the Corteca AI MCP server.",
+    icon: <McpNetworkVisualizerIcon />,
+    href: "/mcp-network-visualizer",
+  },
+  {
     title: "Network Map",
     description: "Global map of every managed WiFi network — online and offline — plotted by geographic location.",
     icon: <NetworkMapIcon />,
@@ -184,6 +202,7 @@ export const DASHBOARD_CARD_HREFS = [
   "/devices",
   "/reports",
   "/network-visualizer",
+  "/mcp-network-visualizer",
   "/network-map",
   "/device-browser",
   "/sw-overview",
