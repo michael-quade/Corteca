@@ -21,9 +21,19 @@ export interface McpAccessPoint {
   clientCount: number;
 }
 
+export interface McpBackhaulLink {
+  parentMac: string;
+  childMac: string;
+  medium: string;           // "wifi-6", "eth", … ("" when no link record)
+  rssiDbm: number | null;   // endpoint metric
+  rateMbps: number | null;  // derived data rate
+  quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor")
+}
+
 export interface McpNetwork {
   topology: NetworkTopologyData;
   aps: McpAccessPoint[];
+  backhaul: McpBackhaulLink[];
   members: Member[];
   results: McpApiResult[];
 }
@@ -62,6 +72,41 @@ function synthesiseTopology(aps: Obj[], rootMac: string): Obj {
     if (!reached.has(mac)) (root.children as Obj[]).push(build(mac, 1));
   }
   return root;
+}
+
+// One entry per parent→child AP edge of the synthesised tree, joined to the
+// mesh link record whose two endpoints are those APs' serials.
+function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBackhaulLink[] {
+  if (!tree) return [];
+  const byMac = new Map(rawAps.map((a) => [toMac(a.macaddress), a]));
+  const links = Array.isArray(mesh?.links) ? (mesh!.links as Obj[]) : [];
+  const out: McpBackhaulLink[] = [];
+  function walk(node: Obj) {
+    const parentMac = String(node.device_id);
+    for (const child of (node.children as Obj[]) ?? []) {
+      const childMac = String(child.device_id);
+      const pSerial = String(byMac.get(parentMac)?.id ?? "");
+      const cSerial = String(byMac.get(childMac)?.id ?? "");
+      const link = links.find((l) => {
+        const ids = (Array.isArray(l.endpoints) ? (l.endpoints as Obj[]) : []).map((e) => String(e.id ?? ""));
+        return ids.includes(pSerial) && ids.includes(cSerial);
+      });
+      const ep = Array.isArray(link?.endpoints) ? (link!.endpoints as Obj[])[0] : undefined;
+      const rate = Number((link?.derivedData as Obj | undefined)?.dataRate ?? ep?.["data-rate-rx"] ?? 0);
+      const quality = byMac.get(childMac)?.backhaulQuality;
+      out.push({
+        parentMac,
+        childMac,
+        medium: String(link?.medium ?? "").toLowerCase(),
+        rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
+        rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
+        quality: quality ? String(quality).toLowerCase() : null,
+      });
+      walk(child);
+    }
+  }
+  walk(tree);
+  return out;
 }
 
 // Lift per-endpoint signal and derived rate onto the link so linkTip() can show them.
@@ -116,16 +161,19 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
     };
   }).sort((x, y) => (x.role === "root" ? -1 : y.role === "root" ? 1 : x.mac.localeCompare(y.mac)));
 
+  const tree = rawAps.length ? synthesiseTopology(rawAps, rootMac) : null;
+
   return {
     topology: {
       networks: null,
-      topology: rawAps.length ? synthesiseTopology(rawAps, rootMac) : null,
+      topology: tree,
       mesh: meshData ? enrichLinks(meshData) : null,
       configs: {},
       members,
       rootDeviceId: rootMac,
     },
     aps,
+    backhaul: buildBackhaul(tree, rawAps, meshData),
     members,
     results,
   };

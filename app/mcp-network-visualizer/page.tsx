@@ -2,10 +2,10 @@
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
-import { NetworkTopologyMap } from "@/web/components/NetworkTopologyMap";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
@@ -26,6 +26,18 @@ interface McpResponse {
   summary: string | null;
   payload: unknown;
 }
+
+const TopologyCanvas = dynamic(
+  () => import("@/web/components/topology/TopologyCanvas").then((m) => ({ default: m.TopologyCanvas })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[560px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50">
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-violet-600" />
+      </div>
+    ),
+  }
+);
 
 function BackNav() {
   return (
@@ -192,7 +204,7 @@ export default function McpNetworkVisualizerPage() {
           {network.aps.length > 0 ? (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold text-neutral-700">Network Topology</h2>
-              <NetworkTopologyMap data={network.topology} />
+              <TopologyCanvas network={network} />
             </section>
           ) : (
             <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>

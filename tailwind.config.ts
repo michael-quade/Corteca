@@ -7,6 +7,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      keyframes: {
+        "flow-dash": { to: { strokeDashoffset: "-24" } },
+      },
+      animation: {
+        "flow-dash": "flow-dash 1.5s linear infinite",
+      },
       colors: {
         neutral: {
           50: "#fafafa",

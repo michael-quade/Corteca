@@ -19,7 +19,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/dashboard` | Dashboard | Card grid linking to all features. |
 | `/devices` | Device Search | Search subscribers by name, email, MAC, UUID, or serial. Shows all devices on their home network with status, model, and IP. |
 | `/network-visualizer` | Home Network Visualizer | Search a subscriber, then renders: interactive D3 topology graph, Leaflet map pin, ethernet port panels per AP (with live/config/spec fallback), and a raw API debug panel. Subscriber card includes a blue "Launch Corteca Console" button linked to the gateway MAC. |
-| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders the shared `NetworkTopologyMap`, per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). |
+| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, per-band client clusters collapsing to "+N", legend, minimap, full screen; ELK layout), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). |
 | `/network-map` | Global Network Map | Leaflet map of every managed network in the fleet, clustered by location. Color-coded online/offline. Sidebar with deployment stats, search, and per-network detail panel. |
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
@@ -136,10 +136,29 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/cron/keepalive` | GET | Pings Supabase via Prisma to prevent auto-pause; called by Vercel Cron |
 
 ### Corteca AI MCP Server
-- Endpoint `${CORTECA_API_BASE_URL}/ai/mcp` (Streamable HTTP, responses as SSE). The same bearer token as the Corteca APIs is accepted — no separate OAuth.
-- Tools: `retrieve-network-data`, `analyze-network`, `troubleshoot-network`. All take `homeWifiId` = root node MAC, **uppercase hyphen-separated**.
-- `retrieve-network-data` runs an AI sub-agent server-side and takes ~10–20s; the route sets `maxDuration = 60`. Its payload is `{ results: [{ apiId: "mesh" | "members", ok, status, data }] }` — the agent chooses which APIs to call, so handle missing entries.
-- Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials.
+
+Nokia's Corteca AI MCP server (`corteca-mcp-server`, R26.03) exposes Corteca network capabilities as Model Context Protocol tools. Each tool runs an AI agent on Nokia's side that picks the right Corteca APIs and returns structured results, so a client can ask in natural language instead of calling individual endpoints. Results are AI-generated and may be incomplete — verify before acting on them. All tools are **read-only**; none change device or network state.
+
+**Connection**
+- Endpoint `${CORTECA_API_BASE_URL}/ai/mcp` (override with `CORTECA_MCP_URL`). Streamable HTTP; responses arrive as SSE (`event: message` / `data: {…}`).
+- Auth: `Authorization: Bearer <token>`. The same token as the Corteca APIs (`corteca_token`) is accepted. OAuth auto-discovery / dynamic client registration is **not** supported yet — a client without a token falls back to DCR and gets a 404 on `/register`.
+- Requires a Corteca L1+L2+L3 license.
+- Server-side client: `web/lib/corteca/mcpClient.ts` (`callMcpTool(token, name, args)` does initialize → `notifications/initialized` → `tools/call`).
+
+**Tools** — all take `homeWifiId` = the home network ID, normally the root node MAC **uppercase hyphen-separated** (`AA-BB-CC-DD-EE-FF`).
+
+| Tool | What it does | Arguments | Returns |
+|---|---|---|---|
+| `retrieve-network-data` | Fetches live network state. A sub-agent chooses which backend APIs to call (e.g. mesh topology / access points, connected clients) from a natural-language `query`. | `homeWifiId`, `query` (e.g. "mesh topology and connected clients"), optional `deviceId` (a specific AP MAC for device-level data), optional `structuredContent: true` (JSON only in `structuredContent`, text is a short summary) | `{ results: [{ apiId, ok, status, data }] }` — seen `apiId`s: `mesh` (UspMesh: `aps[]` with model/firmware/status/ssids/`meshbackhaulnodes`, `links[]` with per-endpoint RSSI `metric`, data rates, errors) and `members` (clients: alias, hostname, AP `device_id`, band/channel/frequency, signal, rx/tx rates, capabilities) |
+| `analyze-network` | Runs network-analyzer "specialists" and returns a report with findings and suggestions. | `homeWifiId`, optional `message` (focus the analysis, e.g. "Printer in the studio does not connect"), optional `specialists[]` from: `homeConnectivity`, `homeNeedsFwUpgrade`, `backhaulSignalStrength`, `clientsOutOfCoverage`, `clientConnection`, `apHealth`, `interference` (all run when omitted) | Analysis report with suggestions |
+| `troubleshoot-network` | AI troubleshooter: gathers evidence from the knowledge base, live network data and the analyzer specialists, then diagnoses *why* something is wrong and *how* to fix it. Diagnoses only — never acts. | `homeWifiId`, `query` (a focused problem description, e.g. "Living room TV keeps dropping off WiFi"), optional `structuredContent` | Narrative summary, detected problems with evidence, likely root causes with confidence, recommended next actions |
+
+**Usage notes**
+- Calls are slow (~10–20s for `retrieve-network-data`; analysis/troubleshooting can take longer) because an AI agent runs per call. API routes calling MCP set `maxDuration = 60`.
+- `retrieve-network-data` lets the agent choose APIs, so an expected `apiId` can be missing or `ok: false` — always handle that.
+- Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials (`web/lib/mcpNetwork.ts` builds the tree from it).
+- In-app usage: `/mcp-network-visualizer` → `GET /api/mcp/network/[homeWifiId]` → `retrieve-network-data`.
+- Claude Code usage: registered locally as MCP server `corteca`, authenticated by `scripts/corteca-mcp-headers.mjs` (a `headersHelper` that logs in with `CORTECA_CLIENT_ID`/`CORTECA_CLIENT_SECRET` + `CORTECA_MCP_USERNAME`/`CORTECA_MCP_PASSWORD` from `.env`). Tokens last ~15 min; reconnect via `/mcp` if calls start returning 401.
 
 ---
 
@@ -230,6 +249,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `reportNameEnrichment.ts` | `findDeviceIdInfo()` heuristic to find MAC/serial columns in CSV report rows; `injectAccountNames()` to prepend account name column |
 | `reportTypes.ts` | `REPORT_CONFIGS` — display name, chart color, Corteca type strings for all 8 report types |
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
+| `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges with band clusters and pre-measured sizes) and `layoutFlowGraph()` (ELK layered, top-down) |
 | `mcpNetwork.ts` | `normaliseMcpNetwork()` — turns an MCP `retrieve-network-data` payload into `NetworkTopologyData` (synthesising the AP tree from `meshbackhaulnodes`), AP summaries, and `Member[]` |
 | `networkMembers.ts` | Fetches and normalises connected client members for a network |
 | `sessionHistory.ts` | LocalStorage session record helpers for the API usage dashboard |
@@ -271,6 +291,7 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | Styling | Tailwind CSS 3 — utility classes only, `cn()` for conditionals |
 | UI Components | Radix UI (Dialog, Popover, Tabs, Slot) |
 | Charts | Recharts |
+| Graph diagrams | React Flow (`@xyflow/react`) + ELK (`elkjs`) for layout — MCP visualizer only; loaded via `next/dynamic` with `ssr: false` |
 | Maps | Leaflet + react-leaflet (loaded via `next/dynamic` with `ssr: false`) |
 | ORM | Prisma 5 |
 | Database | PostgreSQL (Supabase) |
@@ -341,6 +362,13 @@ web/
     EthernetPortPanel.tsx
     GlobalNetworkMap.tsx
     McpAccessPointCards.tsx
+    topology/                     # React Flow canvas for the MCP visualizer
+      TopologyCanvas.tsx          # ReactFlow + ELK layout, legend, minimap, full screen
+      ApNode.tsx                  # AP card node
+      ClientClusterNode.tsx       # Per-band client cluster node
+      BackhaulEdge.tsx            # Quality-coloured, rate-weighted backhaul edge
+      TopologyLegend.tsx
+      qualityStyles.ts            # Shared good/fair/poor Tailwind classes
     Navbar.tsx
     NetworkMap.tsx
     NetworkMapControls.tsx
@@ -396,6 +424,7 @@ web/
     fetchWithAuth.ts
     geoUtils.ts
     mcpNetwork.ts
+    topologyFlow.ts
     networkMembers.ts
     networkTopology.ts
     prisma.ts
