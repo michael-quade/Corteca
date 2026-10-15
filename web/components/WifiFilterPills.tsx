@@ -31,12 +31,12 @@ export function WifiFilterPills({ beaconModels, modelWifi, selected, onChange }:
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
               active
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-50 text-blue-700 ring-1 ring-blue-600"
                 : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50",
             )}
           >
             {gen}
-            <span className={cn("tabular-nums", active ? "text-blue-100" : "text-neutral-400")}>{count}</span>
+            <span className={cn("tabular-nums", active ? "text-blue-500" : "text-neutral-400")}>{count}</span>
           </button>
         );
       })}
@@ -44,7 +44,7 @@ export function WifiFilterPills({ beaconModels, modelWifi, selected, onChange }:
         <button
           type="button"
           onClick={() => onChange([])}
-          className="text-xs text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline"
+          className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline"
         >
           Clear
         </button>

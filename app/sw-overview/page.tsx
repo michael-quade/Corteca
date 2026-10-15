@@ -11,6 +11,12 @@ import { SwDrilldown } from "@/web/components/SwDrilldown";
 import { SwMatrixModal } from "@/web/components/modals/SwMatrixModal";
 import { UnknownFirmwareList } from "@/web/components/UnknownFirmwareList";
 import { WifiFilterPills } from "@/web/components/WifiFilterPills";
+import { SwFleetHealth } from "@/web/components/SwFleetHealth";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { StatusPill } from "@/web/components/corteca/StatusPill";
+import { OutlineButton } from "@/web/components/corteca/OutlineButton";
+import { SegmentedControl } from "@/web/components/corteca/SegmentedControl";
+import { Notice } from "@/web/components/corteca/Notice";
 import type { WifiGeneration } from "@/web/lib/wifiGeneration";
 import type { NetworkSwEntry, SwSelection } from "@/web/components/SwOverview.types";
 import type { SwOverviewResponse } from "@/app/api/sw-overview/route";
@@ -48,6 +54,8 @@ export default function SwOverviewPage() {
   const [selection, setSelection] = useState<SwSelection | null>(null);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [wifiFilter, setWifiFilter] = useState<WifiGeneration[]>([]);
+  // Bumped by the "Unknown firmware" health tile to expand and reveal that list.
+  const [unknownOpenRequest, setUnknownOpenRequest] = useState(0);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
@@ -135,151 +143,147 @@ export default function SwOverviewPage() {
   const networks: NetworkSwEntry[] = data?.networks ?? [];
   const unknownFirmwares = data?.unknownFirmwares ?? [];
 
-  return (
-    <main className="mx-auto max-w-[1400px] px-6 py-8">
-      {/* Back link */}
-      <div className="mb-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 8H3M7 4l-4 4 4 4" />
-          </svg>
-          Back to Dashboard
-        </Link>
-      </div>
+  const matched = visibleNetworks.filter((n) => n.releaseName).length;
 
-      {/* Heading row */}
-      <div className="mb-6 flex flex-wrap items-start gap-4">
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-neutral-900">Beacon Active SW Overview</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Visual matrix of active software releases across the managed Beacon fleet.
-            {data && (
-              <span className="ml-2 text-neutral-400">
-                Report data from {formatAge(data.reportAge)}.
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
+  function showUnknown() {
+    setUnknownOpenRequest((n) => n + 1);
+    requestAnimationFrame(() => document.getElementById("unknown-firmware")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  return (
+    // Plain light ground like the Corteca console (covers the global background image).
+    <div className="min-h-[calc(100vh-3.5rem)] bg-[#f5f7fa]">
+      <main className="mx-auto max-w-[1400px] space-y-6 px-6 py-8">
+        {/* Header: breadcrumb title, last updated, actions */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900">
+              <Link href="/dashboard" className="text-neutral-500 transition-colors hover:text-blue-600">Dashboards</Link>
+              <span className="mx-2 text-neutral-400">/</span>
+              Beacon Active SW Overview
+            </h1>
+            <p className="mt-1 flex items-center gap-2 text-xs text-neutral-500">
+              {data ? <>Report data from {formatAge(data.reportAge)}</> : "Visual matrix of active software releases across the managed Beacon fleet."}
+              {data && (
+                <button
+                  type="button"
+                  onClick={() => void fetchOverview()}
+                  disabled={busy}
+                  title="Reload the cached report"
+                  aria-label="Reload the cached report"
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cn(fetching && "animate-spin")}>
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36" /><polyline points="21 3 21 9 15 9" />
+                  </svg>
+                </button>
+              )}
+            </p>
+          </div>
           <div className="flex items-center gap-2">
-            <button
+            <OutlineButton
               onClick={() => setMatrixOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+              icon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              }
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-              </svg>
               SW Matrix
-            </button>
-            <button
+            </OutlineButton>
+            <OutlineButton
               onClick={handleRefresh}
               disabled={busy}
-              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              icon={refreshing ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" /> : <NewReportIcon />}
             >
-              {busy ? (
-                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Fetching report…</>
-              ) : (
-                <><NewReportIcon />New Report</>
-              )}
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-neutral-500">
-            {[
-              ["bg-emerald-100", "All online"],
-              ["bg-amber-100", "Some offline"],
-              ["bg-neutral-100", "All offline"],
-            ].map(([swatch, label]) => (
-              <span key={label} className="inline-flex items-center gap-1.5">
-                <span className={cn("h-3 w-3 rounded-sm border border-neutral-200", swatch)} />
-                {label}
-              </span>
-            ))}
+              {refreshing ? "Fetching report…" : "New Report"}
+            </OutlineButton>
           </div>
         </div>
-      </div>
 
-      {/* Error */}
-      {error && (
-        <div className="mb-6 rounded-md bg-red-50 px-4 py-3">
-          <p className="text-sm font-medium text-red-700">Error</p>
-          <p className="mt-1 font-mono text-xs text-red-500">{error}</p>
-        </div>
-      )}
+        {error && <Notice tone="error" title="Couldn't load the SW overview" onClose={() => setError(null)}>{error}</Notice>}
 
-      {/* Loading state */}
-      {busy && !data && (
-        <div className="flex flex-col items-center justify-center gap-3 py-28">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-700" />
-          <p className="text-sm text-neutral-400">Loading SW overview…</p>
-        </div>
-      )}
-
-      {data && (
-        <div className="space-y-6">
-          {/* Filter toggle */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-neutral-500">Filter:</span>
-            {(["all", "online", "offline"] as Filter[]).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  filter === f
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                {f === "all" ? "All" : f === "online" ? "Online only" : "Offline only"}
-              </button>
-            ))}
-            <span className="ml-2 text-xs text-neutral-400">
-              {networks.filter((n) => n.releaseName).length} matched ·{" "}
-              {networks.filter((n) => !n.releaseName).length} unknown
-            </span>
+        {busy && !data && (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white py-28">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
+            <p className="text-sm text-neutral-500">Loading SW overview…</p>
           </div>
+        )}
 
-          <WifiFilterPills
-            beaconModels={data.beaconModels}
-            modelWifi={data.modelWifi ?? {}}
-            selected={wifiFilter}
-            onChange={handleWifiFilterChange}
-          />
-
-          {/* Heatmap */}
-          {visibleModels.length === 0 ? (
-            <p className="rounded-lg border border-neutral-200 py-12 text-center text-sm text-neutral-400">
-              No Beacon models are tagged with the selected WiFi type. Set WiFi types in the SW Matrix.
-            </p>
-          ) : (
-            <SwHeatmap
-              beaconModels={visibleModels}
-              buildMatrix={visibleBuildMatrix}
+        {data && (
+          <>
+            <SwFleetHealth
               networks={visibleNetworks}
-              filter={filter}
-              onSelect={setSelection}
-              activeSelection={selection}
+              onShowOnline={() => { setFilter("online"); setSelection(null); }}
+              onShowUnknown={showUnknown}
             />
-          )}
 
-          {/* Unknown builds */}
-          <UnknownFirmwareList items={unknownFirmwares} onAssigned={() => void fetchOverview()} />
-        </div>
-      )}
+            <CortecaCard
+              title="Release matrix"
+              info="Beacons per release and model. Click a count, a release or a model to list its networks."
+              actions={
+                <>
+                  <StatusPill tone="good">All online</StatusPill>
+                  <StatusPill tone="fair">Some offline</StatusPill>
+                  <StatusPill tone="neutral">All offline</StatusPill>
+                </>
+              }
+            >
+              <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+                <SegmentedControl
+                  label="Online status"
+                  value={filter}
+                  onChange={(f) => { setFilter(f); setSelection(null); }}
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "online", label: "Online only" },
+                    { value: "offline", label: "Offline only" },
+                  ]}
+                />
+                <WifiFilterPills
+                  beaconModels={data.beaconModels}
+                  modelWifi={data.modelWifi ?? {}}
+                  selected={wifiFilter}
+                  onChange={handleWifiFilterChange}
+                />
+                <span className="ml-auto text-xs text-neutral-500">
+                  {matched.toLocaleString()} matched · {(visibleNetworks.length - matched).toLocaleString()} unknown
+                </span>
+              </div>
 
-      {/* Drilldown panel */}
-      <SwDrilldown
-        selection={selection}
-        networks={visibleNetworks}
-        filter={filter}
-        onClose={() => setSelection(null)}
-      />
+              {visibleModels.length === 0 ? (
+                <p className="rounded-xl bg-neutral-50 py-12 text-center text-sm text-neutral-500">
+                  No Beacon models are tagged with the selected WiFi type. Set WiFi types in the SW Matrix.
+                </p>
+              ) : (
+                <SwHeatmap
+                  beaconModels={visibleModels}
+                  buildMatrix={visibleBuildMatrix}
+                  networks={visibleNetworks}
+                  filter={filter}
+                  onSelect={setSelection}
+                  activeSelection={selection}
+                />
+              )}
+            </CortecaCard>
 
-      <SwMatrixModal
-        open={matrixOpen}
-        onClose={() => setMatrixOpen(false)}
-        onSaved={() => void fetchOverview()}
-      />
-    </main>
+            <UnknownFirmwareList items={unknownFirmwares} onAssigned={() => void fetchOverview()} openRequest={unknownOpenRequest} />
+          </>
+        )}
+
+        <SwDrilldown
+          selection={selection}
+          networks={visibleNetworks}
+          filter={filter}
+          onClose={() => setSelection(null)}
+        />
+
+        <SwMatrixModal
+          open={matrixOpen}
+          onClose={() => setMatrixOpen(false)}
+          onSaved={() => void fetchOverview()}
+        />
+      </main>
+    </div>
   );
 }

@@ -24,7 +24,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
 | `/reboot-report` | Reboot Report | Dedicated page for the reboot report with Recharts bar chart and sortable/sticky-header table. |
-| `/sw-overview` | Beacon SW Overview | Heatmap matrix of active Beacon firmware versions across the fleet by model. WiFi filter pills (WiFi 5 / WiFi 6/6E / WiFi 7, multi-select) limit columns to models of those generations. Drilldown modal per cell, unknown firmware list, deployment report table. |
+| `/sw-overview` | Beacon SW Overview | Styled after the Corteca console (light grey ground, white rounded cards, blue outline actions, pastel status pills). A "Fleet health" card (Beacons / Online / Known releases / Unknown firmware tiles with Good/Fair/Poor pills; Online and Known releases Good ≥95%, Fair ≥80%; Online tile filters to online, Unknown tile opens the unknown list) sits above a heatmap matrix of active Beacon firmware versions across the fleet by model. WiFi filter pills (WiFi 5 / WiFi 6/6E / WiFi 7, multi-select) limit columns to models of those generations. Drilldown modal per cell, unknown firmware list, deployment report table. |
 | `/device-browser` | Device Data Model Browser | USP TR-369 data model explorer. Search for a device by MAC, browse the full parameter tree, set parameters via modal with confirmation. |
 | `/alarms` | Network Alarms | Query the ouife fault manager for open alarms by date range, severity (critical/major/minor/clear), optional device MAC, and alarm type (standard vs. custom). Results in a sortable table with clickable severity filter chips and per-row Corteca Console launch button. Includes "Cross Reference Reboot Report" — fetches the latest reboot report and cross-matches alarm AP MACs; matched APs are shown grouped with their alarm rows and reboot events, color-coded per AP. |
 | `/api-usage` | API Usage Dashboard | Live stats on Corteca API calls, bytes sent/received, rate limit hits for the current session. Persisted per-session in PostgreSQL via Prisma. |
@@ -367,6 +367,8 @@ web/
     ApiLogPanel.tsx               # Global API log panel (bottom of every page)
     DashboardCard.tsx             # Card used by /reports
     landing/                      # Dashboard landing page: LandingCard, FeaturedCard, OtherAppsSelect
+    corteca/                      # Corteca-console look: CortecaCard, StatusPill, HealthTile, OutlineButton, SegmentedControl, Notice
+    SwFleetHealth.tsx             # SW Overview fleet health tiles
     DataModelBrowser.tsx
     EthernetPortPanel.tsx
     GlobalNetworkMap.tsx

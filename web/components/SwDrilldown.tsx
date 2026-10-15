@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { cn } from "@/web/lib/utils";
 import { SwNetworkTable } from "@/web/components/tables/SwNetworkTable";
+import { StatusPill } from "@/web/components/corteca/StatusPill";
 import type { NetworkSwEntry, SwSelection } from "@/web/components/SwOverview.types";
 
 const NAME_BATCH = 50;
@@ -93,7 +94,7 @@ export function SwDrilldown({ selection, networks, filter, onClose }: SwDrilldow
       {/* Slide-in panel */}
       <div
         className={cn(
-          "fixed right-0 top-0 z-40 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
+          "fixed right-0 top-0 z-40 flex h-full w-full max-w-3xl flex-col rounded-l-2xl bg-white shadow-2xl transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "translate-x-full",
         )}
         role="dialog"
@@ -103,7 +104,7 @@ export function SwDrilldown({ selection, networks, filter, onClose }: SwDrilldow
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
               {selection?.type === "cell"
                 ? "Release + Model"
                 : selection?.type === "release"
@@ -116,12 +117,9 @@ export function SwDrilldown({ selection, networks, filter, onClose }: SwDrilldow
             <p className="mt-1 text-sm text-neutral-500">
               {filtered.length} network{filtered.length !== 1 ? "s" : ""}
               {filter !== "all" && (
-                <span className={cn(
-                  "ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-medium",
-                  filter === "online" ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-500"
-                )}>
+                <StatusPill tone={filter === "online" ? "good" : "neutral"} className="ml-1.5">
                   {filter} only
-                </span>
+                </StatusPill>
               )}
               {loadingNames && (
                 <span className="ml-2 inline-flex items-center gap-1 text-neutral-400">
