@@ -10,7 +10,7 @@ import { McpTopBar } from "@/web/components/McpTopBar";
 import { RecentNetworksDrawer } from "@/web/components/RecentNetworksDrawer";
 import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
-import { clearRecentNetworks, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
+import { clearRecentNetworks, forgetNetwork, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
 import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
 import type { Subscriber } from "@/web/lib/corteca/types";
@@ -96,8 +96,9 @@ export default function McpNetworkVisualizerPage() {
   useEffect(() => {
     if (!response) return;
     const sub = selected?.home_wifis?.[0]?.id === response.homeWifiId ? selected : null;
-    setRecent(rememberNetwork({ networkId: response.homeWifiId, label: sub ? subscriberName(sub) : "Shared link", subscriber: sub }));
-  }, [response, selected]);
+    const gatewayModel = network?.aps.find((a) => a.role === "root")?.model;
+    setRecent(rememberNetwork({ networkId: response.homeWifiId, label: sub ? subscriberName(sub) : "Shared link", subscriber: sub, gatewayModel }));
+  }, [response, selected, network]);
 
   async function loadNetwork(networkId: string) {
     setResponse(null);
@@ -154,6 +155,7 @@ export default function McpNetworkVisualizerPage() {
           entries={recent}
           currentId={networkId}
           onPick={(r) => void (r.subscriber ? handleSubscriberSelect(r.subscriber) : openNetwork(r.networkId, null))}
+          onRemove={(id) => setRecent(forgetNetwork(id))}
           onClear={() => setRecent(clearRecentNetworks())}
         />
         <div className="min-w-0 flex-1 space-y-3">

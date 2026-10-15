@@ -1,40 +1,27 @@
 "use client";
 
-import { EdgeLabelRenderer, getBezierPath, getStraightPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
-import { isEthernet, linkQuality, type BackhaulEdgeData, type Quality } from "@/web/lib/topologyFlow";
+import { backhaulLabel, isEthernet, linkQuality, type BackhaulEdgeData, type Quality } from "@/web/lib/topologyFlow";
+import { labelBox } from "@/web/lib/edgeGeometry";
 import { QUALITY_BORDER, QUALITY_STROKE } from "./qualityStyles";
 import { isSelected, useTopologyUi } from "./TopologyContext";
-
-/** Ethernet backhaul that negotiated below gigabit usually means a bad cable or port. */
-export const SLOW_ETHERNET_MBPS = 1000;
-
-function formatRate(mbps: number): string {
-  return mbps >= 1000 ? `${(mbps / 1000).toFixed(1)} Gbps` : `${mbps} Mbps`;
-}
+import { routePath } from "./RouteEdge";
 
 export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">>) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props;
+  const { id, data } = props;
   const ui = useTopologyUi();
-  const radial = ui.layout === "radial";
-  const [path] = radial
-    ? getStraightPath({ sourceX, sourceY, targetX, targetY })
-    : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  // In tree/sideways the label sits past the midpoint toward the child: links
-  // fanning out of one AP share a parent, so their midpoints crowd together
-  // next to it. Along the main axis the bezier eases (3t² − 2t³); across it,
-  // it is close to linear. Radial links are straight, centre to centre, so the
-  // midpoint is the gap between the two cards.
-  const horizontal = ui.layout === "horizontal";
-  const t = radial ? 0.5 : horizontal ? 0.6 : 0.7, ease = 3 * t * t - 2 * t * t * t;
-  const labelX = sourceX + (targetX - sourceX) * (radial || horizontal ? t : ease);
-  const labelY = sourceY + (targetY - sourceY) * (radial || !horizontal ? t : ease);
-  if (!data) return null;
+  if (!data?.points || data.points.length < 2) return null;
 
+  // Route and label position come from layoutFlowGraph(), which guarantees the
+  // route never runs under another card and the label covers no card or label.
+  const path = routePath(data.points);
   const { link } = data;
+  const { text: label, slowEth } = backhaulLabel(link);
+  const lb = labelBox(data.points, label, ui.layout === "radial");
+  const labelX = lb.x + lb.w / 2, labelY = lb.y + lb.h / 2;
   const eth = isEthernet(link);
   const rate = link.rateMbps ?? 0;
-  const slowEth = eth && rate > 0 && rate < SLOW_ETHERNET_MBPS;
   const quality: Quality = eth ? (slowEth ? "fair" : "unknown") : linkQuality(link);
   const selected = isSelected(ui, "link", link.childMac);
   const dimmed = !!ui.highlight && !ui.highlight.edges.has(id);
@@ -42,12 +29,6 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
   const width = eth ? 3 : 1.5 + Math.min(4, rate / 400);
   const flowSeconds = rate > 0 ? Math.max(0.4, 2.4 - rate / 1000) : 0;
 
-  const parts = [
-    eth ? "Ethernet" : null,
-    !eth && link.rssiDbm != null ? `${link.rssiDbm} dBm` : null,
-    rate > 0 ? formatRate(rate) : null,
-  ].filter(Boolean);
-  const label = parts.join(" · ") || (eth ? "Ethernet" : "WiFi backhaul");
   const toggle = () => ui.select(selected ? null : { kind: "link", id: link.childMac });
 
   return (
@@ -90,7 +71,7 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
           )}
           title={slowEth ? "Ethernet below 1 Gbps — check cable/port" : link.quality ? `Corteca backhaul quality: ${link.quality}` : undefined}
         >
-          {slowEth && "⚠ "}{label}
+          {label}
         </button>
       </EdgeLabelRenderer>
     </g>

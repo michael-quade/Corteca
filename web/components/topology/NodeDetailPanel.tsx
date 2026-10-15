@@ -1,11 +1,10 @@
 "use client";
 
 import type { McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
-import { clientName, isEthernet } from "@/web/lib/topologyFlow";
+import { SLOW_ETHERNET_MBPS, clientName, isEthernet } from "@/web/lib/topologyFlow";
 import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
-import { SLOW_ETHERNET_MBPS } from "./BackhaulEdge";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;

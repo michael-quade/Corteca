@@ -16,6 +16,7 @@ export interface RecentNetworksDrawerProps {
   entries: RecentNetwork[];
   currentId: string | null;
   onPick: (entry: RecentNetwork) => void;
+  onRemove: (networkId: string) => void;
   onClear: () => void;
 }
 
@@ -23,7 +24,7 @@ export interface RecentNetworksDrawerProps {
  * Thin rail on the left edge; opens an overlay panel (so the diagram keeps its
  * full width) listing networks viewed in this browser.
  */
-export function RecentNetworksDrawer({ entries, currentId, onPick, onClear }: RecentNetworksDrawerProps) {
+export function RecentNetworksDrawer({ entries, currentId, onPick, onRemove, onClear }: RecentNetworksDrawerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -73,20 +74,32 @@ export function RecentNetworksDrawer({ entries, currentId, onPick, onClear }: Re
               {entries.map((r) => {
                 const online = r.subscriber?.home_wifis?.[0]?.status?.online;
                 return (
-                  <li key={r.networkId}>
+                  <li key={r.networkId} className={cn("group flex items-center hover:bg-violet-50", r.networkId === currentId && "bg-violet-50/60")}>
                     <button
                       type="button"
                       onClick={() => { setOpen(false); onPick(r); }}
-                      className={cn("flex w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-violet-50", r.networkId === currentId && "bg-violet-50/60")}
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2 pl-4 pr-1 text-left"
                     >
                       <span className="min-w-0">
                         <span className="flex items-center gap-1.5 truncate text-sm font-medium text-neutral-900">
                           {r.subscriber && <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", online ? "bg-green-500" : "bg-neutral-300")} />}
                           {r.label}
                         </span>
-                        <span className="block font-mono text-[11px] text-neutral-400">{r.networkId}</span>
+                        <span className="block text-[11px] text-neutral-400">
+                          <span className="font-mono">{r.networkId}</span>
+                          {r.gatewayModel && <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-px font-medium text-blue-700">{r.gatewayModel}</span>}
+                        </span>
                       </span>
                       <span className="flex-shrink-0 text-[11px] text-neutral-400">{r.networkId === currentId ? "current" : ago(r.viewedAt)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(r.networkId)}
+                      aria-label={`Remove ${r.label} ${r.networkId} from recent networks`}
+                      title="Remove from recent"
+                      className="mr-2 flex-shrink-0 rounded p-1 text-neutral-300 hover:bg-white hover:text-red-600 group-hover:text-neutral-500 focus-visible:text-neutral-700"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                     </button>
                   </li>
                 );

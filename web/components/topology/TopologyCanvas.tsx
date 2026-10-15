@@ -16,13 +16,14 @@ import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import { ApNode } from "./ApNode";
 import { ClientClusterNode } from "./ClientClusterNode";
 import { BackhaulEdge } from "./BackhaulEdge";
+import { RouteEdge } from "./RouteEdge";
 import { TopologyLegend } from "./TopologyLegend";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 
 const nodeTypes: NodeTypes = { ap: ApNode, cluster: ClientClusterNode };
-const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge };
+const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge, route: RouteEdge };
 const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
@@ -74,8 +75,8 @@ function Canvas(props: TopologyCanvasProps) {
     let cancelled = false;
     layoutFlowGraph(graph.nodes, graph.edges, layout).then((laidOut) => {
       if (cancelled) return;
-      setNodes(laidOut);
-      setEdges(graph.edges);
+      setNodes(laidOut.nodes);
+      setEdges(laidOut.edges);
       // The first view comes from ReactFlow's fitView/defaultViewport props;
       // switching layout refits.
       if (lastLayoutMode.current !== layout) requestAnimationFrame(() => fitView({ padding: 0.15, duration: 400 }));

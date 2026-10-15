@@ -4,6 +4,7 @@
 
 import type { Edge, Node } from "@xyflow/react";
 import type { McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
+import { center, spreadRadial, straightRoute, type Box, type Point } from "@/web/lib/edgeGeometry";
 import type { Member } from "@/web/lib/corteca/types";
 
 // ── Sizes (must match the node components) ───────────────────────────────────
@@ -42,7 +43,9 @@ export interface ClusterNodeData extends Record<string, unknown> {
   sections: ClientSection[];
   onToggle: (sectionId: string) => void;
 }
-export interface BackhaulEdgeData extends Record<string, unknown> { link: McpBackhaulLink }
+/** `points`: the edge's route in flow coordinates, set by layoutFlowGraph(). */
+export interface BackhaulEdgeData extends Record<string, unknown> { link: McpBackhaulLink; points?: Point[] }
+export interface RouteEdgeData extends Record<string, unknown> { points?: Point[] }
 
 export type ApFlowNode = Node<ApNodeData, "ap">;
 export type ClusterFlowNode = Node<ClusterNodeData, "cluster">;
@@ -56,6 +59,27 @@ export function linkQuality(link: McpBackhaulLink): Quality {
 }
 
 export const isEthernet = (link: McpBackhaulLink) => link.medium.includes("eth");
+
+/** Ethernet backhaul that negotiated below gigabit usually means a bad cable or port. */
+export const SLOW_ETHERNET_MBPS = 1000;
+
+export function formatLinkRate(mbps: number): string {
+  return mbps >= 1000 ? `${(mbps / 1000).toFixed(1)} Gbps` : `${mbps} Mbps`;
+}
+
+/** Text of a backhaul edge's label — shared by the edge and the layout checks. */
+export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: boolean } {
+  const eth = isEthernet(link);
+  const rate = link.rateMbps ?? 0;
+  const slowEth = eth && rate > 0 && rate < SLOW_ETHERNET_MBPS;
+  const parts = [
+    eth ? "Ethernet" : null,
+    !eth && link.rssiDbm != null ? `${link.rssiDbm} dBm` : null,
+    rate > 0 ? formatLinkRate(rate) : null,
+  ].filter(Boolean);
+  const text = parts.join(" · ") || (eth ? "Ethernet" : "WiFi backhaul");
+  return { text: slowEth ? `⚠ ${text}` : text, slowEth };
+}
 
 export function clientBand(m: Member): Band {
   if (String(m.type ?? "").toLowerCase() === "ethernet") return "Wired";
@@ -181,7 +205,7 @@ export function buildFlowGraph(
       height,
       data: { sections, onToggle },
     });
-    edges.push({ id: `ce:${id}`, source: apMac, target: id, type: mode === "radial" ? "straight" : "smoothstep", className: "cluster-edge" });
+    edges.push({ id: `ce:${id}`, source: apMac, target: id, type: "route", className: "cluster-edge", data: {} });
   }
 
   return { nodes, edges };
@@ -214,7 +238,19 @@ const LAYOUT_OPTIONS: Record<LayoutMode, Record<string, string>> = {
   },
 };
 
-export async function layoutFlowGraph(nodes: FlowNode[], edges: Edge[], mode: LayoutMode = "tree"): Promise<FlowNode[]> {
+interface ElkSection { startPoint: Point; endPoint: Point; bendPoints?: Point[] }
+
+/**
+ * Positions nodes with ELK and attaches each edge's route (`data.points`).
+ * Layered layouts use ELK's own orthogonal routes, which go around cards; radial
+ * layouts get straight centre-to-centre routes after spreadRadial() has opened
+ * up enough room that no link runs under a card or loses its label.
+ */
+export async function layoutFlowGraph(
+  nodes: FlowNode[],
+  edges: Edge[],
+  mode: LayoutMode = "tree",
+): Promise<{ nodes: FlowNode[]; edges: Edge[] }> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
   const elk = new ELK();
   const graph = await elk.layout({
@@ -223,6 +259,35 @@ export async function layoutFlowGraph(nodes: FlowNode[], edges: Edge[], mode: La
     children: nodes.map((n) => ({ id: n.id, width: n.width ?? AP_W, height: n.height ?? AP_H })),
     edges: edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
   });
-  const pos = new Map((graph.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }]));
-  return nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position }));
+
+  let boxes = new Map<string, Box>((graph.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 }]));
+  let routes: Map<string, Point[]>;
+
+  if (mode === "radial") {
+    const root = nodes.find((n) => n.type === "ap" && (n.data as ApNodeData).ap.role === "root")?.id ?? nodes[0]?.id;
+    boxes = spreadRadial(boxes, root, edges.map((e) => ({
+      id: e.id, source: e.source, target: e.target,
+      label: e.type === "backhaul" ? backhaulLabel((e.data as BackhaulEdgeData).link).text : undefined,
+    })));
+    routes = new Map(edges.map((e) => [e.id, straightRoute(boxes.get(e.source)!, boxes.get(e.target)!)]));
+  } else {
+    routes = new Map((graph.edges ?? []).map((e) => {
+      const sec = (e as { sections?: ElkSection[] }).sections?.[0];
+      return [e.id, sec ? [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint] : []];
+    }));
+    // Fallback for an edge ELK didn't route: straight between the two cards.
+    for (const e of edges) {
+      if (!routes.get(e.id)?.length && boxes.has(e.source) && boxes.has(e.target)) {
+        routes.set(e.id, [center(boxes.get(e.source)!), center(boxes.get(e.target)!)]);
+      }
+    }
+  }
+
+  return {
+    nodes: nodes.map((n) => {
+      const b = boxes.get(n.id);
+      return b ? { ...n, position: { x: b.x, y: b.y } } : n;
+    }),
+    edges: edges.map((e) => ({ ...e, data: { ...(e.data ?? {}), points: routes.get(e.id) ?? [] } })),
+  };
 }
