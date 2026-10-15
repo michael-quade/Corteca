@@ -197,14 +197,15 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Subset shown as cards on the dashboard grid — unchanged from before. */
+/** Wide tiles on the dashboard landing page, in display order. */
 export const DASHBOARD_CARD_HREFS = [
   "/devices",
   "/reports",
-  "/network-visualizer",
-  "/mcp-network-visualizer",
   "/network-map",
   "/device-browser",
   "/sw-overview",
   "/alarms",
 ];
+
+/** Tall feature tile on the dashboard landing page. */
+export const DASHBOARD_FEATURED_HREF = "/mcp-network-visualizer";
