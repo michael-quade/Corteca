@@ -60,8 +60,8 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
           {ap.name}{ap.online ? "" : " · Offline"}
         </p>
         <p className="truncate text-sm font-semibold text-neutral-900" title={ap.model}>{ap.model}</p>
-        <p className="truncate font-mono text-[11px] text-neutral-500" title={`Firmware ${ap.firmware}`}>
-          {ap.firmware || ap.mac}
+        <p className="truncate font-mono text-[11px] text-neutral-500" title={`MAC ${ap.mac} · firmware ${ap.firmware}`}>
+          {ap.mac}
         </p>
       </div>
 

@@ -3,7 +3,7 @@
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
-  Background, BackgroundVariant, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
+  Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
   type Edge, type EdgeTypes, type NodeTypes,
 } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
@@ -18,6 +18,7 @@ import { ClientClusterNode } from "./ClientClusterNode";
 import { BackhaulEdge } from "./BackhaulEdge";
 import { RouteEdge } from "./RouteEdge";
 import { TopologyLegend } from "./TopologyLegend";
+import { ZoomControls } from "./ZoomControls";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
@@ -42,7 +43,13 @@ function Canvas(props: TopologyCanvasProps) {
   const { network, selection, onSelect, filters, onFiltersChange, layout, onLayoutChange, initialViewport, onViewportChange } = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
-  const { fitView, getViewport, setCenter, getNode } = useReactFlow();
+  const { fitView, getViewport, setViewport, setCenter, getNode } = useReactFlow();
+  // View from just before the detail panel first pushed the diagram aside;
+  // restored when the panel closes. Dropped if the user moves the view meanwhile.
+  const restoreView = useRef<Viewport | null>(null);
+  // View when the latest pan/drag gesture began: React Flow reports a pane click
+  // at the end of a drag, which must not close the detail panel.
+  const gestureStart = useRef<Viewport | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [nodes, setNodes] = useState<FlowNode[] | null>(null);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -79,7 +86,10 @@ function Canvas(props: TopologyCanvasProps) {
       setEdges(laidOut.edges);
       // The first view comes from ReactFlow's fitView/defaultViewport props;
       // switching layout refits.
-      if (lastLayoutMode.current !== layout) requestAnimationFrame(() => fitView({ padding: 0.15, duration: 400 }));
+      if (lastLayoutMode.current !== layout) {
+        restoreView.current = null;
+        requestAnimationFrame(() => fitView({ padding: 0.15, duration: 400 }));
+      }
       lastLayoutMode.current = layout;
     });
     return () => { cancelled = true; };
@@ -120,14 +130,23 @@ function Canvas(props: TopologyCanvasProps) {
     const left = node.position.x * zoom + x, top = node.position.y * zoom + y;
     const fits = left >= 0 && top >= 0 && left + w * zoom <= box.width - PANEL_W && top + h * zoom <= box.height;
     if (!fits) {
+      restoreView.current ??= { x, y, zoom };
       const z = Math.max(zoom, 0.8);
       // Offset the centre left by half the panel so the node lands in the visible area.
       setCenter(node.position.x + w / 2 + PANEL_W / 2 / z, node.position.y + h / 2, { zoom: z, duration: 400 });
     }
   }, [selection, nodes, network, getNode, getViewport, setCenter]);
 
+  // Panel closed → put the diagram back where it was before the panel moved it.
+  useEffect(() => {
+    if (selection || !restoreView.current) return;
+    void setViewport(restoreView.current, { duration: 400 });
+    restoreView.current = null;
+  }, [selection, setViewport]);
+
   useEffect(() => {
     const onChange = () => {
+      restoreView.current = null;
       setFullscreen(document.fullscreenElement === wrapperRef.current);
       requestAnimationFrame(() => fitView({ padding: 0.15, duration: 300 }));
     };
@@ -209,16 +228,30 @@ function Canvas(props: TopologyCanvasProps) {
                 const child = edge.target;
                 onSelect(selection?.kind === "link" && selection.id === child ? null : { kind: "link", id: child });
               }}
-              onPaneClick={() => onSelect(null)}
+              onPaneClick={() => {
+                const s0 = gestureStart.current, v = getViewport();
+                gestureStart.current = null;
+                if (s0 && (s0.x !== v.x || s0.y !== v.y || s0.zoom !== v.zoom)) return; // it was a drag
+                onSelect(null);
+              }}
               fitView={!initialViewport}
               fitViewOptions={{ padding: 0.15 }}
               defaultViewport={initialViewport ?? undefined}
-              onMoveEnd={(_, v) => onViewportChange(v)}
+              // A user pan/zoom (event present; programmatic moves have none) keeps their view.
+              onMoveStart={(event, v) => {
+                if (!event) return;
+                gestureStart.current = v;
+              }}
+              onMoveEnd={(event, v) => {
+                // Only a gesture that actually moved the view keeps the user's position.
+                const s0 = gestureStart.current;
+                if (event && s0 && (s0.x !== v.x || s0.y !== v.y || s0.zoom !== v.zoom)) restoreView.current = null;
+                onViewportChange(v);
+              }}
               minZoom={0.15}
               maxZoom={2.5}
             >
               <Background variant={BackgroundVariant.Dots} gap={20} size={1} className="!bg-neutral-50" />
-              <Controls showInteractive={false} position="bottom-left" />
               {!selection && (
                 <MiniMap
                   position="bottom-right"
@@ -229,8 +262,9 @@ function Canvas(props: TopologyCanvasProps) {
                   className="!rounded-lg !border !border-neutral-200"
                 />
               )}
-              <Panel position="top-left">
+              <Panel position="top-left" className="flex items-start gap-2">
                 <TopologyLegend />
+                <ZoomControls />
               </Panel>
             </ReactFlow>
           )}

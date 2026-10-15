@@ -69,7 +69,7 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
             selected && "ring-2 ring-violet-500/50",
             dimmed && "opacity-25"
           )}
-          title={slowEth ? "Ethernet below 1 Gbps — check cable/port" : link.quality ? `Corteca backhaul quality: ${link.quality}` : undefined}
+          title={slowEth ? "Ethernet below 1 Gbps — check cable/port" : link.quality ? `Backhaul quality: ${link.quality}` : undefined}
         >
           {label}
         </button>
