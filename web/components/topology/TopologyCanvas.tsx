@@ -88,7 +88,7 @@ function Canvas(props: TopologyCanvasProps) {
 
   const visibleClients = useMemo(() => {
     if (!filtersActive(filters)) return null;
-    return new Set(network.members.filter((m) => m.connected && clientMatches(m, filters)).map((m) => m.id));
+    return new Set(network.members.filter((m) => m.connected && clientMatches(m, filters, network)).map((m) => m.id));
   }, [network, filters]);
 
   const ui: TopologyUi = useMemo(() => ({
@@ -161,7 +161,7 @@ function Canvas(props: TopologyCanvasProps) {
         aria-label="Network topology. Arrow keys move between devices, Escape clears the selection."
         className={cn(
           "flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
-          fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-12rem)] min-h-[600px]"
+          fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-8.5rem)] min-h-[520px]"
         )}
       >
         <TopologyToolbar

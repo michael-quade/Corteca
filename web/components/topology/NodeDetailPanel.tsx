@@ -2,6 +2,7 @@
 
 import type { McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName, isEthernet } from "@/web/lib/topologyFlow";
+import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
 import { SLOW_ETHERNET_MBPS } from "./BackhaulEdge";
@@ -23,6 +24,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
   const uplink = network.backhaul.find((l) => l.childMac === ap.mac);
   const parent = uplink && network.aps.find((a) => a.mac === uplink.parentMac);
   const children = network.backhaul.filter((l) => l.parentMac === ap.mac);
+  const talkers = topTalkers(network, ap.mac);
 
   return (
     <>
@@ -32,9 +34,21 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         <DetailRow label="MAC" mono>{ap.mac}</DetailRow>
         <DetailRow label="Serial" mono>{ap.serial}</DetailRow>
         <DetailRow label="Firmware" mono>{ap.firmware}</DetailRow>
+        <DetailRow label="Hardware" mono>{ap.hardwareVersion}</DetailRow>
         <DetailRow label="LAN IP" mono>{ap.ipAddress}</DetailRow>
+        <DetailRow label="Public IP" mono>{ap.wanIp}</DetailRow>
         <DetailRow label="Last boot">{formatDate(ap.lastBoot)}</DetailRow>
+        <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
       </DetailSection>
+      {talkers.length > 0 && (
+        <DetailSection title="Top clients by traffic">
+          {talkers.map(({ member, total }) => (
+            <DetailRow key={member.id} label={formatBytes(total)}>
+              <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{clientName(member)}</JumpButton>
+            </DetailRow>
+          ))}
+        </DetailSection>
+      )}
       <DetailSection title="Radios">
         <DetailRow label="Bands">{ap.bands.join(" · ")}</DetailRow>
         <DetailRow label="SSIDs">{ap.ssids.join(", ")}</DetailRow>
@@ -43,7 +57,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         {parent && uplink ? (
           <>
             <DetailRow label="Uplink to">
-              <JumpButton onClick={() => onSelect({ kind: "ap", id: parent.mac })}>{apLabel(parent.role, parent.model)}</JumpButton>
+              <JumpButton onClick={() => onSelect({ kind: "ap", id: parent.mac })}>{apLabel(parent)}</JumpButton>
             </DetailRow>
             <DetailRow label="Backhaul"><LinkSummary link={uplink} onSelect={onSelect} /></DetailRow>
           </>
@@ -55,7 +69,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
           return (
             <DetailRow key={l.childMac} label="Downlink to">
               <JumpButton onClick={() => onSelect({ kind: "ap", id: l.childMac })}>
-                {child ? apLabel(child.role, child.model) : l.childMac}
+                {child ? apLabel(child) : l.childMac}
               </JumpButton>
             </DetailRow>
           );
@@ -73,15 +87,19 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
   return (
     <DetailSection title="Backhaul link">
       <DetailRow label="From">
-        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.parentMac })}>{parent ? apLabel(parent.role, parent.model) : link.parentMac}</JumpButton>
+        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.parentMac })}>{parent ? apLabel(parent) : link.parentMac}</JumpButton>
       </DetailRow>
       <DetailRow label="To">
-        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child.role, child.model) : link.childMac}</JumpButton>
+        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
       </DetailRow>
       <DetailRow label="Medium">{eth ? "Ethernet" : link.medium ? link.medium.replace(/^wifi-/i, "WiFi ") : "WiFi"}</DetailRow>
       {!eth && <DetailRow label="Corteca quality">{link.quality ?? "Not rated"}</DetailRow>}
       {!eth && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
       <DetailRow label="Data rate">{formatMbps(link.rateMbps)}</DetailRow>
+      {!eth && <DetailRow label="PHY rate">{formatMbps(link.phyRateMbps)}</DetailRow>}
+      <DetailRow label="Traffic ↓ / ↑">
+        {link.bytesDown != null || link.bytesUp != null ? `${formatBytes(link.bytesDown ?? 0)} / ${formatBytes(link.bytesUp ?? 0)}` : null}
+      </DetailRow>
       <DetailRow label="Errors tx / rx">
         {link.errorsTx != null || link.errorsRx != null ? `${link.errorsTx ?? "—"} / ${link.errorsRx ?? "—"}` : null}
       </DetailRow>
@@ -105,7 +123,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   const link = selection.kind === "link" ? network.backhaul.find((l) => l.childMac === selection.id) : undefined;
   if (!ap && !member && !link) return null;
 
-  const title = ap ? apLabel(ap.role, ap.model) : member ? clientName(member) : "Backhaul link";
+  const title = ap ? apLabel(ap) : member ? clientName(member) : "Backhaul link";
   const kicker = ap ? "Access point" : member ? "Client" : "Link";
 
   return (

@@ -3,13 +3,14 @@
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
-import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
-import { McpNetworkHeader } from "@/web/components/McpNetworkHeader";
+import { McpTopBar } from "@/web/components/McpTopBar";
+import { RecentNetworksDrawer } from "@/web/components/RecentNetworksDrawer";
+import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
+import { clearRecentNetworks, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
 import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
 import type { Subscriber } from "@/web/lib/corteca/types";
@@ -33,20 +34,6 @@ const TopologyCanvas = dynamic(
     ),
   }
 );
-
-function BackNav() {
-  return (
-    <div className="mb-6 flex items-center gap-4">
-      <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        Back to Dashboard
-      </Link>
-    </div>
-  );
-}
 
 function McpDebugPanel({ response }: { response: McpResponse }) {
   const [open, setOpen] = useState(false);
@@ -83,6 +70,9 @@ export default function McpNetworkVisualizerPage() {
   const [response, setResponse] = useState<McpResponse | null>(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [recent, setRecent]     = useState<RecentNetwork[]>([]);
+
+  useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
   const network = useMemo(
     () => (response ? normaliseMcpNetwork(response.payload, response.homeWifiId) : null),
@@ -90,13 +80,24 @@ export default function McpNetworkVisualizerPage() {
   );
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
-    setSelected(subscriber);
     const networkId = subscriber.home_wifis?.[0]?.id;
-    if (!networkId) { setResponse(null); setError("No network ID found for this subscriber."); return; }
+    if (!networkId) { setSelected(subscriber); setResponse(null); setError("No network ID found for this subscriber."); return; }
+    await openNetwork(networkId, subscriber);
+  }
+
+  async function openNetwork(networkId: string, subscriber: Subscriber | null) {
+    setSelected(subscriber);
     // A new network starts from a clean view; the layout choice carries over.
     update({ network: networkId, selection: null, filters: EMPTY_FILTERS, viewport: null });
     await loadNetwork(networkId);
   }
+
+  // Remember every network that loads, with its subscriber when we know it.
+  useEffect(() => {
+    if (!response) return;
+    const sub = selected?.home_wifis?.[0]?.id === response.homeWifiId ? selected : null;
+    setRecent(rememberNetwork({ networkId: response.homeWifiId, label: sub ? subscriberName(sub) : "Shared link", subscriber: sub }));
+  }, [response, selected]);
 
   async function loadNetwork(networkId: string) {
     setResponse(null);
@@ -116,12 +117,17 @@ export default function McpNetworkVisualizerPage() {
 
   // Shared link: ?network=… loads straight away, without a subscriber search.
   const deepLinked = useRef(false);
+  // Runs once, on the URL the page opened with; later network changes come from
+  // search or Recent and must not be treated as a shared link.
   useEffect(() => {
-    if (!ready || !isAuthenticated || deepLinked.current || !view.network) return;
+    if (!ready || !isAuthenticated || deepLinked.current) return;
     deepLinked.current = true;
+    if (!view.network) return;
+    // Restore the subscriber chip if this network was opened from a search before.
+    setSelected(loadRecentNetworks().find((r) => r.networkId === view.network)?.subscriber ?? null);
     void loadNetwork(view.network);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, isAuthenticated, view.network]);
+  }, [ready, isAuthenticated]);
 
   const select = useCallback((selection: Selection | null) => update({ selection }), [update]);
   // Picks from the AP cards or clients table bring the graph back into view.
@@ -142,91 +148,94 @@ export default function McpNetworkVisualizerPage() {
   const failedApis = network?.results.filter((r) => !r.ok) ?? [];
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <BackNav />
-
-      <div className="mb-8">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-neutral-900">Home Network Visualizer</h1>
-          <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">MCP</span>
-        </div>
-        <p className="mt-1 text-sm text-neutral-500">
-          Search for a subscriber, then fetch live mesh and client data through the Corteca AI MCP server.
-        </p>
-      </div>
-
-      <div className="mb-8 rounded-xl border border-neutral-200 bg-white p-6">
-        <SubscriberSearch
-          onSelect={handleSubscriberSelect}
-          selectedId={selected?.customer_id ?? selected?.uuid}
+    <main className="mx-auto max-w-screen-2xl px-4 py-3">
+      <div className="flex gap-3">
+        <RecentNetworksDrawer
+          entries={recent}
+          currentId={networkId}
+          onPick={(r) => void (r.subscriber ? handleSubscriberSelect(r.subscriber) : openNetwork(r.networkId, null))}
+          onClear={() => setRecent(clearRecentNetworks())}
         />
-      </div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <McpTopBar
+            subscriber={selected}
+            networkId={networkId}
+            capturedAt={network?.capturedAt ?? null}
+            onSelectSubscriber={handleSubscriberSelect}
+          />
 
-      {networkId && <McpNetworkHeader subscriber={selected} networkId={networkId} />}
-
-      {fetching && (
-        <div className="flex flex-col items-center justify-center gap-3 py-20">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-violet-600" />
-          <p className="text-sm text-neutral-500">Asking the Corteca AI MCP server for network data…</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>
-      )}
-
-      {network && response && !fetching && (
-        <div className="space-y-8">
-          {failedApis.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-              MCP could not retrieve: {failedApis.map((r) => `${r.apiId} (HTTP ${r.status})`).join(", ")}
+          {!networkId && !fetching && (
+            <div className="flex h-[calc(100vh-8.5rem)] min-h-[420px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-white/70 text-center">
+              <p className="text-sm font-medium text-neutral-700">Search for a subscriber above to load their home network.</p>
+              <p className="text-xs text-neutral-500">Or reopen one from <span className="font-semibold">Recent</span> on the left. Data comes live from the Corteca AI MCP server.</p>
             </div>
           )}
 
-          {network.aps.length > 0 ? (
-            <section id="topology" className="scroll-mt-4 space-y-3">
-              <h2 className="text-sm font-semibold text-neutral-700">Network Topology</h2>
-              <TopologyCanvas
-                network={network}
-                selection={view.selection}
-                onSelect={select}
-                filters={view.filters}
-                onFiltersChange={(filters) => update({ filters })}
-                layout={view.layout}
-                onLayoutChange={(layout) => update({ layout })}
-                initialViewport={view.viewport}
-                onViewportChange={(viewport) => update({ viewport })}
-              />
-            </section>
-          ) : (
-            <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>
+          {fetching && (
+            <div className="flex h-[calc(100vh-8.5rem)] min-h-[420px] flex-col items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-white/70">
+              <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-violet-600" />
+              <p className="text-sm text-neutral-500">Asking the Corteca AI MCP server for network data…</p>
+            </div>
           )}
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-700">Access Points ({network.aps.length})</h2>
-            <McpAccessPointCards
-              aps={network.aps}
-              selectedMac={view.selection?.kind === "ap" ? view.selection.id : null}
-              onSelect={(mac) => selectAndReveal({ kind: "ap", id: mac })}
-            />
-          </section>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>
+          )}
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-700">Clients ({network.members.length})</h2>
-            {network.members.length > 0
-              ? (
-                <NetworkMembersTable
-                  members={network.members}
-                  selectedId={view.selection?.kind === "client" ? view.selection.id : null}
-                  onSelect={(id) => selectAndReveal({ kind: "client", id })}
+          {network && response && !fetching && (
+            <div className="space-y-6">
+              {failedApis.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                  MCP could not retrieve: {failedApis.map((r) => `${r.apiId} (HTTP ${r.status})`).join(", ")}
+                </div>
+              )}
+
+              {network.aps.length > 0 ? (
+                <section id="topology" className="scroll-mt-16">
+                  <h2 className="sr-only">Network topology</h2>
+                  <TopologyCanvas
+                    network={network}
+                    selection={view.selection}
+                    onSelect={select}
+                    filters={view.filters}
+                    onFiltersChange={(filters) => update({ filters })}
+                    layout={view.layout}
+                    onLayoutChange={(layout) => update({ layout })}
+                    initialViewport={view.viewport}
+                    onViewportChange={(viewport) => update({ viewport })}
+                  />
+                </section>
+              ) : (
+                <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>
+              )}
+
+              <section className="space-y-3">
+                <h2 className="text-sm font-semibold text-neutral-700">Access Points ({network.aps.length})</h2>
+                <McpAccessPointCards
+                  aps={network.aps}
+                  selectedMac={view.selection?.kind === "ap" ? view.selection.id : null}
+                  onSelect={(mac) => selectAndReveal({ kind: "ap", id: mac })}
                 />
-              )
-              : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}
-          </section>
+              </section>
 
-          <McpDebugPanel response={response} />
+              <section className="space-y-3">
+                <h2 className="text-sm font-semibold text-neutral-700">Clients ({network.members.length})</h2>
+                {network.members.length > 0
+                  ? (
+                    <NetworkMembersTable
+                      members={network.members}
+                      selectedId={view.selection?.kind === "client" ? view.selection.id : null}
+                      onSelect={(id) => selectAndReveal({ kind: "client", id })}
+                    />
+                  )
+                  : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}
+              </section>
+
+              <McpDebugPanel response={response} />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </main>
   );
 }

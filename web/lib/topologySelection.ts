@@ -4,26 +4,29 @@
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
 import { clientBand, clientName, clientSignalDbm, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
+import { bandUpgrade } from "@/web/lib/clientInsights";
 
 export type SelectionKind = "ap" | "client" | "link";
 /** `link` ids are the child AP's MAC (each AP has at most one backhaul parent). */
 export interface Selection { kind: SelectionKind; id: string }
 
-export interface ClientFilters { bands: Band[]; ssids: string[]; weak: boolean }
-export const EMPTY_FILTERS: ClientFilters = { bands: [], ssids: [], weak: false };
+/** `slowBand`: on a slower band than the client and its AP both support. */
+export interface ClientFilters { bands: Band[]; ssids: string[]; weak: boolean; slowBand: boolean }
+export const EMPTY_FILTERS: ClientFilters = { bands: [], ssids: [], weak: false, slowBand: false };
 export const WEAK_SIGNAL_DBM = -70;
 
-export const filtersActive = (f: ClientFilters) => f.bands.length > 0 || f.ssids.length > 0 || f.weak;
+export const filtersActive = (f: ClientFilters) => f.bands.length > 0 || f.ssids.length > 0 || f.weak || f.slowBand;
 
 export const memberSsid = (m: Member) => String((m as unknown as { ssid?: string }).ssid ?? "");
 
-export function clientMatches(m: Member, f: ClientFilters): boolean {
+export function clientMatches(m: Member, f: ClientFilters, network: McpNetwork): boolean {
   if (f.bands.length && !f.bands.includes(clientBand(m))) return false;
   if (f.ssids.length && !f.ssids.includes(memberSsid(m))) return false;
   if (f.weak) {
     const s = clientSignalDbm(m);
     if (s == null || s >= WEAK_SIGNAL_DBM) return false;
   }
+  if (f.slowBand && !bandUpgrade(m, network)) return false;
   return true;
 }
 
@@ -153,6 +156,7 @@ export function parseViewState(search: string): ViewState {
       bands: (p.get("band") ?? "").split(",").map((k) => BAND_BY_KEY[k]).filter(Boolean),
       ssids: p.getAll("ssid"),
       weak: p.get("weak") === "1",
+      slowBand: p.get("slowband") === "1",
     },
     layout: layout && LAYOUTS.includes(layout) ? layout : "tree",
     viewport: v.length === 3 && v.every(Number.isFinite) ? { x: v[0], y: v[1], zoom: v[2] } : null,
@@ -166,6 +170,7 @@ export function serializeViewState(s: ViewState): string {
   if (s.filters.bands.length) p.set("band", s.filters.bands.map((b) => BAND_KEYS[b]).join(","));
   s.filters.ssids.forEach((ssid) => p.append("ssid", ssid));
   if (s.filters.weak) p.set("weak", "1");
+  if (s.filters.slowBand) p.set("slowband", "1");
   if (s.layout !== "tree") p.set("layout", s.layout);
   if (s.viewport) p.set("v", [s.viewport.x, s.viewport.y].map(Math.round).concat(+s.viewport.zoom.toFixed(3)).join(","));
   const q = p.toString();

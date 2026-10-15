@@ -19,7 +19,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/dashboard` | Dashboard | Card grid linking to all features. |
 | `/devices` | Device Search | Search subscribers by name, email, MAC, UUID, or serial. Shows all devices on their home network with status, model, and IP. |
 | `/network-visualizer` | Home Network Visualizer | Search a subscriber, then renders: interactive D3 topology graph, Leaflet map pin, ethernet port panels per AP (with live/config/spec fallback), and a raw API debug panel. Subscriber card includes a blue "Launch Corteca Console" button linked to the gateway MAC. |
-| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Same subscriber search as `/network-visualizer`, but network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, one client card per AP with stacked band sections (6/5/2.4 GHz, wired) collapsing to "+N", legend, minimap, full screen; ELK layout; Ethernet backhaul below 1 Gbps flagged amber), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). Interaction: click an AP, client pill or link to open a detail side panel and highlight its path to the gateway; AP cards and table rows select the same node; client search (name/MAC/IP); filter chips (band, SSID, weak signal < -70 dBm) fade non-matching clients; Tree / Sideways / Radial layouts; arrow keys step through devices, Esc clears. View state lives in the URL (`?network=…&sel=client:…&band=5,2.4&ssid=…&weak=1&layout=radial&v=x,y,zoom`) — `?network=<root MAC>` deep-links straight to a network without a subscriber search. |
+| `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Compact top bar (title, subscriber search with floating results, subscriber/network chip with data-captured time and Console button) and a left "Recent networks" rail/drawer (localStorage) keep the diagram at the top of the page, sized to the window. Network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, one client card per AP with stacked band sections (6/5/2.4 GHz, wired) collapsing to "+N", legend, minimap, full screen; ELK layout; Ethernet backhaul below 1 Gbps flagged amber), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). Interaction: click an AP, client pill or link to open a detail side panel and highlight its path to the gateway; AP cards and table rows select the same node; client search (name/MAC/IP); filter chips (band, SSID, weak signal < -70 dBm, could use faster band) fade non-matching clients; detail panel also shows AP public IP / hardware / last offline / top clients by traffic, link PHY rate and traffic, client traffic, supported bands and last disconnect reason; a "data captured" time sits above the canvas; Tree / Sideways / Radial layouts; arrow keys step through devices, Esc clears. View state lives in the URL (`?network=…&sel=client:…&band=5,2.4&ssid=…&weak=1&slowband=1&layout=radial&v=x,y,zoom`) — `?network=<root MAC>` deep-links straight to a network without a subscriber search. |
 | `/network-map` | Global Network Map | Leaflet map of every managed network in the fleet, clustered by location. Color-coded online/offline. Sidebar with deployment stats, search, and per-network detail panel. |
 | `/reports` | Performance Reports Hub | Card grid of all available report types. |
 | `/reports/[reportType]` | Performance Report | Fetches a specific report type, renders a Recharts bar chart + sortable/filterable/sticky-header table. Account names enriched via batch lookups. Report types: reboot, congestion, noise, new-devices, coverage, cloud-disconnections, claim, backhaul-quality. |
@@ -157,6 +157,8 @@ Nokia's Corteca AI MCP server (`corteca-mcp-server`, R26.03) exposes Corteca net
 - Calls are slow (~10–20s for `retrieve-network-data`; analysis/troubleshooting can take longer) because an AI agent runs per call. API routes calling MCP set `maxDuration = 60`.
 - `retrieve-network-data` lets the agent choose APIs, so an expected `apiId` can be missing or `ok: false` — always handle that.
 - Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials (`web/lib/mcpNetwork.ts` builds the tree from it).
+- **No user nicknames for APs** anywhere in the MCP payload or the REST topology endpoints. The live USP model has `Device.DeviceInfo.X_ALU-COM_FriendlyName`, but on the demo networks it holds only the model default ("Nokia WiFi Beacon 10"). The visualizer shows the formal model name (no sequential numbering — model names like "Beacon 10" already contain numbers); detail-panel links append the last two MAC octets to tell identical models apart.
+- Units: link/client `data-rate-*`, `derivedData.dataRate|phyRate` and client `rx/tx_statistics.rate` are kbps; `*-bytes` / `statistics.bytes` are cumulative byte counters. From the AP's view, its tx is the client's download.
 - In-app usage: `/mcp-network-visualizer` → `GET /api/mcp/network/[homeWifiId]` → `retrieve-network-data`.
 - Claude Code usage: registered locally as MCP server `corteca`, authenticated by `scripts/corteca-mcp-headers.mjs` (a `headersHelper` that logs in with `CORTECA_CLIENT_ID`/`CORTECA_CLIENT_SECRET` + `CORTECA_MCP_USERNAME`/`CORTECA_MCP_PASSWORD` from `.env`). Tokens last ~15 min; reconnect via `/mcp` if calls start returning 401.
 
@@ -250,7 +252,9 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `reportTypes.ts` | `REPORT_CONFIGS` — display name, chart color, Corteca type strings for all 8 report types |
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured) and `layoutFlowGraph()` (ELK layered, top-down) |
+| `clientInsights.ts` | Client traffic, supported bands, `bandUpgrade()` (client on a slower band than it and its AP support for that SSID), IEEE disconnect-reason text, top talkers per AP |
 | `topologySelection.ts` | Selection types, path highlight (`highlightFor`), client filters, search, keyboard order, and URL (de)serialisation for the MCP visualizer |
+| `recentNetworks.ts` | localStorage list of networks recently opened in the MCP visualizer (with subscriber, for the header chip) |
 | `useTopologyViewState.ts` | Hook that mirrors the MCP visualizer's view state into the query string via `history.replaceState` |
 | `mcpNetwork.ts` | `normaliseMcpNetwork()` — turns an MCP `retrieve-network-data` payload into `NetworkTopologyData` (synthesising the AP tree from `meshbackhaulnodes`), AP summaries, and `Member[]` |
 | `networkMembers.ts` | Fetches and normalises connected client members for a network |
@@ -364,7 +368,9 @@ web/
     EthernetPortPanel.tsx
     GlobalNetworkMap.tsx
     McpAccessPointCards.tsx
-    McpNetworkHeader.tsx          # Subscriber / shared-link header with Console button
+    McpTopBar.tsx                 # MCP visualizer top bar: search, subscriber chip, Console button
+    SubscriberSearchBox.tsx       # Compact subscriber search with dropdown results
+    RecentNetworksDrawer.tsx      # Left rail + overlay list of recently viewed networks
     topology/                     # React Flow canvas for the MCP visualizer
       TopologyCanvas.tsx          # ReactFlow + ELK layout, legend, minimap, full screen
       ApNode.tsx                  # AP card node
@@ -428,10 +434,12 @@ web/
       types.ts
       usp.ts
     fetchWithAuth.ts
+    clientInsights.ts
     geoUtils.ts
     mcpNetwork.ts
     topologyFlow.ts
     topologySelection.ts
+    recentNetworks.ts
     useTopologyViewState.ts
     networkMembers.ts
     networkTopology.ts

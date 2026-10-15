@@ -10,14 +10,22 @@ export interface McpAccessPoint {
   mac: string;            // "60-98-49-FF-9F-40"
   serial: string;
   role: string;           // "root" | "beacon"
+  /** Role label, "Gateway" or "Beacon". The API carries no user nicknames, and the
+   *  formal model name ("Beacon 10") is the AP's display name. */
+  name: string;
   model: string;
   firmware: string;
+  hardwareVersion: string;
   online: boolean;
   backhaulQuality: string | null;
-  ipAddress: string;
+  ipAddress: string;      // LAN
+  wanIp: string;          // public address the AP reaches the cloud from
   lastBoot: string | null;
+  lastOffline: string | null;
   bands: string[];        // e.g. ["2.4 GHz", "5 GHz", "6 GHz"]
   ssids: string[];        // fronthaul SSIDs only
+  /** fronthaul SSID → bands it is broadcast on */
+  ssidBands: Record<string, string[]>;
   clientCount: number;
 }
 
@@ -27,9 +35,13 @@ export interface McpBackhaulLink {
   medium: string;           // "wifi-6", "eth", … ("" when no link record)
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
+  phyRateMbps: number | null;
   quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor")
-  errorsTx: number | null;  // endpoint error counters
+  // Counters from the child AP's end: tx goes up toward the gateway, rx comes down.
+  errorsTx: number | null;
   errorsRx: number | null;
+  bytesUp: number | null;
+  bytesDown: number | null;
 }
 
 export interface McpNetwork {
@@ -38,6 +50,8 @@ export interface McpNetwork {
   backhaul: McpBackhaulLink[];
   members: Member[];
   results: McpApiResult[];
+  /** When Corteca captured the mesh snapshot (ISO), from the payload's `timestamp`. */
+  capturedAt: string | null;
 }
 
 type Obj = Record<string, unknown>;
@@ -93,18 +107,25 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
         const ids = (Array.isArray(l.endpoints) ? (l.endpoints as Obj[]) : []).map((e) => String(e.id ?? ""));
         return ids.includes(pSerial) && ids.includes(cSerial);
       });
-      const ep = Array.isArray(link?.endpoints) ? (link!.endpoints as Obj[])[0] : undefined;
-      const rate = Number((link?.derivedData as Obj | undefined)?.dataRate ?? ep?.["data-rate-rx"] ?? 0);
+      const eps = Array.isArray(link?.endpoints) ? (link!.endpoints as Obj[]) : [];
+      const ep = eps.find((e) => String(e.id) === cSerial) ?? eps[0];
+      const derived = (link?.derivedData ?? {}) as Obj;
+      const rate = Number(derived.dataRate ?? ep?.["data-rate-rx"] ?? 0);
+      const phy = Number(derived.phyRate ?? 0);
       const quality = byMac.get(childMac)?.backhaulQuality;
+      const num = (v: unknown) => (typeof v === "number" ? v : null);
       out.push({
         parentMac,
         childMac,
         medium: String(link?.medium ?? "").toLowerCase(),
         rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
         rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
+        phyRateMbps: phy > 0 ? Math.round(phy / 1000) : null,
         quality: quality ? String(quality).toLowerCase() : null,
-        errorsTx: typeof ep?.["errors-tx"] === "number" ? ep["errors-tx"] : null,
-        errorsRx: typeof ep?.["errors-rx"] === "number" ? ep["errors-rx"] : null,
+        errorsTx: num(ep?.["errors-tx"]),
+        errorsRx: num(ep?.["errors-rx"]),
+        bytesUp: num(ep?.["total-bytes-tx"]),
+        bytesDown: num(ep?.["total-bytes-rx"]),
       });
       walk(child);
     }
@@ -149,21 +170,35 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
     const mac = toMac(a.macaddress);
     const ssids = Array.isArray(a.ssids) ? (a.ssids as Obj[]) : [];
     const fronthaul = ssids.filter((s) => !s.backhaulUse && s.ssidStatus && s.ssid);
+    const bandOf = (s: Obj) => BAND_LABEL[String(s.band)] ?? String(s.band);
+    const ssidBands: Record<string, string[]> = {};
+    for (const s of fronthaul) ssidBands[String(s.ssid)] = [...new Set([...(ssidBands[String(s.ssid)] ?? []), bandOf(s)])];
+    const role = String(a.role ?? "");
+    const index = typeof a.deviceIndex === "number" ? a.deviceIndex : null;
     return {
       mac,
       serial: String(a.sn ?? a.SerialNumber ?? a.id ?? ""),
-      role: String(a.role ?? ""),
+      role,
+      name: role === "root" ? "Gateway" : "Beacon",
       model: String(a.model ?? a.ManufacturerModel ?? "Access Point").replace(/^nokia\s+wifi\s+/i, ""),
       firmware: String(a.firmware_version ?? a.SoftwareVersion ?? ""),
+      hardwareVersion: String(a.hardware_version ?? ""),
       online: String(a.status ?? "").toLowerCase() === "online" || a.xalu_com_online === true,
       backhaulQuality: a.backhaulQuality ? String(a.backhaulQuality) : null,
       ipAddress: String(a.ipaddress ?? ""),
+      wanIp: String(a.ip_address ?? ""),
       lastBoot: a.last_boot ? String(a.last_boot) : null,
-      bands: [...new Set(ssids.map((s) => BAND_LABEL[String(s.band)] ?? String(s.band)))].sort(),
-      ssids: [...new Set(fronthaul.map((s) => String(s.ssid)))],
+      lastOffline: a.last_offline ? String(a.last_offline) : null,
+      bands: [...new Set(ssids.map(bandOf))].sort(),
+      ssids: Object.keys(ssidBands),
+      ssidBands,
       clientCount: clientsByAp.get(mac) ?? 0,
+      index,
     };
-  }).sort((x, y) => (x.role === "root" ? -1 : y.role === "root" ? 1 : x.mac.localeCompare(y.mac)));
+  })
+    // Gateway first, then by beacon number.
+    .sort((x, y) => (x.role === "root" ? -1 : y.role === "root" ? 1 : (x.index ?? 99) - (y.index ?? 99)))
+    .map(({ index: _index, ...ap }) => ap);
 
   const tree = rawAps.length ? synthesiseTopology(rawAps, rootMac) : null;
 
@@ -180,5 +215,6 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
     backhaul: buildBackhaul(tree, rawAps, meshData),
     members,
     results,
+    capturedAt: typeof meshData?.timestamp === "number" ? new Date(meshData.timestamp * 1000).toISOString() : null,
   };
 }

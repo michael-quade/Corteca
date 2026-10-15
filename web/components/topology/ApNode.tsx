@@ -34,7 +34,7 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
     <div
       role="button"
       aria-pressed={selected}
-      aria-label={`${isRoot ? "Gateway" : "Beacon"} ${ap.model} ${ap.mac}`}
+      aria-label={`${ap.name} ${ap.model} ${ap.mac}`}
       style={{ width: AP_W, height: AP_H }}
       className={cn(
         "relative flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 shadow-sm transition-shadow hover:shadow-md",
@@ -57,7 +57,7 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
 
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-          {isRoot ? "Gateway" : "Beacon"}{ap.online ? "" : " · Offline"}
+          {ap.name}{ap.online ? "" : " · Offline"}
         </p>
         <p className="truncate text-sm font-semibold text-neutral-900" title={ap.model}>{ap.model}</p>
         <p className="truncate font-mono text-[11px] text-neutral-500" title={`Firmware ${ap.firmware}`}>

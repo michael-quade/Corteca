@@ -100,6 +100,7 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
         ))}
         <span className="mx-0.5 h-4 w-px bg-neutral-200" />
         <Chip active={filters.weak} onClick={() => onFiltersChange({ ...filters, weak: !filters.weak })}>Weak signal &lt; {WEAK_SIGNAL_DBM} dBm</Chip>
+        <Chip active={filters.slowBand} onClick={() => onFiltersChange({ ...filters, slowBand: !filters.slowBand })}>Could use faster band</Chip>
         {filtersActive(filters) && (
           <>
             <span className="text-xs text-neutral-500">{matchCount} of {total}</span>
