@@ -104,7 +104,7 @@ function SwitchDetails({ hosts, network, onSelect }: { hosts: PortHosts; network
 
 /** Gateway: live TR-181 Ethernet status via the REST route (fetched when the panel opens). */
 function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void }) {
-  const ports = useGatewayPorts(ap.mac);
+  const ports = useGatewayPorts(ap.mac, network.capturedAt);
   const [openPort, setOpenPort] = useState<number | null>(null);
 
   if (ports === null) {
@@ -153,7 +153,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
   const uplink = network.backhaul.find((l) => l.childMac === ap.mac);
   // Where this AP's Ethernet backhaul lands on the gateway, from the gateway's host table.
   const gatewayMac = network.aps.find((a) => a.role === "root")?.mac;
-  const gatewayPorts = useGatewayPorts(uplink && isEthernet(uplink) && ap.role !== "root" ? gatewayMac : undefined);
+  const gatewayPorts = useGatewayPorts(uplink && isEthernet(uplink) && ap.role !== "root" ? gatewayMac : undefined, network.capturedAt);
   const landing = Array.isArray(gatewayPorts) ? gatewayPortOf(ap.mac, gatewayPorts, network) : null;
   const parentIsGateway = uplink?.parentMac === gatewayMac;
   const wired = network.members

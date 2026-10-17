@@ -36,6 +36,8 @@ export interface McpBackhaulLink {
   medium: string;           // "wifi-6", "ethernet", … ("" when no link record)
   /** Radio band of a wireless link ("6 GHz"). Corteca's `medium` "wifi-6" is the 6 GHz band, not the WiFi 6 standard. */
   band: string | null;
+  /** The child AP's backhaul station MAC (its endpoint BSSID, lowercase colon form) — keys the gateway's per-station records. */
+  childStaMac: string | null;
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
   phyRateMbps: number | null;
@@ -158,6 +160,7 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
         childMac,
         medium,
         band,
+        childStaMac: ep?.bssid && String(ep.id) === cSerial ? String(ep.bssid).toLowerCase() : null,
         rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
         rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
         phyRateMbps: phy > 0 ? Math.round(phy / 1000) : null,

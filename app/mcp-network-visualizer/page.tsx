@@ -71,6 +71,7 @@ export default function McpNetworkVisualizerPage() {
   const [response, setResponse] = useState<McpResponse | null>(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [recent, setRecent]     = useState<RecentNetwork[]>([]);
   // User-given Beacon/client names from the gateway, fetched after the MCP data.
   const [names, setNames]       = useState<DeviceNames | null>(null);
@@ -133,6 +134,24 @@ export default function McpNetworkVisualizerPage() {
     }
   }
 
+  // Refresh keeps the current diagram, selection, filters and zoom on screen while
+  // MCP re-reads the network; on failure the old data stays and an error shows.
+  async function refreshNetwork() {
+    if (!response || refreshing) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/mcp/network/${encodeURIComponent(response.homeWifiId)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setResponse(json as McpResponse);
+    } catch (e) {
+      setError(`Refresh failed, showing the previous data: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   // Shared link: ?network=… loads straight away, without a subscriber search.
   const deepLinked = useRef(false);
   // Runs once, on the URL the page opened with; later network changes come from
@@ -181,6 +200,8 @@ export default function McpNetworkVisualizerPage() {
             networkId={networkId}
             capturedAt={network?.capturedAt ?? null}
             onSelectSubscriber={handleSubscriberSelect}
+            onRefresh={response && !fetching ? () => void refreshNetwork() : undefined}
+            refreshing={refreshing}
           />
 
           {!networkId && !fetching && (

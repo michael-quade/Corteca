@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { cn } from "@/web/lib/utils";
 import { SubscriberSearchBox, subscriberName } from "@/web/components/SubscriberSearchBox";
-import type { Subscriber } from "@/web/lib/corteca/types";
+import type { McpTopBarProps } from "./McpTopBar.types";
+
+export type { McpTopBarProps };
 
 const CONSOLE_BASE =
   process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? "https://console.demo2.homewifi.nokia.com";
@@ -20,15 +22,8 @@ function capturedLabel(iso: string): string {
   return `${d.toLocaleTimeString()} (${ago})`;
 }
 
-export interface McpTopBarProps {
-  subscriber: Subscriber | null;
-  networkId: string | null;
-  capturedAt: string | null;
-  onSelectSubscriber: (s: Subscriber) => void;
-}
-
 /** One slim row: back link, title, subscriber search, and the current network chip. */
-export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber }: McpTopBarProps) {
+export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber, onRefresh, refreshing }: McpTopBarProps) {
   const online = subscriber?.home_wifis?.[0]?.status?.online;
 
   return (
@@ -58,6 +53,21 @@ export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscribe
               {capturedAt && <span className="font-sans" title={capturedAt}> · data {capturedLabel(capturedAt)}</span>}
             </p>
           </div>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              title="Re-read the network from Corteca, keeping the current view"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
+            >
+              <svg className={cn(refreshing && "animate-spin")} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <polyline points="21 3 21 9 15 9" />
+              </svg>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => window.open(consoleUrl(networkId), "_blank", "noopener,noreferrer")}

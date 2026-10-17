@@ -6,6 +6,7 @@ import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
 import { ApEthernetPorts } from "./ApEthernetPorts";
+import { useBackhaulStandards } from "./useBackhaulStandards";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -85,6 +86,10 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
   const child = network.aps.find((a) => a.mac === link.childMac);
   const eth = isEthernet(link);
   const slow = eth && link.rateMbps != null && link.rateMbps < SLOW_ETHERNET_MBPS;
+  // WiFi standard from the gateway; without it the band-only view stays.
+  const standards = useBackhaulStandards(!eth && link.childStaMac ? network.aps.find((a) => a.role === "root")?.mac : undefined, network.capturedAt);
+  const std = link.childStaMac ? standards?.[link.childStaMac] : undefined;
+  const medium = eth ? "Ethernet" : [std ? `${std.generation} (${std.ieee})` : "WiFi", link.band].filter(Boolean).join(" · ");
   return (
     <DetailSection title="Backhaul link">
       <DetailRow label="From">
@@ -93,7 +98,8 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
       <DetailRow label="To">
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
       </DetailRow>
-      <DetailRow label="Medium">{eth ? "Ethernet" : link.band ? `WiFi · ${link.band}` : "WiFi"}</DetailRow>
+      <DetailRow label="Medium">{medium}</DetailRow>
+      {std?.generation === "WiFi 7" && <DetailRow label="Multi-link (MLO)">{std.mlo ? "Yes" : "No"}</DetailRow>}
       {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}
       {!eth && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
       <DetailRow label="Data rate">{formatMbps(link.rateMbps)}</DetailRow>
