@@ -29,6 +29,15 @@ const ONLINE = icon("M5 12.5a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19h.01M2
 const OFFLINE = icon("M2 2l20 20M8.5 15.5a5 5 0 0 1 7 0M12 19h.01M5 12.5a10 10 0 0 1 5.2-2.8M16.5 10.3a10 10 0 0 1 2.5 2.2");
 const PIN = icon("M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z");
 
+/** Hover text for "of N eligible": what eligible means and why some aren't on the map. */
+function eligibleHint(phase: MapPhase, eligible: number, online: number, located: number): string {
+  const what = `Eligible = online networks with a Customer ID (${eligible.toLocaleString()} of ${online.toLocaleString()} online).`;
+  const how = "Each is placed using the location stored for it in Corteca.";
+  if (phase !== "done") return `${what} ${how} Still resolving locations…`;
+  const missing = Math.max(0, eligible - located);
+  return `${what} ${how} ${missing ? `${missing.toLocaleString()} have no location in Corteca.` : "All eligible networks were located."}`;
+}
+
 const share = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}% of networks` : "");
 
 /** Fleet counts and progress / error notices for the Network Map page. */
@@ -45,8 +54,11 @@ export function NetworkMapControls({ phase, stats, located, progress, geoCount, 
               icon={PIN}
               label="Located on map"
               value={located.toLocaleString()}
-              sub={geoCount !== null ? `of ${geoCount.toLocaleString()} eligible` : ""}
-              hint={geoCount !== null ? `Map shows active networks with a valid Customer ID (${geoCount} of ${stats.online} online networks eligible).` : undefined}
+              sub={geoCount !== null && (
+                <span title={eligibleHint(phase, geoCount, stats.online, located)} className="cursor-help underline decoration-neutral-300 decoration-dotted underline-offset-2">
+                  of {geoCount.toLocaleString()} eligible
+                </span>
+              )}
             />
           </div>
         </CortecaCard>
