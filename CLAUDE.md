@@ -120,6 +120,7 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/network/[deviceId]/ethernet` | GET | Ethernet port live status for a device |
 | `/api/network/[deviceId]/datamodel` | GET | USP TR-369 data model for a device |
 | `/api/network/[deviceId]/datamodel/set` | POST | Set a USP parameter value |
+| `/api/network/[deviceId]/device-names` | GET | User-given Beacon/client names + detected manufacturer/model/category from the gateway's `X_ALU-COM_LAN_DEVICE_MAP` (USP) |
 | `/api/networks/[networkId]/members` | GET | Connected client devices for a network |
 | `/api/mcp/network/[homeWifiId]` | GET | Calls the MCP `retrieve-network-data` tool (mesh + clients) for a root node MAC; optional `query` param overrides the natural-language query |
 | `/api/network-map` | GET | Fleet-wide deployment report (cached in DB + memory) |
@@ -157,7 +158,8 @@ Nokia's Corteca AI MCP server (`corteca-mcp-server`, R26.03) exposes Corteca net
 - Calls are slow (~10–20s for `retrieve-network-data`; analysis/troubleshooting can take longer) because an AI agent runs per call. API routes calling MCP set `maxDuration = 60`.
 - `retrieve-network-data` lets the agent choose APIs, so an expected `apiId` can be missing or `ok: false` — always handle that.
 - Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials (`web/lib/mcpNetwork.ts` builds the tree from it).
-- **No user nicknames for APs** anywhere in the MCP payload or the REST topology endpoints. The live USP model has `Device.DeviceInfo.X_ALU-COM_FriendlyName`, but on the demo networks it holds only the model default ("Nokia WiFi Beacon 10"). The visualizer shows the formal model name (no sequential numbering — model names like "Beacon 10" already contain numbers); detail-panel links append the last two MAC octets to tell identical models apart.
+- **Nicknames are not in MCP** (or the REST topology/mesh/members endpoints), but they **are on the gateway**: USP `Device.X_ALU-COM_LAN_DEVICE_MAP.DeviceMap.{i}.HostAlias` holds the user-given names the Corteca console shows — Beacons (`DeviceCategory = WIFI_EXTENDER`, e.g. "MBR", "Kitchen") and clients (e.g. "TV Living Room") — plus `DeviceCategory`, `Manufacturer`, `ModelName`. `Device.X_ALU-COM_BeaconInfo.Beacon.{i}.FriendlyName` and the Beacon's own `X_ALU-COM_FriendlyName` are empty/defaults. The MCP visualizer reads it via `GET /api/network/[gatewayMac]/device-names` after the MCP data loads and applies it with `applyDeviceNames()` (`web/lib/deviceNames.ts`): AP cards show the nickname with the model as the kicker, client aliases are replaced (the original kept as "Detected name"), and the client panel adds "Detected as" (manufacturer · model — the gateway's own guess, sometimes wrong) and category. If the call fails (gateway offline), formal model names are kept (never sequential numbering).
+- **Ethernet ports:** MCP has no per-port data. The **gateway** exposes live `Device.Ethernet.Interface.*` + `Device.Hosts.Host.*` (via `/api/network/[deviceId]/ethernet`). **Mesh APs don't** — their data model only has `DeviceInfo`/`X_ALU-COM_Wifi` (Ethernet isn't in the TR-181 Data Elements yet). For mesh APs the visualizer builds ports from MCP members (wired clients' `port_number`, 1 = WAN so 2 = LAN 1, and rx rate) plus the Ethernet backhaul link — labelled as reported, not live; empty ports can't be confirmed.
 - Units: link/client `data-rate-*`, `derivedData.dataRate|phyRate` and client `rx/tx_statistics.rate` are kbps; `*-bytes` / `statistics.bytes` are cumulative byte counters. From the AP's view, its tx is the client's download.
 - Topology canvas rule: **no edge may run under a card it doesn't connect, and no backhaul label may cover a card or another label, in any layout.** Tree/Sideways draw edges along ELK's orthogonal routes (never bezier between handles); Radial uses straight routes after `spreadRadial()`. Edge components must take their path and label position from `edge.data.points` + `labelBox()`, not from React Flow's `sourceX/targetX`.
 - In-app usage: `/mcp-network-visualizer` → `GET /api/mcp/network/[homeWifiId]` → `retrieve-network-data`.
@@ -255,6 +257,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured), `layoutFlowGraph()` (ELK; returns node positions **and** edge routes in `edge.data.points`), `backhaulLabel()` |
 | `edgeGeometry.ts` | Edge/label geometry for the topology canvas: `labelBox()` (where a backhaul label sits), `layoutProblems()` (edge under a card, label covering a card/label), `spreadRadial()` (scales a radial layout out from the gateway until `layoutProblems()` is empty) |
 | `ethernetPorts.ts` | REST visualizer Ethernet ports: live → device config → model-spec fallback (`resolvePorts`) |
+| `deviceNames.ts` | `applyDeviceNames()` — overlays gateway device-map nicknames onto an `McpNetwork` (AP `nickname`, client `alias`, identity fields) |
 | `clientInsights.ts` | Client traffic, supported bands, `bandUpgrade()` (client on a slower band than it and its AP support for that SSID), IEEE disconnect-reason text, top talkers per AP |
 | `topologySelection.ts` | Selection types, path highlight (`highlightFor`), client filters, search, keyboard order, and URL (de)serialisation for the MCP visualizer |
 | `recentNetworks.ts` | localStorage list of networks recently opened in the MCP visualizer (with subscriber, for the header chip) |
@@ -384,6 +387,7 @@ web/
       ClientClusterNode.tsx       # Per-AP client card, sections stacked by band
       BackhaulEdge.tsx            # Quality-coloured, rate-weighted backhaul edge drawn along its layout route
       RouteEdge.tsx               # AP → client-card connector; routePath() rounds orthogonal routes
+      ApEthernetPorts.tsx         # AP detail panel "Ethernet ports": gateway live (REST, fetched on open, cached), mesh APs from MCP wired clients
       TopologyLegend.tsx
       ZoomControls.tsx            # +/−/Fit buttons shown beside the legend
       TopologyToolbar.tsx         # Client search, filter chips, layout switch, full screen
@@ -444,6 +448,7 @@ web/
       usp.ts
     fetchWithAuth.ts
     clientInsights.ts
+    deviceNames.ts
     ethernetPorts.ts
     edgeGeometry.ts
     geoUtils.ts

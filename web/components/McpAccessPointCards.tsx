@@ -47,7 +47,10 @@ export function McpAccessPointCards({ aps, selectedMac, onSelect }: {
           >
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-neutral-900">{ap.model}</p>
+                <p className="text-sm font-semibold text-neutral-900">
+                  {ap.nickname ?? ap.model}
+                  {ap.nickname && <span className="ml-1.5 font-normal text-neutral-500">{ap.model}</span>}
+                </p>
                 <p className="font-mono text-xs text-neutral-400">{ap.mac}</p>
               </div>
               <span

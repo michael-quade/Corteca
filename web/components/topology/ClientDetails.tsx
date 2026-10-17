@@ -5,6 +5,7 @@ import type { Member } from "@/web/lib/corteca/types";
 import { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/topologyFlow";
 import { highlightFor, memberSsid, type Selection } from "@/web/lib/topologySelection";
 import { bandUpgrade, clientTraffic, disconnectReason, formatBytes, supportedBands } from "@/web/lib/clientInsights";
+import { categoryLabel, deviceKindLabel, memberIdentity } from "@/web/lib/deviceNames";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
 
 // Fields the MCP members payload carries beyond the shared Member type.
@@ -35,6 +36,7 @@ export function ClientDetails({ network, member, onSelect }: {
   // Rates are kbps from the AP's view: its tx is the client's download.
   const down = formatMbps((raw.tx_statistics?.rate ?? 0) / 1000);
   const up = formatMbps((raw.rx_statistics?.rate ?? 0) / 1000);
+  const identity = memberIdentity(member);
   const traffic = clientTraffic(member);
   const upgrade = bandUpgrade(member, network);
   const bands = supportedBands(member);
@@ -66,7 +68,10 @@ export function ClientDetails({ network, member, onSelect }: {
 
       <DetailSection title="Device">
         <DetailRow label="Name">{clientName(member)}</DetailRow>
-        {raw.hostname && raw.hostname !== member.alias && <DetailRow label="Hostname">{raw.hostname}</DetailRow>}
+        {identity.autoAlias && identity.autoAlias !== member.alias && <DetailRow label="Detected name">{identity.autoAlias}</DetailRow>}
+        {raw.hostname && raw.hostname !== member.alias && raw.hostname !== identity.autoAlias && <DetailRow label="Hostname">{raw.hostname}</DetailRow>}
+        <DetailRow label="Detected as">{deviceKindLabel(member)}</DetailRow>
+        <DetailRow label="Category">{categoryLabel(identity.category)}</DetailRow>
         <DetailRow label="MAC" mono>{member.id}</DetailRow>
         <DetailRow label="IPv4" mono>{member.ipv4}</DetailRow>
         <DetailRow label="IPv6" mono>{raw.ipv6?.[0]}</DetailRow>

@@ -48,9 +48,11 @@ export function formatDate(iso: string | null | undefined): string | null {
 }
 
 /**
- * Formal model name; the gateway is prefixed, and beacons get their last two MAC
- * octets so several identical models ("Beacon 10") can be told apart in lists.
+ * The user's nickname when there is one ("MBR · Beacon 10"); otherwise the formal
+ * model name, with the gateway prefixed and beacons given their last two MAC octets
+ * so several identical models ("Beacon 10") can be told apart in lists.
  */
-export function apLabel(ap: { role: string; model: string; mac: string }): string {
+export function apLabel(ap: { role: string; model: string; mac: string; nickname?: string }): string {
+  if (ap.nickname) return `${ap.nickname} · ${ap.model}`;
   return ap.role === "root" ? `Gateway · ${ap.model}` : `${ap.model} · ${ap.mac.slice(-5)}`;
 }

@@ -10,9 +10,10 @@ export interface McpAccessPoint {
   mac: string;            // "60-98-49-FF-9F-40"
   serial: string;
   role: string;           // "root" | "beacon"
-  /** Role label, "Gateway" or "Beacon". The API carries no user nicknames, and the
-   *  formal model name ("Beacon 10") is the AP's display name. */
+  /** Role label, "Gateway" or "Beacon". */
   name: string;
+  /** User-given name from the gateway's device map ("MBR"), applied by applyDeviceNames(). */
+  nickname?: string;
   model: string;
   firmware: string;
   hardwareVersion: string;

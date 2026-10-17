@@ -34,7 +34,7 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
     <div
       role="button"
       aria-pressed={selected}
-      aria-label={`${ap.name} ${ap.model} ${ap.mac}`}
+      aria-label={`${ap.nickname ? `${ap.nickname}, ` : ""}${ap.name} ${ap.model} ${ap.mac}`}
       style={{ width: AP_W, height: AP_H }}
       className={cn(
         "relative flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 shadow-sm transition-shadow hover:shadow-md",
@@ -57,9 +57,10 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
 
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-          {ap.name}{ap.online ? "" : " · Offline"}
+          {/* With a nickname the title is the nickname, so the kicker carries the model. */}
+          {ap.nickname ? (isRoot ? `Gateway · ${ap.model}` : ap.model) : ap.name}{ap.online ? "" : " · Offline"}
         </p>
-        <p className="truncate text-sm font-semibold text-neutral-900" title={ap.model}>{ap.model}</p>
+        <p className="truncate text-sm font-semibold text-neutral-900" title={ap.nickname ? `${ap.nickname} (${ap.model})` : ap.model}>{ap.nickname ?? ap.model}</p>
         <p className="truncate font-mono text-[11px] text-neutral-500" title={`MAC ${ap.mac} · firmware ${ap.firmware}`}>
           {ap.mac}
         </p>

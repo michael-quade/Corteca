@@ -10,6 +10,7 @@ import { McpTopBar } from "@/web/components/McpTopBar";
 import { RecentNetworksDrawer } from "@/web/components/RecentNetworksDrawer";
 import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
+import { applyDeviceNames, toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
 import { clearRecentNetworks, forgetNetwork, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
 import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
@@ -71,13 +72,28 @@ export default function McpNetworkVisualizerPage() {
   const [fetching, setFetching] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [recent, setRecent]     = useState<RecentNetwork[]>([]);
+  // User-given Beacon/client names from the gateway, fetched after the MCP data.
+  const [names, setNames]       = useState<DeviceNames | null>(null);
 
   useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
   const network = useMemo(
-    () => (response ? normaliseMcpNetwork(response.payload, response.homeWifiId) : null),
-    [response]
+    () => (response ? applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names) : null),
+    [response, names]
   );
+
+  // Names live on the gateway's own data model (not in MCP); a failure just keeps model names.
+  useEffect(() => {
+    if (!response) return;
+    let cancelled = false;
+    fetchWithAuth(`/api/network/${encodeURIComponent(response.homeWifiId)}/device-names`)
+      .then(async (r) => {
+        const body = (await r.json().catch(() => null)) as { devices?: Parameters<typeof toDeviceNames>[0] } | null;
+        if (!cancelled && r.ok && body?.devices) setNames(toDeviceNames(body.devices));
+      })
+      .catch(() => { /* names are optional */ });
+    return () => { cancelled = true; };
+  }, [response]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     const networkId = subscriber.home_wifis?.[0]?.id;
@@ -102,6 +118,7 @@ export default function McpNetworkVisualizerPage() {
 
   async function loadNetwork(networkId: string) {
     setResponse(null);
+    setNames(null);
     setError(null);
     setFetching(true);
     try {

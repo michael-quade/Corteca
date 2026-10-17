@@ -5,6 +5,7 @@ import { SLOW_ETHERNET_MBPS, clientName, isEthernet } from "@/web/lib/topologyFl
 import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
+import { ApEthernetPorts } from "./ApEthernetPorts";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -48,6 +49,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
           ))}
         </DetailSection>
       )}
+      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
       <DetailSection title="Radios">
         <DetailRow label="Bands">{ap.bands.join(" · ")}</DetailRow>
         <DetailRow label="SSIDs">{ap.ssids.join(", ")}</DetailRow>
