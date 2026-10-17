@@ -2,11 +2,13 @@
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useState } from "react";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { StatusPill } from "@/web/components/corteca/StatusPill";
+import { Notice } from "@/web/components/corteca/Notice";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
-import { cn } from "@/web/lib/utils";
 import type { Subscriber, Member } from "@/web/lib/corteca/types";
 
 export default function DevicesPage() {
@@ -43,21 +45,13 @@ export default function DevicesPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <main className="p-8">
-        <p className="text-sm text-neutral-500">Loading…</p>
-      </main>
-    );
-  }
+  if (isLoading) return <CortecaLoading />;
 
   if (!isAuthenticated) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center gap-2">
-        <p className="text-sm text-neutral-500">
-          Sign in to search subscriber devices.
-        </p>
-      </main>
+      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#f5f7fa]">
+        <p className="text-sm text-neutral-500">Sign in to search subscriber devices.</p>
+      </div>
     );
   }
 
@@ -71,90 +65,49 @@ export default function DevicesPage() {
     : null;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-6">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 8H3M7 4l-4 4 4 4" />
-          </svg>
-          Back to Dashboard
-        </Link>
-      </div>
-
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-neutral-900">Device Search</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Search for a subscriber to view the devices in their home network.
-        </p>
-      </div>
-
-      <SubscriberSearch
-        onSelect={handleSubscriberSelect}
-        selectedId={selectedSubscriber?.customer_id ?? selectedSubscriber?.uuid}
-      />
+    <CortecaPage title="Device Search" meta="Search for a subscriber to view the devices in their home network." width="max-w-6xl">
+      <CortecaCard title="Find a subscriber">
+        <SubscriberSearch
+          onSelect={handleSubscriberSelect}
+          selectedId={selectedSubscriber?.customer_id ?? selectedSubscriber?.uuid}
+        />
+      </CortecaCard>
 
       {selectedSubscriber && (
-        <div className="mt-8">
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-neutral-900">
-                {fullName ?? "Unknown Subscriber"}
-              </h2>
-              {selectedSubscriber.email && fullName !== selectedSubscriber.email && (
-                <p className="mt-0.5 text-sm text-neutral-500">{selectedSubscriber.email}</p>
-              )}
-              {networkId && (
-                <p className="mt-0.5 font-mono text-xs text-neutral-400">
-                  Network ID: {networkId}
-                </p>
-              )}
-            </div>
-            {networkId && (
-              <span
-                className={cn(
-                  "flex items-center gap-1.5 text-sm",
-                  online ? "text-green-700" : "text-neutral-400"
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-2 w-2 rounded-full",
-                    online ? "bg-green-500" : "bg-neutral-300"
-                  )}
-                />
-                {online ? "Gateway online" : "Gateway offline"}
-              </span>
+        <CortecaCard
+          title={fullName ?? "Unknown Subscriber"}
+          actions={networkId && (
+            <StatusPill tone={online ? "good" : "neutral"}>{online ? "Gateway online" : "Gateway offline"}</StatusPill>
+          )}
+        >
+          <div className="-mt-3 mb-4 space-y-0.5">
+            {selectedSubscriber.email && fullName !== selectedSubscriber.email && (
+              <p className="text-sm text-neutral-500">{selectedSubscriber.email}</p>
             )}
+            {networkId && <p className="font-mono text-xs text-neutral-400">Network ID: {networkId}</p>}
           </div>
 
           {loadingMembers && (
-            <div className="flex items-center gap-2 text-sm text-neutral-500">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
+            <div className="flex items-center gap-2 py-6 text-sm text-neutral-500">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
               Loading devices…
             </div>
           )}
 
-          {membersError && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
-              {membersError}
-            </p>
-          )}
+          {membersError && <Notice tone="error" title="Couldn't load devices">{membersError}</Notice>}
 
           {!loadingMembers && !membersError && (
             <>
               {members.length > 0 && (
-                <p className="mb-3 text-xs text-neutral-400">
+                <p className="mb-3 text-xs text-neutral-500">
                   {members.length} device{members.length !== 1 ? "s" : ""} found
                 </p>
               )}
               <NetworkMembersTable members={members} />
             </>
           )}
-        </div>
+        </CortecaCard>
       )}
-    </main>
+    </CortecaPage>
   );
 }

@@ -12,10 +12,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<Variant, string> = {
+  // Corteca console look: solid blue primary, blue outline secondary.
   default:
-    "bg-neutral-900 text-white hover:bg-neutral-700 focus-visible:ring-neutral-900",
+    "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-600",
   outline:
-    "border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-400",
+    "border border-blue-600 bg-white text-blue-600 hover:bg-blue-50 focus-visible:ring-blue-600/40",
   ghost:
     "bg-transparent text-neutral-700 hover:bg-neutral-100 focus-visible:ring-neutral-400",
 };
@@ -34,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center rounded-md font-medium transition-colors",
+          "inline-flex items-center justify-center rounded-lg font-medium transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
@@ -47,4 +48,4 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   }
 );
 
-Button.displayName = "Button Crap";
+Button.displayName = "Button";

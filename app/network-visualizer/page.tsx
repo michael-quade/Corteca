@@ -3,14 +3,18 @@
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
+import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
+import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, type ApEthData } from "@/web/lib/ethernetPorts";
 import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
-import { cn } from "@/web/lib/utils";
 import type { Subscriber } from "@/web/lib/corteca/types";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { StatusPill } from "@/web/components/corteca/StatusPill";
+import { Notice } from "@/web/components/corteca/Notice";
 
 const CONSOLE_BASE =
   process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? "https://console.demo2.homewifi.nokia.com";
@@ -25,94 +29,11 @@ const NetworkMap = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex min-h-[480px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-blue-600" />
       </div>
     ),
   }
 );
-
-function BackNav() {
-  return (
-    <div className="mb-6 flex items-center gap-4">
-      <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        Back to Dashboard
-      </Link>
-    </div>
-  );
-}
-
-function DebugPanel({ data }: { data: NetworkTopologyData }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-medium text-amber-800"
-      >
-        <span>Raw API response (debug)</span>
-        <span>{open ? "▲ hide" : "▼ show"}</span>
-      </button>
-      {open && (
-        <div className="grid gap-3 border-t border-amber-200 p-4 sm:grid-cols-3">
-          {(["networks", "topology", "mesh", "members"] as const).map((key) => (
-            <div key={key}>
-              <p className="mb-1 font-mono text-xs font-bold text-amber-700 uppercase">{key}</p>
-              <pre className="max-h-64 overflow-auto rounded bg-white p-2 text-xs text-neutral-700 ring-1 ring-amber-200">
-                {JSON.stringify(data[key], null, 2)}
-              </pre>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface ApEthData { ports: EthernetPort[]; error?: string; notice?: string; label: string; serial: string; mac: string }
-
-function parseEthernetFromConfig(params: Record<string, string> | undefined): EthernetPort[] {
-  if (!params) return [];
-  const grouped: Record<string, Record<string, string>> = {};
-  for (const [key, val] of Object.entries(params)) {
-    const m = key.match(/^Device\.Ethernet\.Interface\.(\d+)\.(.*)/);
-    if (m) {
-      if (!grouped[m[1]]) grouped[m[1]] = {};
-      grouped[m[1]][m[2]] = val;
-    }
-  }
-  if (Object.keys(grouped).length === 0) return [];
-  return Object.entries(grouped)
-    .map(([idx, p]) => ({
-      index: parseInt(idx, 10),
-      name: p.Name ?? `eth${parseInt(idx, 10) - 1}`,
-      upstream: p.Upstream === 'true',
-      enable: p.Enable !== 'false',
-      status: (p.Status ?? 'Unknown') as EthernetPort['status'],
-      maxBitRate: parseInt(p.MaxBitRate ?? '-1', 10),
-      currentBitRate: parseInt(p.CurrentBitRate ?? '0', 10),
-      duplexMode: p.DuplexMode ?? '',
-      macAddress: p.MACAddress ?? '',
-      connectedHost: null,
-    }))
-    .sort((a, b) => (a.upstream !== b.upstream ? (a.upstream ? -1 : 1) : a.index - b.index));
-}
-
-function getModelFallbackPorts(model: string): EthernetPort[] {
-  if (model.toLowerCase().includes('beacon')) {
-    return [
-      { index: 1, name: 'eth0', upstream: true,  enable: true, status: 'Unknown', maxBitRate: 10000, currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
-      { index: 2, name: 'eth1', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
-      { index: 3, name: 'eth2', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
-      { index: 4, name: 'eth3', upstream: false, enable: true, status: 'Unknown', maxBitRate: -1,    currentBitRate: 0, duplexMode: '', macAddress: '', connectedHost: null },
-    ];
-  }
-  return [];
-}
 
 export default function NetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -190,13 +111,7 @@ export default function NetworkVisualizerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (isLoading || !isAuthenticated) {
-    return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
-      </main>
-    );
-  }
+  if (isLoading || !isAuthenticated) return <CortecaLoading />;
 
   const networkId = selected?.home_wifis?.[0]?.id;
   const online    = selected?.home_wifis?.[0]?.status?.online;
@@ -205,118 +120,70 @@ export default function NetworkVisualizerPage() {
     : null;
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <BackNav />
-
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-900">Home Network Visualizer</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Search for a subscriber to visualize their home network topology and location.
-        </p>
-      </div>
-
-      <div className="mb-8 rounded-xl border border-neutral-200 bg-white p-6">
+    <CortecaPage title="Home Network Visualizer" meta="Search for a subscriber to visualize their home network topology and location.">
+      <CortecaCard title="Find a subscriber">
         <SubscriberSearch
           onSelect={handleSubscriberSelect}
           selectedId={selected?.customer_id ?? selected?.uuid}
         />
-      </div>
+      </CortecaCard>
 
       {selected && (
-        <div className="mb-6 flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">{fullName}</p>
-            {selected.email && <p className="text-xs text-neutral-500">{selected.email}</p>}
-            {networkId && <p className="mt-0.5 font-mono text-xs text-neutral-400">Network: {networkId}</p>}
-          </div>
-          <div className="flex items-center gap-4">
-            {networkId && (
-              <span className={cn("flex items-center gap-1.5 text-sm", online ? "text-green-700" : "text-neutral-400")}>
-                <span className={cn("h-2 w-2 rounded-full", online ? "bg-green-500" : "bg-neutral-300")} />
-                {online ? "Online" : "Offline"}
-              </span>
-            )}
-            {networkId && (
+        <CortecaCard
+          title={fullName}
+          actions={networkId && (
+            <>
+              <StatusPill tone={online ? "good" : "neutral"}>{online ? "Online" : "Offline"}</StatusPill>
               <button
                 type="button"
                 onClick={() => window.open(consoleUrl(networkId), "_blank", "noopener,noreferrer")}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
               >
-                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor"
-                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/>
                   <path d="M8 1h3v3M11 1 6 6"/>
                 </svg>
                 Launch Corteca Console
               </button>
-            )}
+            </>
+          )}
+        >
+          <div className="-mt-3 space-y-0.5">
+            {selected.email && <p className="text-sm text-neutral-500">{selected.email}</p>}
+            {networkId && <p className="font-mono text-xs text-neutral-400">Network: {networkId}</p>}
           </div>
-        </div>
+        </CortecaCard>
       )}
 
       {fetching && (
-        <div className="flex items-center justify-center py-20">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+        <div className="flex items-center justify-center rounded-2xl bg-white py-20">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
         </div>
       )}
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>
-      )}
+      {error && <Notice tone="error" title="Couldn't load the network">{error}</Notice>}
 
       {topoData && !fetching && (
-        <div className="space-y-6">
+        <>
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-neutral-700">Network Topology</h2>
-              <NetworkTopologyMap data={topoData} />
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-neutral-700">Network Location</h2>
-              <NetworkMap data={topoData} />
-            </div>
+            <CortecaCard title="Network topology"><NetworkTopologyMap data={topoData} /></CortecaCard>
+            <CortecaCard title="Network location"><NetworkMap data={topoData} /></CortecaCard>
           </div>
-          {apEthData && Object.entries(apEthData).map(([, entry]) => {
-            const { error: ethErr, label, serial, mac } = entry;
-            let ports = entry.ports;
-            let notice = entry.notice;
-
-            // Render-time fallback: if no live ports and no error, derive from topoData.configs
-            if (ports.length === 0 && !ethErr) {
-              const rawConfigs = (topoData?.configs ?? {}) as Record<string, unknown>;
-              const configEntry = rawConfigs[mac];
-              const cfgParams = ((configEntry as Record<string, unknown>)?.params ?? configEntry) as Record<string, string> | undefined;
-              const cfgPorts = parseEthernetFromConfig(cfgParams);
-              if (cfgPorts.length > 0) {
-                ports = cfgPorts;
-                notice = 'Port capabilities from device config — live status unavailable';
-              } else {
-                const rawModel = String(cfgParams?.['Device.DeviceInfo.ModelName'] ?? '');
-                const model = rawModel.replace(/^nokia\s+wifi\s+/i, '').replace(/^nokia\s+/i, '').trim();
-                const specPorts = getModelFallbackPorts(model);
-                if (specPorts.length > 0) {
-                  ports = specPorts;
-                  notice = `Port layout from ${model || 'device'} spec — live status unavailable`;
-                }
-              }
-            }
-
+          {apEthData && Object.values(apEthData).map((entry) => {
+            const { ports, notice } = resolvePorts(entry, topoData);
             return (
-              <div key={mac} className="space-y-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-neutral-700">{label} — Ethernet Ports</h2>
-                  <p className="font-mono text-xs text-neutral-400">{serial ? `S/N: ${serial} · ` : ''}MAC: {mac}</p>
-                </div>
-                {ethErr && <p className="text-sm text-red-600">{ethErr}</p>}
-                {notice && <p className="text-xs text-neutral-400 italic">{notice}</p>}
-                {!ethErr && ports.length === 0 && <p className="text-sm text-neutral-400">No Ethernet data returned.</p>}
+              <CortecaCard key={entry.mac} title={`${entry.label} — Ethernet ports`}>
+                <p className="-mt-3 mb-3 font-mono text-xs text-neutral-400">{entry.serial ? `S/N: ${entry.serial} · ` : ""}MAC: {entry.mac}</p>
+                {entry.error && <p className="text-sm text-red-600">{entry.error}</p>}
+                {notice && <p className="mb-2 text-xs italic text-neutral-500">{notice}</p>}
+                {!entry.error && ports.length === 0 && <p className="text-sm text-neutral-500">No Ethernet data returned.</p>}
                 {ports.length > 0 && <EthernetPortPanel ports={ports} />}
-              </div>
+              </CortecaCard>
             );
           })}
-          <DebugPanel data={topoData} />
-        </div>
+          <NetworkDebugPanel data={topoData} />
+        </>
       )}
-    </main>
+    </CortecaPage>
   );
 }

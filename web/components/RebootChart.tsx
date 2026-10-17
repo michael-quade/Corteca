@@ -1,5 +1,7 @@
 "use client";
 
+import { CARD } from "@/web/components/corteca/styles";
+import { cn } from "@/web/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -17,9 +19,9 @@ function findField(keys: string[], ...candidates: string[]): string | undefined 
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-1.5 truncate text-3xl font-bold text-neutral-900">{value}</p>
+    <div className={cn(CARD, "p-5")}>
+      <p className="text-sm text-neutral-600">{label}</p>
+      <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums text-neutral-900">{value}</p>
       {sub && <p className="mt-1 truncate text-xs text-neutral-500">{sub}</p>}
     </div>
   );
@@ -94,7 +96,7 @@ export function RebootChart({ rows }: { rows: RebootRow[] }) {
       </div>
 
       {dailyData.length > 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
+        <div className={cn(CARD, "p-5")}>
           <p className="mb-4 text-sm font-semibold text-neutral-800">Reboots Per Day</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyData} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
@@ -109,7 +111,7 @@ export function RebootChart({ rows }: { rows: RebootRow[] }) {
       )}
 
       {originData.length > 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
+        <div className={cn(CARD, "p-5")}>
           <p className="mb-4 text-sm font-semibold text-neutral-800">Reboots by Origin</p>
           <ResponsiveContainer width="100%" height={Math.max(120, originData.length * 40)}>
             <BarChart data={originData} layout="vertical" margin={{ top: 0, right: 24, left: 80, bottom: 0 }}>

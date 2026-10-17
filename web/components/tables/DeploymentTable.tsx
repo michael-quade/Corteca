@@ -123,13 +123,13 @@ export function DeploymentTable({ rows, headers, pinnedFirst = ["Account Name", 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-neutral-200">
         <table className="w-full min-w-max border-collapse text-xs">
-          <thead className="sticky top-0 z-20 bg-neutral-50">
+          <thead className="sticky top-0 z-20 bg-neutral-100">
             <tr>
               {orderedHeaders.map((col) => {
                 const active = Boolean(filters[col]);
                 const isPin  = col === pinnedCol;
                 return (
-                  <th key={col} className={cn("group border-b border-neutral-200 px-3 py-2 text-left font-semibold text-neutral-700 whitespace-nowrap", isPin && "sticky left-0 z-10 bg-neutral-50 shadow-[1px_0_0_#e5e7eb]")}>
+                  <th key={col} className={cn("group border-b border-neutral-200 px-3 py-2 text-left font-semibold text-neutral-700 whitespace-nowrap", isPin && "sticky left-0 z-10 bg-neutral-100 shadow-[1px_0_0_#e5e7eb]")}>
                     <div className="flex items-center gap-1">
                       <button type="button" onClick={() => handleSort(col)} className="hover:text-blue-700 flex items-center gap-0.5">
                         {col}
@@ -181,10 +181,10 @@ export function DeploymentTable({ rows, headers, pinnedFirst = ["Account Name", 
       <div className="flex items-center justify-between text-xs text-neutral-500">
         <span>Page {page} of {totalPages}</span>
         <div className="flex gap-1">
-          <button type="button" onClick={() => setPage(1)} disabled={page === 1} className="rounded border border-neutral-200 px-2 py-0.5 disabled:opacity-40 hover:bg-neutral-50">«</button>
-          <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded border border-neutral-200 px-2 py-0.5 disabled:opacity-40 hover:bg-neutral-50">‹ Prev</button>
-          <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded border border-neutral-200 px-2 py-0.5 disabled:opacity-40 hover:bg-neutral-50">Next ›</button>
-          <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded border border-neutral-200 px-2 py-0.5 disabled:opacity-40 hover:bg-neutral-50">»</button>
+          <button type="button" onClick={() => setPage(1)} disabled={page === 1} className="rounded-lg border border-neutral-200 px-2 py-0.5 text-neutral-700 hover:border-blue-300 hover:bg-blue-50 disabled:opacity-40">«</button>
+          <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-neutral-200 px-2 py-0.5 text-neutral-700 hover:border-blue-300 hover:bg-blue-50 disabled:opacity-40">‹ Prev</button>
+          <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-lg border border-neutral-200 px-2 py-0.5 text-neutral-700 hover:border-blue-300 hover:bg-blue-50 disabled:opacity-40">Next ›</button>
+          <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-lg border border-neutral-200 px-2 py-0.5 text-neutral-700 hover:border-blue-300 hover:bg-blue-50 disabled:opacity-40">»</button>
         </div>
       </div>
 

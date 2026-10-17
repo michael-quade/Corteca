@@ -1,5 +1,7 @@
 "use client";
 
+import { CARD } from "@/web/components/corteca/styles";
+import { cn } from "@/web/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -19,7 +21,7 @@ interface Props { buckets: PeriodBucket[] }
 
 export function UsageChart({ buckets }: Props) {
   if (buckets.length === 0) return (
-    <div className="rounded-xl border border-neutral-200 bg-white px-6 py-16 text-center text-sm text-neutral-400">
+    <div className={cn(CARD, "px-6 py-16 text-center text-sm text-neutral-500")}>
       No data for the selected period.
     </div>
   );
@@ -35,8 +37,8 @@ export function UsageChart({ buckets }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-neutral-200 bg-white p-6">
-        <h2 className="mb-4 text-sm font-semibold text-neutral-700">Auth Events &amp; API Calls</h2>
+      <div className={cn(CARD, "p-6")}>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Auth Events &amp; API Calls</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid {...grid} />
@@ -51,8 +53,8 @@ export function UsageChart({ buckets }: Props) {
         </ResponsiveContainer>
       </div>
 
-      <div className="rounded-xl border border-neutral-200 bg-white p-6">
-        <h2 className="mb-4 text-sm font-semibold text-neutral-700">Data Transfer (bytes)</h2>
+      <div className={cn(CARD, "p-6")}>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Data Transfer (bytes)</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid {...grid} />

@@ -86,10 +86,10 @@ export function DataModelBrowser({ deviceId }: Props) {
           <button key={p} type="button"
             onClick={() => { setActivePath(p); setCustomPath(""); loadSchema(p); }}
             className={cn(
-              "rounded-lg border px-3 py-1.5 font-mono text-xs transition-colors",
+              "rounded-full border px-3 py-1 font-mono text-xs transition-colors",
               activePath === p && !customPath
-                ? "border-blue-400 bg-blue-50 text-blue-700"
-                : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                ? "border-blue-600 bg-blue-50 text-blue-700"
+                : "border-neutral-200 bg-white text-neutral-600 hover:border-blue-300 hover:bg-blue-50/40"
             )}
           >{p}</button>
         ))}
@@ -103,23 +103,23 @@ export function DataModelBrowser({ deviceId }: Props) {
       {/* Toolbar */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => loadSchema(queryPath)} disabled={loadingSchema}
-          className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50">
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           {loadingSchema ? "Loading…" : "Load Schema"}
         </button>
         {schema.length > 0 && (
           <button type="button" onClick={loadValues} disabled={loadingValues}
-            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
+            className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50">
             {loadingValues ? "Fetching…" : "Get Current Values"}
           </button>
         )}
         {schema.length > 0 && <span className="text-xs text-neutral-400">{schema.length} objects</span>}
       </div>
 
-      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 px-4 py-2.5 text-xs text-red-700">{error}</p>}
 
       {/* Tree */}
       {schema.length > 0 && (
-        <div className="overflow-auto rounded-xl border border-neutral-200 bg-white text-xs">
+        <div className="overflow-auto rounded-xl bg-white text-xs ring-1 ring-neutral-200">
           {schema.filter(isVisible).map((obj) => {
             const depth  = pathDepth(obj.supportedObjPath, allPaths);
             const isExp  = expanded.has(obj.supportedObjPath);
@@ -132,8 +132,8 @@ export function DataModelBrowser({ deviceId }: Props) {
                   style={{ paddingLeft: `${16 + depth * 16}px` }}>
                   <span className="w-3 shrink-0 text-neutral-400">{hasKids ? (isExp ? "▾" : "▸") : "·"}</span>
                   <span className="font-mono font-semibold text-neutral-800">{seg}</span>
-                  {obj.isMultiInstance && <span className="rounded bg-purple-100 px-1 text-[10px] text-purple-600">multi</span>}
-                  {obj.access === "readWrite" && <span className="rounded bg-green-100 px-1 text-[10px] text-green-600">rw</span>}
+                  {obj.isMultiInstance && <span className="rounded-full bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">multi</span>}
+                  {obj.access === "readWrite" && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-800">rw</span>}
                   <span className="ml-auto text-[10px] text-neutral-300">{obj.supportedParams.length} params</span>
                 </div>
                 {isExp && obj.supportedParams.map((param) => {
@@ -150,7 +150,7 @@ export function DataModelBrowser({ deviceId }: Props) {
                         ? <span className="ml-auto shrink-0 text-[10px] text-neutral-300">ro</span>
                         : <button type="button"
                             onClick={() => setEditTarget({ deviceId, objPath: obj.supportedObjPath, param, currentValue: val })}
-                            className="ml-auto shrink-0 rounded border border-neutral-200 px-2 py-0.5 text-[10px] text-neutral-500 hover:border-blue-300 hover:text-blue-600">
+                            className="ml-auto shrink-0 rounded-lg border border-blue-600 px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50">
                             Edit
                           </button>
                       }

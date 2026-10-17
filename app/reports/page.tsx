@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
-import { DashboardCard } from "@/web/components/DashboardCard";
+import { LandingCard } from "@/web/components/landing/LandingCard";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
 
 function RebootIcon() {
   return (
@@ -141,40 +141,15 @@ export default function PerformanceReportsPage() {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading || !isAuthenticated) {
-    return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
-      </main>
-    );
-  }
+  if (isLoading || !isAuthenticated) return <CortecaLoading />;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <div className="mb-6">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-          Back to Dashboard
-        </Link>
-      </div>
-
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-900">Performance Reports</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Tenant-wide analytics and event reports from the Corteca platform.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <CortecaPage title="Performance Reports" meta="Tenant-wide analytics and event reports from the Corteca platform." width="max-w-6xl">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {REPORTS.map((r) => (
-          <DashboardCard key={r.href} {...r} />
+          <LandingCard key={r.href} title={r.title} description={r.description} icon={r.icon} href={r.href} />
         ))}
       </div>
-    </main>
+    </CortecaPage>
   );
 }

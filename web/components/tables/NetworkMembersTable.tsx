@@ -169,14 +169,14 @@ function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort, s
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-neutral-200 bg-neutral-50">
+        <tr className="bg-neutral-100 shadow-[0_1px_0_0_#e5e7eb]">
           {COLUMNS.map((col) => (
             <th key={col.key} className="px-4 py-3 text-left">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => onSort(col.key)}
-                  className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-neutral-500 hover:text-neutral-800"
+                  className="flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:text-neutral-800"
                 >
                   {col.label}
                   <span className={cn("text-xs", sortKey === col.key ? "text-neutral-700" : "text-neutral-300")}>
@@ -269,21 +269,21 @@ export function NetworkMembersTable({ members, selectedId, onSelect }: NetworkMe
   const tabTriggerClass = (active: boolean) =>
     cn(
       "relative px-5 py-2.5 text-sm font-medium transition-colors",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-1",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1",
       active
-        ? "text-neutral-900 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-neutral-900"
-        : "text-neutral-500 hover:text-neutral-700"
+        ? "text-blue-700 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-blue-600"
+        : "text-neutral-500 hover:text-neutral-800"
     );
 
   return (
     <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
-      <div className="overflow-hidden rounded-lg border border-neutral-200">
-        <Tabs.List className="flex border-b border-neutral-200 bg-neutral-50">
+      <div className="overflow-hidden rounded-xl ring-1 ring-neutral-200">
+        <Tabs.List className="flex border-b border-neutral-200 bg-white">
           <Tabs.Trigger value="connected" className={tabTriggerClass(activeTab === "connected")}>
             Connected
             <span className={cn(
               "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
-              activeTab === "connected" ? "bg-green-100 text-green-700" : "bg-neutral-200 text-neutral-500"
+              activeTab === "connected" ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-500"
             )}>
               {connectedMembers.length}
             </span>
@@ -292,7 +292,7 @@ export function NetworkMembersTable({ members, selectedId, onSelect }: NetworkMe
             Not Connected
             <span className={cn(
               "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
-              activeTab === "not-connected" ? "bg-red-100 text-red-600" : "bg-neutral-200 text-neutral-500"
+              activeTab === "not-connected" ? "bg-red-100 text-red-700" : "bg-neutral-100 text-neutral-500"
             )}>
               {notConnectedMembers.length}
             </span>

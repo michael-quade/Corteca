@@ -7,7 +7,18 @@ import { loadSessions, aggregateSessions } from "@/web/lib/sessionHistory";
 import type { SessionRecord, Period } from "@/web/lib/sessionHistory";
 import { UsageChart } from "@/web/components/UsageChart";
 import { SessionTable } from "@/web/components/tables/SessionTable";
-import { cn } from "@/web/lib/utils";
+import { CortecaPage } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { HealthTile } from "@/web/components/corteca/HealthTile";
+import { SegmentedControl } from "@/web/components/corteca/SegmentedControl";
+
+const icon = (d: string) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
+);
+const SESSIONS = icon("M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3");
+const CALLS = icon("M4 19V9M10 19V5M16 19v-7M22 19H2");
+const SENT = icon("M12 19V5M5 12l7-7 7 7");
+const RECEIVED = icon("M12 5v14M19 12l-7 7-7-7");
 
 function fmtBytes(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
@@ -64,52 +75,27 @@ export default function ApiUsagePage() {
   ), [merged]);
 
   if (!isAuthenticated) return (
-    <main className="flex items-center justify-center py-32 text-neutral-400">Sign in to view API usage history.</main>
+    <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#f5f7fa] text-sm text-neutral-500">Sign in to view API usage history.</div>
   );
 
   return (
-    <main className="mx-auto max-w-7xl space-y-8 px-6 py-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">API Usage History</h1>
-          <p className="mt-1 text-sm text-neutral-500">{merged.length} authentication sessions recorded across all time</p>
+    <CortecaPage
+      title="API Usage"
+      meta={`${merged.length} authentication sessions recorded across all time`}
+      actions={<SegmentedControl label="Period" value={period} onChange={setPeriod} options={PERIODS} />}
+    >
+      <CortecaCard title="Usage summary">
+        <div className="grid grid-cols-2 gap-y-4 md:grid-cols-4 md:divide-x md:divide-neutral-200">
+          <HealthTile icon={SESSIONS} label="Sessions" value={merged.length.toLocaleString()} sub="auth events" />
+          <HealthTile icon={CALLS} label="API calls" value={totals.calls.toLocaleString()} sub="requests" />
+          <HealthTile icon={SENT} label="Bytes sent" value={fmtBytes(totals.bytesSent)} sub="to Corteca" />
+          <HealthTile icon={RECEIVED} label="Bytes received" value={fmtBytes(totals.bytesReceived)} sub="from Corteca" />
         </div>
+      </CortecaCard>
 
-        {/* Period selector */}
-        <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1">
-          {PERIODS.map((p) => (
-            <button key={p.value} type="button" onClick={() => setPeriod(p.value)}
-              className={cn("rounded-md px-3 py-1.5 text-sm transition-colors",
-                period === p.value ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-              )}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          { label: "Total Sessions",     value: merged.length,                      sub: "auth events",   color: "text-violet-600" },
-          { label: "Total API Calls",    value: totals.calls.toLocaleString(),       sub: "requests",      color: "text-blue-600"   },
-          { label: "Total Bytes Sent",   value: fmtBytes(totals.bytesSent),          sub: "to Corteca",    color: "text-orange-500" },
-          { label: "Total Bytes Recv",   value: fmtBytes(totals.bytesReceived),      sub: "from Corteca",  color: "text-emerald-600"},
-        ].map((c) => (
-          <div key={c.label} className="rounded-xl border border-neutral-200 bg-white p-5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{c.label}</p>
-            <p className={cn("mt-1.5 text-2xl font-semibold", c.color)}>{c.value}</p>
-            <p className="mt-0.5 text-xs text-neutral-400">{c.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts */}
       <UsageChart buckets={buckets} />
 
-      {/* Session table */}
       <SessionTable sessions={merged} />
-    </main>
+    </CortecaPage>
   );
 }

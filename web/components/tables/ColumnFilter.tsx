@@ -64,7 +64,7 @@ export function ColumnFilter({
     <div
       ref={ref}
       data-filter-dropdown
-      className="fixed z-[9999] w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl"
+      className="fixed z-[9999] w-60 overflow-hidden rounded-xl ring-1 ring-neutral-200 bg-white shadow-xl"
       style={{ top, left }}
     >
       {/* Search */}

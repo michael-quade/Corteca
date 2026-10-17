@@ -131,7 +131,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   {
     title: "Dashboard",
-    description: "Card grid linking to all features.",
+    description: "Landing page with every Corteca dashboard.",
     icon: <DashboardIcon />,
     href: "/dashboard",
   },

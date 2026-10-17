@@ -4,12 +4,15 @@ import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { REPORT_CONFIGS } from "@/web/lib/reportTypes";
 import { ReportChart, type ReportRow } from "@/web/components/ReportChart";
 import { ReportTable } from "@/web/components/tables/ReportTable";
 import { findDeviceIdInfo, injectAccountNames } from "@/web/lib/reportNameEnrichment";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { OutlineButton } from "@/web/components/corteca/OutlineButton";
+import { Notice } from "@/web/components/corteca/Notice";
 
 const NAME_BATCH = 50;
 
@@ -116,102 +119,76 @@ export default function ReportPage() {
     return accountNames.size > 0 ? ['Account Name', ...base] : base;
   }, [data, accountNames]);
 
-  if (isLoading || !isAuthenticated) {
-    return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
-      </main>
-    );
-  }
+  if (isLoading || !isAuthenticated) return <CortecaLoading />;
 
   if (!config) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <p className="text-sm text-red-500">Unknown report type: {reportType}</p>
-        <Link href="/reports" className="mt-4 inline-block text-sm text-neutral-500 hover:text-neutral-800">
-          ← Back
-        </Link>
-      </main>
+      <CortecaPage title="Unknown report" crumbs={[{ label: "Performance Reports", href: "/reports" }]}>
+        <Notice tone="error" title={`Unknown report type: ${reportType}`} />
+      </CortecaPage>
     );
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/reports" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Back
-          </Link>
-          <span className="text-neutral-300">|</span>
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-            Dashboard
-          </Link>
-        </div>
-
-        <button
-          type="button"
+    <CortecaPage
+      title={config.displayName}
+      crumbs={[{ label: "Performance Reports", href: "/reports" }]}
+      meta={
+        <>
+          {config.description}
+          {data?.meta && (
+            <span className="ml-2 font-mono text-neutral-400">
+              Period {data.meta.start.slice(0, 10)} → {data.meta.end.slice(0, 10)} · Report ID {data.meta.reportId}
+            </span>
+          )}
+        </>
+      }
+      actions={
+        <OutlineButton
           onClick={fetchReport}
           disabled={fetching}
-          className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={fetching ? "animate-spin" : ""}>
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          }
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={fetching ? "animate-spin" : ""}>
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
           Refresh
-        </button>
-      </div>
-
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-900">{config.displayName}</h1>
-        <p className="mt-1 text-sm text-neutral-500">{config.description}</p>
-        {data?.meta && (
-          <p className="mt-1 font-mono text-xs text-neutral-400">
-            Period: {data.meta.start.slice(0, 10)} → {data.meta.end.slice(0, 10)}
-            &nbsp;·&nbsp;Report ID: {data.meta.reportId}
-          </p>
-        )}
-      </div>
-
+        </OutlineButton>
+      }
+    >
       {fetching && !data && (
-        <div className="flex min-h-[300px] items-center justify-center">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+        <div className="flex min-h-[300px] items-center justify-center rounded-2xl bg-white">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
         </div>
       )}
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <Notice tone="error" title="Couldn't load the report">{error}</Notice>}
 
       {data && (
-        <div className="space-y-8">
+        <>
           <ReportChart rows={data.rows} config={config} dateRange={{ start: data.meta.start, end: data.meta.end }} />
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-neutral-700">Report Data</h2>
-              {loadingNames && (
-                <span className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <span className="h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-neutral-500" />
-                  Loading account names…
-                </span>
-              )}
-              {!loadingNames && accountNames.size > 0 && (
-                <span className="text-xs text-neutral-400">{accountNames.size} account name{accountNames.size !== 1 ? 's' : ''} resolved</span>
-              )}
-            </div>
+          <CortecaCard
+            title="Report data"
+            actions={
+              <>
+                {loadingNames && (
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                    <span className="h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-blue-600" />
+                    Loading account names…
+                  </span>
+                )}
+                {!loadingNames && accountNames.size > 0 && (
+                  <span className="text-xs text-neutral-500">{accountNames.size} account name{accountNames.size !== 1 ? "s" : ""} resolved</span>
+                )}
+              </>
+            }
+          >
             <ReportTable rows={enrichedRows as ReportRow[]} columns={enrichedColumns} exportFilename={config.displayName} />
-          </div>
-        </div>
+          </CortecaCard>
+        </>
       )}
-    </main>
+    </CortecaPage>
   );
 }

@@ -63,8 +63,8 @@ export function RebootTable({ rows, columns }: RebootTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200">
-      <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
+    <div className="overflow-hidden rounded-xl ring-1 ring-neutral-200">
+      <div className="border-b border-neutral-200 bg-white px-4 py-2.5">
         <span className="text-xs font-medium text-neutral-500">
           {displayed.length} of {rows.length} record{rows.length !== 1 ? "s" : ""}
         </span>
@@ -80,7 +80,7 @@ export function RebootTable({ rows, columns }: RebootTableProps) {
                     <button
                       type="button"
                       onClick={() => handleSort(col)}
-                      className="flex items-center gap-1 whitespace-nowrap text-xs font-medium uppercase tracking-wide text-neutral-500 hover:text-neutral-800"
+                      className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-neutral-700 hover:text-neutral-800"
                     >
                       {col.replace(/_/g, " ")}
                       <span className={cn("text-xs", sortCol === col ? "text-neutral-700" : "text-neutral-300")}>
@@ -92,7 +92,7 @@ export function RebootTable({ rows, columns }: RebootTableProps) {
                       placeholder="Filter…"
                       value={filters[col] ?? ""}
                       onChange={(e) => setFilters((f) => ({ ...f, [col]: e.target.value }))}
-                      className="w-full min-w-[80px] rounded border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 placeholder:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                      className="w-full min-w-[80px] rounded border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 placeholder:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </th>

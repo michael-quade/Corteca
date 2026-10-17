@@ -46,10 +46,10 @@ export function Navbar() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  "rounded-lg border px-3.5 py-1.5 text-sm font-medium transition-colors",
                   pathname === link.href
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900"
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-blue-200 hover:bg-blue-50/50 hover:text-neutral-900"
                 )}
               >
                 {link.label}

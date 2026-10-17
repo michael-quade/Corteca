@@ -254,6 +254,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured), `layoutFlowGraph()` (ELK; returns node positions **and** edge routes in `edge.data.points`), `backhaulLabel()` |
 | `edgeGeometry.ts` | Edge/label geometry for the topology canvas: `labelBox()` (where a backhaul label sits), `layoutProblems()` (edge under a card, label covering a card/label), `spreadRadial()` (scales a radial layout out from the gateway until `layoutProblems()` is empty) |
+| `ethernetPorts.ts` | REST visualizer Ethernet ports: live → device config → model-spec fallback (`resolvePorts`) |
 | `clientInsights.ts` | Client traffic, supported bands, `bandUpgrade()` (client on a slower band than it and its AP support for that SSID), IEEE disconnect-reason text, top talkers per AP |
 | `topologySelection.ts` | Selection types, path highlight (`highlightFor`), client filters, search, keyboard order, and URL (de)serialisation for the MCP visualizer |
 | `recentNetworks.ts` | localStorage list of networks recently opened in the MCP visualizer (with subscriber, for the header chip) |
@@ -365,9 +366,10 @@ app/
 web/
   components/
     ApiLogPanel.tsx               # Global API log panel (bottom of every page)
-    DashboardCard.tsx             # Card used by /reports
     landing/                      # Dashboard landing page: LandingCard, FeaturedCard, OtherAppsSelect
-    corteca/                      # Corteca-console look: CortecaCard, StatusPill, HealthTile, OutlineButton, SegmentedControl, Notice
+    corteca/                      # Corteca-console look: CortecaPage (page shell), CortecaCard, StatusPill, HealthTile, OutlineButton, SegmentedControl, Notice, styles.ts (CARD)
+    alarms/                       # Network Alarms: AlarmQueryForm (+ .types.ts), AlarmSeverityChips, severity.ts
+    NetworkDebugPanel.tsx         # REST visualizer raw-response debug panel
     SwFleetHealth.tsx             # SW Overview fleet health tiles
     DataModelBrowser.tsx
     EthernetPortPanel.tsx
@@ -442,6 +444,7 @@ web/
       usp.ts
     fetchWithAuth.ts
     clientInsights.ts
+    ethernetPorts.ts
     edgeGeometry.ts
     geoUtils.ts
     mcpNetwork.ts
@@ -468,7 +471,77 @@ middleware.ts                     # Site gate enforcer — redirects to /gate if
 - **Exports:** Named exports for all components
 - **Props:** Define component props in a matching `.types.ts` file if they exceed 5 properties
 
+## Corteca Style (UI standard)
+
+"**Corteca style**" means: make the page look and behave like the real Nokia Corteca console (Home troubleshooting / console home). When asked to build or change a dashboard "in the Corteca style", follow this section. Reference implementations: `app/sw-overview/page.tsx`, `app/alarms/page.tsx`, `app/devices/page.tsx`; building blocks live in `web/components/corteca/`.
+
+### Page template
+```tsx
+if (isLoading || !isAuthenticated) return <CortecaLoading />;
+
+return (
+  <CortecaPage
+    title="My Dashboard"                                   // breadcrumb: "Dashboards / My Dashboard"
+    crumbs={[{ label: "Parent", href: "/parent" }]}        // optional middle crumbs
+    meta="One-line description · Report as of …"           // small grey line under the title
+    actions={<OutlineButton icon={…}>Refresh</OutlineButton>}
+  >
+    {error && <Notice tone="error" title="Couldn't load …">{error}</Notice>}
+    <CortecaCard title="Summary" info="Optional (i) tooltip text">
+      <div className="grid grid-cols-2 gap-y-4 md:grid-cols-4 md:divide-x md:divide-neutral-200">
+        <HealthTile icon={…} label="Online" value="1,196" sub="90.2% of Beacons" onClick={…} />
+      </div>
+    </CortecaCard>
+    <CortecaCard title="Details" actions={<StatusPill tone="info">…</StatusPill>}>
+      <MyTable … />  {/* table follows Table Conventions; no outer border of its own beyond rounded-xl ring */}
+    </CortecaCard>
+  </CortecaPage>
+);
+```
+
+### Building blocks (`web/components/corteca/`)
+| Component | Use for |
+|---|---|
+| `CortecaPage`, `CortecaLoading` | Every dashboard page shell and its loading state. Light grey ground `bg-[#f5f7fa]` (hides the global background image). |
+| `CortecaCard` | Every content block: white, `rounded-2xl`, soft shadow (`CARD` in `styles.ts`), bold `text-lg` title, optional (i) `info` tooltip and right-side `actions`. |
+| `HealthTile` | Summary counts in a 4-up grid split by `divide-x`: outline icon, label, big number, `sub` line (share/context) or a pill. Click → filter/scroll. |
+| `StatusPill` | Status/labels: fully rounded pastel pill. Tones: `good` (emerald), `fair` (yellow), `poor` (red), `neutral` (grey), `info` (blue), `online` (stronger green — use where it must contrast with `neutral` grey, e.g. matrix cells). |
+| `OutlineButton` | Secondary/page actions: blue outline + blue text + leading icon. |
+| `ui/Button` (default) | Primary action: solid `bg-blue-600`, `rounded-lg`. One primary per form. |
+| `SegmentedControl` | Small mutually exclusive toggles (filters, periods): active = `bg-blue-50 text-blue-700 ring-blue-600`. |
+| `Notice` | Errors (`tone="error"`, red-50) and progress/info (`tone="info"`, blue-50), with icon and optional close. Never raw red `<p>` boxes. |
+| `CARD`, `TABLE_HEAD_ROW` (`styles.ts`) | When a component draws its own card/table header instead of using `CortecaCard`. |
+
+### Colours & shapes
+- **Blue = action/link/selection** (`blue-600`; hover `blue-700`; tint `blue-50`). Links in values are `font-medium text-blue-600`. Selected items get a blue ring (`ring-2 ring-blue-600`).
+- **Green/yellow/red only mean status**, never decoration or actions (no green "New Report" buttons).
+- Corners: cards `rounded-2xl`, inputs/buttons `rounded-lg`, pills `rounded-full`. Prefer hairline rings/shadows over grey borders.
+- Text: card titles `text-lg font-semibold text-neutral-900`; labels `text-sm text-neutral-700`; meta `text-xs text-neutral-500`. Table headers `text-xs font-semibold text-neutral-700`, normal case (no small grey uppercase).
+- Inputs: `rounded-lg border-neutral-300`, focus `border-blue-600 ring-2 ring-blue-600/20`. Checkboxes `accent-blue-600`.
+- Spinners: `border-neutral-200 border-t-blue-600`. Nav active item: `bg-blue-50 text-blue-700`.
+- Icons: thin outline (`strokeWidth 1.5`), `currentColor`.
+
+### Rules learned from feedback
+- **Summary tiles show data only** — counts and shares (e.g. "90.2% of Beacons"), **no Good/Fair/Poor ratings or thresholds** unless explicitly asked.
+- Show device names by **formal model name** ("Beacon 10"); never invent sequential numbering. Use MAC suffixes only to disambiguate identical models in lists.
+- Status pills that must be told apart at a glance need clearly different hues (hence `online` green vs `neutral` grey).
+- Page content must start near the top: one compact header (title/meta/actions), no large intro blocks or stacked headers.
+
+### Checklist for a new or restyled page
+1. Wrap in `CortecaPage` with breadcrumb title, meta, actions; loading via `CortecaLoading`.
+2. Every block in a `CortecaCard`; summaries as `HealthTile` grids.
+3. Actions blue (`OutlineButton` / blue primary); status as `StatusPill`; errors/progress as `Notice`.
+4. Tables follow **Table Conventions** inside a card.
+5. Forms/modals/tables extracted per **Component Architecture**; files < 300 lines.
+6. Check it in the browser (headless Playwright) before calling it done.
+
+**Exceptions:** the MCP visualizer (`/mcp-network-visualizer`) uses its own compact top bar + Recent rail instead of `CortecaPage`, and the dashboard landing page (`/dashboard`) uses the console-home layout (`web/components/landing/`). Both still use the same colours and shapes.
+
+---
+
 ## Styling Patterns
+
+All dashboards follow the **Corteca Style** — see the section above.
 
 - Use utility classes directly in `className`
 - Use `cn()` (Tailwind Merge + CLSX) for conditional classes

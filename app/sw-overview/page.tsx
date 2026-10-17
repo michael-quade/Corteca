@@ -132,7 +132,7 @@ export default function SwOverviewPage() {
   if (isLoading) {
     return (
       <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-blue-600" />
       </main>
     );
   }
@@ -223,7 +223,7 @@ export default function SwOverviewPage() {
               info="Beacons per release and model. Click a count, a release or a model to list its networks."
               actions={
                 <>
-                  <StatusPill tone="good">All online</StatusPill>
+                  <StatusPill tone="online">All online</StatusPill>
                   <StatusPill tone="fair">Some offline</StatusPill>
                   <StatusPill tone="neutral">All offline</StatusPill>
                 </>

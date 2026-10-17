@@ -5,6 +5,8 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 import type { ReportTypeConfig } from "@/web/lib/reportTypes";
+import { CARD } from "@/web/components/corteca/styles";
+import { cn } from "@/web/lib/utils";
 
 export type ReportRow = Record<string, unknown>;
 
@@ -25,9 +27,9 @@ function findField(keys: string[], ...candidates: string[]): string | undefined 
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-1.5 truncate text-3xl font-bold text-neutral-900">{value}</p>
+    <div className={cn(CARD, "p-5")}>
+      <p className="text-sm text-neutral-600">{label}</p>
+      <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums text-neutral-900">{value}</p>
       {sub && <p className="mt-1 truncate font-mono text-xs text-neutral-500">{sub}</p>}
     </div>
   );
@@ -102,7 +104,7 @@ export function ReportChart({ rows, config, dateRange }: ReportChartProps) {
 
       {/* Daily trend */}
       {dailyData.length > 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
+        <div className={cn(CARD, "p-5")}>
           <p className="mb-4 text-sm font-semibold text-neutral-800">Events Per Day</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyData} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
@@ -118,7 +120,7 @@ export function ReportChart({ rows, config, dateRange }: ReportChartProps) {
 
       {/* Group breakdown */}
       {groupData.length > 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
+        <div className={cn(CARD, "p-5")}>
           <p className="mb-4 text-sm font-semibold text-neutral-800">
             Events by {groupKey?.replace(/_/g, " ") ?? "Category"}
           </p>

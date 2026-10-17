@@ -1,5 +1,7 @@
 "use client";
 
+import { CARD } from "@/web/components/corteca/styles";
+import { cn } from "@/web/lib/utils";
 import type { SessionRecord } from "@/web/lib/sessionHistory";
 
 function fmtBytes(n: number): string {
@@ -23,15 +25,15 @@ export function SessionTable({ sessions }: Props) {
   const sorted = [...sessions].sort((a, b) => b.startTime - a.startTime).slice(0, 100);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-baseline justify-between border-b border-neutral-100 px-6 py-4">
-        <h2 className="text-sm font-semibold text-neutral-700">Session History</h2>
-        <span className="text-xs text-neutral-400">{sessions.length} total sessions recorded</span>
+    <div className={cn(CARD, "overflow-hidden")}>
+      <div className="flex items-baseline justify-between px-5 py-4">
+        <h2 className="text-lg font-semibold text-neutral-900">Session history</h2>
+        <span className="text-xs text-neutral-500">{sessions.length} total sessions recorded</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-100 text-left text-xs font-medium text-neutral-500">
+      <div className="max-h-[60vh] overflow-auto border-t border-neutral-200">
+        <table className="w-full min-w-max text-sm">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-neutral-100 text-left text-xs font-semibold text-neutral-700 shadow-[0_1px_0_0_#e5e7eb]">
               {["Started", "Duration", "API Calls", "Bytes Sent", "Bytes Received", "Throttled", "Status"].map((h) => (
                 <th key={h} className="whitespace-nowrap px-4 py-2.5">{h}</th>
               ))}
@@ -39,7 +41,7 @@ export function SessionTable({ sessions }: Props) {
           </thead>
           <tbody>
             {sorted.map((s) => (
-              <tr key={s.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/60">
+              <tr key={s.id} className="border-b border-neutral-100 bg-white last:border-0 hover:bg-neutral-50">
                 <td className="whitespace-nowrap px-4 py-3 text-neutral-900">
                   {new Date(s.startTime).toLocaleString()}
                 </td>

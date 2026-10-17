@@ -16,7 +16,7 @@ function consoleUrl(mac: string): string {
 const SEVERITY_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-800 border-red-200",
   major:    "bg-orange-100 text-orange-800 border-orange-200",
-  minor:    "bg-amber-100 text-amber-800 border-amber-200",
+  minor:    "bg-yellow-100 text-yellow-800 border-yellow-200",
   clear:    "bg-emerald-100 text-emerald-800 border-emerald-200",
 };
 
@@ -24,7 +24,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   const key = severity.toLowerCase();
   return (
     <span className={cn(
-      "inline-block rounded border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+      "inline-block rounded-full px-3 py-0.5 text-xs font-semibold capitalize",
       SEVERITY_BADGE[key] ?? "bg-neutral-100 text-neutral-700 border-neutral-200",
     )}>
       {severity}
@@ -143,8 +143,8 @@ export function AlarmTable({ alarms, severityFilter }: Props) {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+    <div className="flex flex-1 flex-col overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200">
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-500">
         <span>
           {sorted.length} of {alarms.length} alarm{alarms.length !== 1 ? "s" : ""}
           {hiddenCount > 0 && <span className="ml-1 text-neutral-400">({hiddenCount} filtered out)</span>}
@@ -152,7 +152,7 @@ export function AlarmTable({ alarms, severityFilter }: Props) {
         <button
           type="button"
           onClick={handleExport}
-          className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 shadow-sm transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-900"
+          className="rounded-lg border border-blue-600 bg-white px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
         >
           Export to Excel
         </button>
@@ -226,7 +226,7 @@ export function AlarmTable({ alarms, severityFilter }: Props) {
                         <button
                           type="button"
                           onClick={() => window.open(consoleUrl(alarm.ap!), "_blank", "noopener,noreferrer")}
-                          className="inline-flex items-center gap-1.5 rounded border border-neutral-200 bg-white px-2 py-1 text-xs font-medium text-neutral-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-600 bg-white px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
                           title="Open in Corteca Console"
                         >
                           <ConsoleIcon />

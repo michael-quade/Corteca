@@ -28,13 +28,13 @@ function selectionMatches(sel: SwSelection | null, releaseName: string, beaconMo
   return false;
 }
 
-// Corteca status pill per cell: mint = all online, yellow = some offline, grey = all offline.
+// Corteca status pill per cell: green = all online, yellow = some offline, grey = all offline.
 function CellBadge({ counts, isActive }: { counts: CellCounts; isActive: boolean }) {
   const { total, online, offline } = counts;
   if (total === 0) {
     return <span className="text-xs text-neutral-300">—</span>;
   }
-  const tone = offline === 0 ? "good" : online === 0 ? "neutral" : "fair";
+  const tone = offline === 0 ? "online" : online === 0 ? "neutral" : "fair";
   return (
     <StatusPill tone={tone} className={cn("min-w-[44px] justify-center", isActive && "ring-2 ring-blue-600 ring-offset-1")}>
       {total}

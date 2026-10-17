@@ -2,12 +2,15 @@
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { RebootChart, type RebootRow } from "@/web/components/RebootChart";
 import { RebootTable } from "@/web/components/tables/RebootTable";
 import { findDeviceIdInfo, injectAccountNames } from "@/web/lib/reportNameEnrichment";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { OutlineButton } from "@/web/components/corteca/OutlineButton";
+import { Notice } from "@/web/components/corteca/Notice";
 
 const NAME_BATCH = 50;
 
@@ -107,92 +110,67 @@ export default function RebootReportPage() {
     return accountNames.size > 0 ? ['Account Name', ...columns] : columns;
   }, [columns, accountNames]);
 
-  if (isLoading) {
-    return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
-      </main>
-    );
-  }
+  if (isLoading) return <CortecaLoading />;
 
   if (!isAuthenticated) return null;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 8H3M7 4l-4 4 4 4" />
-          </svg>
-          Back to Dashboard
-        </Link>
-      </div>
-
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900">Reboot Report</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            {fetching && !fetchedAt
-              ? "Fetching the most recent tenant-wide reboot report…"
-              : fetchedAt
-              ? `Fetched at ${fetchedAt.toLocaleTimeString()} · ${rows.length} record${rows.length !== 1 ? "s" : ""}`
-              : "Tenant-wide device reboot history from Corteca."}
-          </p>
-        </div>
-        <button
+    <CortecaPage
+      title="Reboot Report"
+      meta={
+        fetching && !fetchedAt
+          ? "Fetching the most recent tenant-wide reboot report…"
+          : fetchedAt
+          ? `Fetched at ${fetchedAt.toLocaleTimeString()} · ${rows.length} record${rows.length !== 1 ? "s" : ""}`
+          : "Tenant-wide device reboot history from Corteca."
+      }
+      actions={
+        <OutlineButton
           onClick={fetchReport}
           disabled={fetching}
-          className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+          icon={fetching ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" /> : <RefreshIcon />}
         >
-          {fetching ? (
-            <><span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />Refreshing…</>
-          ) : (
-            <><RefreshIcon />Refresh</>
-          )}
-        </button>
-      </div>
-
+          {fetching ? "Refreshing…" : "Refresh"}
+        </OutlineButton>
+      }
+    >
       {/* Full-page loading state (first fetch only) */}
       {fetching && rows.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 py-28">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-700" />
-          <p className="text-sm text-neutral-400">Fetching reboot report from Corteca…</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white py-28">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
+          <p className="text-sm text-neutral-500">Fetching reboot report from Corteca…</p>
         </div>
       )}
 
-      {error && (
-        <div className="mb-6 rounded-md bg-red-50 px-4 py-3">
-          <p className="text-sm font-medium text-red-700">Failed to fetch report</p>
-          <p className="mt-1 font-mono text-xs text-red-500">{error}</p>
-        </div>
-      )}
+      {error && <Notice tone="error" title="Failed to fetch report">{error}</Notice>}
 
       {!fetching && !error && fetchedAt && rows.length === 0 && (
-        <p className="py-16 text-center text-sm text-neutral-400">
-          The report returned no records.
-        </p>
+        <CortecaCard><p className="py-12 text-center text-sm text-neutral-500">The report returned no records.</p></CortecaCard>
       )}
 
       {rows.length > 0 && (
-        <div className="space-y-8">
+        <>
           <RebootChart rows={rows} />
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold text-neutral-900">Report Data</h2>
-              {loadingNames && (
-                <span className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <span className="h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-neutral-500" />
-                  Loading account names…
-                </span>
-              )}
-              {!loadingNames && accountNames.size > 0 && (
-                <span className="text-xs text-neutral-400">{accountNames.size} account name{accountNames.size !== 1 ? 's' : ''} resolved</span>
-              )}
-            </div>
+          <CortecaCard
+            title="Report data"
+            actions={
+              <>
+                {loadingNames && (
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                    <span className="h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-blue-600" />
+                    Loading account names…
+                  </span>
+                )}
+                {!loadingNames && accountNames.size > 0 && (
+                  <span className="text-xs text-neutral-500">{accountNames.size} account name{accountNames.size !== 1 ? "s" : ""} resolved</span>
+                )}
+              </>
+            }
+          >
             <RebootTable rows={enrichedRows as RebootRow[]} columns={enrichedColumns} />
-          </div>
-        </div>
+          </CortecaCard>
+        </>
       )}
-    </main>
+    </CortecaPage>
   );
 }

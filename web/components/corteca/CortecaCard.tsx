@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/web/lib/utils";
+import { CARD } from "@/web/components/corteca/styles";
 
 function InfoIcon({ text }: { text: string }) {
   return (
@@ -23,7 +24,7 @@ export function CortecaCard({ title, info, actions, children, className, id }: {
   id?: string;
 }) {
   return (
-    <section id={id} className={cn("rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(16,24,40,0.06),0_1px_2px_rgba(16,24,40,0.04)] ring-1 ring-neutral-200/60", className)}>
+    <section id={id} className={cn(CARD, "p-5", className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           {title && (

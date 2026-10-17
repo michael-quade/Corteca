@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import type { ReportDevice } from "@/app/api/network-map/route";
 import type { DeviceMarker } from "@/app/api/network-map/locate/route";
 import { DeploymentTable } from "@/web/components/tables/DeploymentTable";
-import { NetworkMapControls, type MapPhase } from "@/web/components/NetworkMapControls";
+import { NetworkMapControls, isMapBusy, type MapPhase } from "@/web/components/NetworkMapControls";
 import { NetworkMapSearch } from "@/web/components/NetworkMapSearch";
+import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
+import { CortecaCard } from "@/web/components/corteca/CortecaCard";
+import { OutlineButton } from "@/web/components/corteca/OutlineButton";
 import {
   continentFromLatLng, loadMarkerCache, saveMarkerCache, clearMarkerCache,
   loadNameCache, saveNameCache, clearNameClientCache,
@@ -211,56 +213,68 @@ export default function NetworkMapPage() {
     return rawRows.filter((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter);
   }, [rawRows, macFilter]);
 
-  if (isLoading || !isAuthenticated) {
-    return <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center"><span className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" /></main>;
-  }
+  if (isLoading || !isAuthenticated) return <CortecaLoading />;
+
+  const busy = isMapBusy(phase);
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10 space-y-6">
-      <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        Back to Dashboard
-      </Link>
-
+    <CortecaPage
+      title="Network Map"
+      meta={
+        <>
+          All managed WiFi networks plotted by location.
+          {reportCachedAt && <> Report as of <span className="font-medium text-neutral-700">{new Date(reportCachedAt).toLocaleString()}</span>.</>}
+        </>
+      }
+      actions={
+        <>
+          <OutlineButton onClick={() => load(true)} disabled={busy} title="Fetch a fresh deployment report from Corteca">
+            New Report
+          </OutlineButton>
+          <OutlineButton onClick={refreshLocations} disabled={busy} title="Re-locate all devices (clears location cache)">
+            Refresh Locations
+          </OutlineButton>
+        </>
+      }
+    >
       <NetworkMapControls
         phase={phase} stats={stats} located={located} progress={progress}
-        reportCachedAt={reportCachedAt} geoCount={geoCount} rateLimited={rateLimited} error={error}
-        onNewReport={() => load(true)}
-        onRefreshLocations={refreshLocations}
+        geoCount={geoCount} rateLimited={rateLimited} error={error}
         onRetry={() => load()}
       />
 
       {(phase === "locating" || phase === "done") && (
-        <>
-          <NetworkMapSearch
-            rawRows={rawRows} markerCache={markerCache}
-            onFlyTo={(lat, lng) => setFlyToTarget({ lat, lng })}
-            onClearFly={() => setFlyToTarget(null)}
-            onMacSelect={setMacFilter}
-            onResetView={() => setResetViewTrigger((n) => n + 1)}
-          />
-          <GlobalNetworkMap
-            devices={devices} progress={progress}
-            flyToTarget={flyToTarget}
-            resetViewTrigger={resetViewTrigger}
-            onPopupClose={() => setMacFilter(null)}
-          />
-        </>
+        <CortecaCard title="Map">
+          <div className="space-y-4">
+            <NetworkMapSearch
+              rawRows={rawRows} markerCache={markerCache}
+              onFlyTo={(lat, lng) => setFlyToTarget({ lat, lng })}
+              onClearFly={() => setFlyToTarget(null)}
+              onMacSelect={setMacFilter}
+              onResetView={() => setResetViewTrigger((n) => n + 1)}
+            />
+            <GlobalNetworkMap
+              devices={devices} progress={progress}
+              flyToTarget={flyToTarget}
+              resetViewTrigger={resetViewTrigger}
+              onPopupClose={() => setMacFilter(null)}
+            />
+          </div>
+        </CortecaCard>
       )}
 
       {rawRows.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-neutral-700">
-            Deployment Report
-            {macFilter && (
-              <span className="ml-2 font-normal text-blue-500">
-                — filtered to {rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter}
-              </span>
-            )}
-          </h2>
+        <CortecaCard
+          title="Deployment report"
+          actions={macFilter && (
+            <span className="text-sm text-blue-600">
+              Filtered to {rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter}
+            </span>
+          )}
+        >
           <DeploymentTable rows={tableRows} headers={csvHeaders} />
-        </div>
+        </CortecaCard>
       )}
-    </main>
+    </CortecaPage>
   );
 }

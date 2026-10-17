@@ -56,18 +56,18 @@ export function NavMenu() {
                   href={item.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    "flex items-start gap-2.5 rounded px-2.5 py-2 text-sm transition-colors",
+                    "flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                     active
-                      ? "bg-neutral-900 text-white"
+                      ? "bg-blue-50 text-blue-700"
                       : "text-neutral-700 hover:bg-neutral-100"
                   )}
                 >
-                  <span className={cn("mt-0.5 shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]", active ? "text-white" : "text-neutral-400")}>
+                  <span className={cn("mt-0.5 shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]", active ? "text-blue-600" : "text-neutral-400")}>
                     {item.icon}
                   </span>
                   <span className="flex flex-col">
                     <span className="font-medium leading-tight">{item.title}</span>
-                    <span className={cn("mt-0.5 text-xs leading-snug", active ? "text-neutral-300" : "text-neutral-400")}>
+                    <span className={cn("mt-0.5 text-xs leading-snug", active ? "text-blue-600/80" : "text-neutral-400")}>
                       {item.description}
                     </span>
                   </span>

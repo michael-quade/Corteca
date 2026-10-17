@@ -41,9 +41,9 @@ export function SubscriberSearch({ onSelect, selectedId }: SubscriberSearchProps
   }
 
   const inputClass = cn(
-    "flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm",
+    "flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm",
     "placeholder:text-neutral-400",
-    "focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-1",
+    "focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20",
     "disabled:opacity-50"
   );
 
@@ -64,7 +64,7 @@ export function SubscriberSearch({ onSelect, selectedId }: SubscriberSearchProps
       </form>
 
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>
       )}
 
       {searched && results.length === 0 && (
@@ -90,10 +90,10 @@ export function SubscriberSearch({ onSelect, selectedId }: SubscriberSearchProps
                   type="button"
                   onClick={() => onSelect(sub)}
                   className={cn(
-                    "w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors",
+                    "w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors",
                     isSelected
-                      ? "border-neutral-900 bg-neutral-50"
-                      : "border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50"
+                      ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600"
+                      : "border-neutral-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
