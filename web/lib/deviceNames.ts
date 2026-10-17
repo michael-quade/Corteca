@@ -78,3 +78,34 @@ export function categoryLabel(category: string | undefined): string | null {
   if (!category) return null;
   return CATEGORY_LABEL[category] ?? category.toLowerCase().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+/**
+ * Same names for the REST visualizer's topology data: mesh APs get `nickname`
+ * (buildTree prefers it for diagram/map labels) and members get the nickname as
+ * `alias` (the original kept as `autoAlias`).
+ */
+export function applyNamesToTopology<T extends { mesh: unknown; members?: unknown }>(data: T, names: DeviceNames | null): T {
+  if (!names || names.size === 0) return data;
+  const mesh = data.mesh as { aps?: Record<string, unknown>[] } | null;
+  const aps = mesh?.aps?.map((ap) => {
+    const alias = names.get(key(String(ap.macaddress ?? "")))?.alias;
+    return alias ? { ...ap, nickname: alias } : ap;
+  });
+  const rename = (list: unknown[]) => list.map((m) => {
+    const rec = m as Record<string, unknown>;
+    const alias = names.get(key(String(rec.id ?? rec.mac ?? "")))?.alias;
+    return alias ? { ...rec, alias, autoAlias: rec.alias } : rec;
+  });
+  const raw = data.members;
+  const members = Array.isArray(raw)
+    ? rename(raw)
+    : raw && Array.isArray((raw as { content?: unknown[] }).content)
+      ? { ...(raw as object), content: rename((raw as { content: unknown[] }).content) }
+      : raw;
+  return { ...data, mesh: mesh ? { ...mesh, aps } : mesh, members };
+}
+
+/** User nickname for a MAC, if the gateway has one. */
+export function nicknameFor(names: DeviceNames | null, mac: string): string | undefined {
+  return names?.get(key(mac))?.alias || undefined;
+}

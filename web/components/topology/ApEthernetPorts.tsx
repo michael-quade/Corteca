@@ -5,7 +5,7 @@ import { cn } from "@/web/lib/utils";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName, isEthernet } from "@/web/lib/topologyFlow";
 import type { Selection } from "@/web/lib/topologySelection";
-import { classifyPortHosts, gatewayPortOf, labelPorts, looksLikeSwitch, type PortAp, type PortHosts } from "@/web/lib/portHosts";
+import { beaconClientsLabel, classifyPortHosts, gatewayPortOf, labelPorts, looksLikeSwitch, staleLabel, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import { DetailSection, JumpButton } from "./DetailParts";
 import { useGatewayPorts } from "./useGatewayPorts";
 
@@ -23,7 +23,7 @@ function Row({ port, status, rate, device, deviceTitle, title }: {
   title?: string;
 }) {
   return (
-    <div className="grid grid-cols-[2.75rem_2.5rem_4.25rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
+    <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
       <span className="font-semibold text-neutral-800">{port}</span>
       {status ? (
         <span className={cn("w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold", status.up ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-500")}>
@@ -45,8 +45,10 @@ function PortDevice({ hosts, onSelect, open, onToggle }: {
   open: boolean;
   onToggle: () => void;
 }) {
-  const { beacons, via, direct } = hosts;
-  if (!beacons.length && !direct.length && !via.length) return null;
+  const { beacons, via, direct, stale } = hosts;
+  if (!beacons.length && !direct.length && !via.length) {
+    return stale.length ? <span className="text-neutral-400" title={staleTitle(hosts)}>{staleLabel(hosts)}</span> : null;
+  }
   if (!looksLikeSwitch(hosts)) {
     if (beacons.length === 1) {
       return <JumpButton onClick={() => onSelect({ kind: "ap", id: beacons[0].mac })}>{apShortName(beacons[0])}</JumpButton>;
@@ -73,13 +75,13 @@ function PortDevice({ hosts, onSelect, open, onToggle }: {
 }
 
 /** Expanded list under an inferred-switch row. */
-function SwitchDetails({ hosts, onSelect }: { hosts: PortHosts; onSelect: (s: Selection) => void }) {
+function SwitchDetails({ hosts, network, onSelect }: { hosts: PortHosts; network: PortContext; onSelect: (s: Selection) => void }) {
   return (
     <div className="mb-1.5 space-y-1 rounded-lg bg-neutral-50 px-3 py-2 text-xs">
       {hosts.beacons.map((b) => (
         <div key={b.mac} className="grid grid-cols-[1fr_auto] items-baseline gap-2">
           <span className="truncate whitespace-nowrap"><JumpButton onClick={() => onSelect({ kind: "ap", id: b.mac })}>{apShortName(b)}</JumpButton></span>
-          <span className="whitespace-nowrap text-[11px] text-neutral-400">Beacon · {hosts.via.filter((v) => v.ap.mac === b.mac).length} clients</span>
+          <span className="whitespace-nowrap text-[11px] text-neutral-400" title="Clients on this Beacon, from Corteca">{beaconClientsLabel(b, network)}</span>
         </div>
       ))}
       {hosts.direct.map((d) => (
@@ -127,12 +129,13 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
               port={label}
               status={{ up, label: up ? "Up" : p.status === "Down" ? "Empty" : p.status }}
               rate={up && p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined}
+              deviceTitle={hosts.stale.length && !p.upstream ? staleTitle(hosts) : undefined}
               device={p.upstream
                 ? <span className="text-neutral-600">Internet</span>
                 : <PortDevice hosts={hosts} onSelect={onSelect} open={open} onToggle={() => setOpenPort(open ? null : p.index)} />}
               title={[p.name, p.maxBitRate > 0 ? `max ${fmtMbps(p.maxBitRate)}` : null, p.duplexMode || null, p.macAddress || null].filter(Boolean).join(" · ")}
             />
-            {open && looksLikeSwitch(hosts) && <SwitchDetails hosts={hosts} onSelect={onSelect} />}
+            {open && looksLikeSwitch(hosts) && <SwitchDetails hosts={hosts} network={network} onSelect={onSelect} />}
           </div>
         );
       })}
@@ -188,7 +191,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
 export function ApEthernetPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void }) {
   return (
     <DetailSection title="Ethernet ports">
-      <div className="grid grid-cols-[2.75rem_2.5rem_4.25rem_1fr] gap-2 border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] gap-2 border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
         <span>Port</span><span>Link</span><span>Rate</span><span className="text-right">Device</span>
       </div>
       <div className="divide-y divide-neutral-100">

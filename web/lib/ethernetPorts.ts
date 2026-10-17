@@ -70,6 +70,7 @@ export function portContextFromTopology(topoData: NetworkTopologyData): PortCont
     mac: String(a.macaddress ?? "").toUpperCase().replace(/:/g, "-"),
     role: String(a.role ?? ""),
     model: String(a.ManufacturerModel ?? a.model ?? "Beacon").replace(/^nokia\s+wifi\s+/i, ""),
+    nickname: typeof a.nickname === "string" && a.nickname ? a.nickname : undefined,
   })).filter((a) => a.mac);
   const raw = topoData.members as unknown;
   const members = (Array.isArray(raw) ? raw : ((raw as { content?: unknown[] })?.content ?? [])) as Member[];

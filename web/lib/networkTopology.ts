@@ -60,7 +60,7 @@ function configModelLabel(configs: Record<string, unknown>, deviceId: string): s
 
 // ── Mesh AP info map ──────────────────────────────────────────────────────────
 
-interface ApInfo { mac: string; serial: string; label: string; model: string; online: boolean; isRoot: boolean }
+interface ApInfo { mac: string; serial: string; label: string; model: string; online: boolean; isRoot: boolean; nickname?: string }
 
 function buildMeshApMaps(mesh: unknown): { byMac: Map<string, ApInfo>; bySerial: Map<string, ApInfo> } {
   const byMac = new Map<string, ApInfo>();
@@ -77,7 +77,9 @@ function buildMeshApMaps(mesh: unknown): { byMac: Map<string, ApInfo>; bySerial:
     const label   = isRoot ? 'Gateway' : `Beacon ${ap.deviceIndex ?? ''}`.trim();
     const model   = String(ap.ManufacturerModel ?? ap.model ?? 'Access Point');
     const online  = String(ap.status ?? '').toLowerCase() === 'online' || ap['X_ALU-COM_Online'] === true;
-    const info: ApInfo = { mac, serial, label, model, online, isRoot };
+    // `nickname` is injected by applyNamesToTopology() from the gateway's device map.
+    const nickname = typeof ap.nickname === 'string' && ap.nickname ? ap.nickname : undefined;
+    const info: ApInfo = { mac, serial, label, model, online, isRoot, nickname };
     if (mac)    byMac.set(mac, info);
     if (serial) bySerial.set(serial, info);
   }
@@ -98,8 +100,8 @@ export function buildTree(
   function info(id: string): Pick<TreeNode, 'label' | 'model' | 'online'> {
     const cfgLabel = configModelLabel(configs, id);
     const m = byMac.get(id);
-    // label: config model name > mesh ManufacturerModel > fallback
-    const label = cfgLabel ?? (m ? parseModelLabel(m.model) : null) ?? id;
+    // label: user nickname > config model name > mesh ManufacturerModel > fallback
+    const label = m?.nickname ?? cfgLabel ?? (m ? parseModelLabel(m.model) : null) ?? id;
     const model = m?.model ?? 'Access Point';
     const online = m?.online ?? false;
     return { label, model, online };

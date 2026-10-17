@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { cn } from "@/web/lib/utils";
 import { clientName } from "@/web/lib/topologyFlow";
-import { classifyPortHosts, looksLikeSwitch, type PortContext, type PortHosts } from "@/web/lib/portHosts";
+import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleLabel, staleTitle, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import type { EthernetPort } from "@/app/api/network/[deviceId]/ethernet/route";
 
 export type { EthernetPort };
@@ -82,8 +82,10 @@ function ConnectedTo({ port, hosts, open, onToggle }: { port: EthernetPort; host
     const host = port.connectedHost;
     return <>{host?.hostName || host?.ipAddress || "—"}</>;
   }
-  const { beacons, direct, via } = hosts;
-  if (!beacons.length && !direct.length && !via.length) return <>—</>;
+  const { beacons, direct, via, stale } = hosts;
+  if (!beacons.length && !direct.length && !via.length) {
+    return stale.length ? <span className="text-neutral-400" title={staleTitle(hosts)}>{staleLabel(hosts)}</span> : <>—</>;
+  }
   if (!looksLikeSwitch(hosts)) {
     if (beacons.length === 1) return <>{apName(beacons[0])} <span className="text-neutral-400">(Beacon)</span></>;
     const d = direct[0];
@@ -97,14 +99,14 @@ function ConnectedTo({ port, hosts, open, onToggle }: { port: EthernetPort; host
   );
 }
 
-function SwitchRow({ hosts }: { hosts: PortHosts }) {
+function SwitchRow({ hosts, context }: { hosts: PortHosts; context: PortContext }) {
   return (
     <tr className="bg-neutral-50">
       <td colSpan={6} className="px-4 pb-3 pt-1">
         <div className="flex flex-wrap gap-2 text-xs">
           {hosts.beacons.map((b) => (
             <span key={b.mac} className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
-              {apName(b)} · Beacon · {hosts.via.filter((v) => v.ap.mac === b.mac).length} clients
+              {apName(b)} · Beacon · {beaconClientsLabel(b, context)} clients
             </span>
           ))}
           {hosts.direct.map((d) => (
@@ -206,7 +208,7 @@ export function EthernetPortPanel({ ports, context }: Props) {
                     <ConnectedTo port={port} hosts={hosts} open={open} onToggle={() => setOpenPort(open ? null : port.index)} />
                   </td>
                 </tr>
-                {open && hosts && looksLikeSwitch(hosts) && <SwitchRow hosts={hosts} />}
+                {open && hosts && looksLikeSwitch(hosts) && <SwitchRow hosts={hosts} context={context!} />}
                 </Fragment>
               );
             })}

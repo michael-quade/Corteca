@@ -1,7 +1,7 @@
 "use client";
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
@@ -9,6 +9,7 @@ import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/N
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
 import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
 import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, portContextFromTopology, type ApEthData } from "@/web/lib/ethernetPorts";
+import { applyNamesToTopology, nicknameFor, toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
 import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
 import type { Subscriber } from "@/web/lib/corteca/types";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
@@ -40,6 +41,21 @@ export default function NetworkVisualizerPage() {
 
   const [selected, setSelected]     = useState<Subscriber | null>(null);
   const [topoData, setTopoData]     = useState<NetworkTopologyData | null>(null);
+  // User-given Beacon/client names from the gateway's device map, fetched after the topology.
+  const [names, setNames]           = useState<DeviceNames | null>(null);
+  const named = useMemo(() => (topoData ? applyNamesToTopology(topoData, names) : null), [topoData, names]);
+
+  useEffect(() => {
+    if (!topoData?.rootDeviceId) return;
+    let cancelled = false;
+    fetchWithAuth(`/api/network/${encodeURIComponent(topoData.rootDeviceId)}/device-names`)
+      .then(async (r) => {
+        const body = (await r.json().catch(() => null)) as { devices?: Parameters<typeof toDeviceNames>[0] } | null;
+        if (!cancelled && r.ok && body?.devices) setNames(toDeviceNames(body.devices));
+      })
+      .catch(() => { /* names are optional */ });
+    return () => { cancelled = true; };
+  }, [topoData]);
   const [apEthData, setApEthData]   = useState<Record<string, ApEthData> | null>(null);
   const [fetching, setFetching]     = useState(false);
   const [error, setError]           = useState<string | null>(null);
@@ -47,6 +63,7 @@ export default function NetworkVisualizerPage() {
   async function handleSubscriberSelect(subscriber: Subscriber) {
     setSelected(subscriber);
     setTopoData(null);
+    setNames(null);
     setApEthData(null);
     setError(null);
 
@@ -115,7 +132,7 @@ export default function NetworkVisualizerPage() {
 
   const networkId = selected?.home_wifis?.[0]?.id;
   const online    = selected?.home_wifis?.[0]?.status?.online;
-  const portContext = topoData ? portContextFromTopology(topoData) : undefined;
+  const portContext = named ? portContextFromTopology(named) : undefined;
   const fullName  = selected
     ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
     : null;
@@ -167,13 +184,16 @@ export default function NetworkVisualizerPage() {
       {topoData && !fetching && (
         <>
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <CortecaCard title="Network topology"><NetworkTopologyMap data={topoData} /></CortecaCard>
-            <CortecaCard title="Network location"><NetworkMap data={topoData} /></CortecaCard>
+            <CortecaCard title="Network topology"><NetworkTopologyMap data={named ?? topoData} /></CortecaCard>
+            <CortecaCard title="Network location"><NetworkMap data={named ?? topoData} /></CortecaCard>
           </div>
           {apEthData && Object.values(apEthData).map((entry) => {
             const { ports, notice } = resolvePorts(entry, topoData);
             return (
-              <CortecaCard key={entry.mac} title={`${entry.label} — Ethernet ports`}>
+              <CortecaCard
+                key={entry.mac}
+                title={nicknameFor(names, entry.mac) ? `${nicknameFor(names, entry.mac)} · ${entry.label} — Ethernet ports` : `${entry.label} — Ethernet ports`}
+              >
                 <p className="-mt-3 mb-3 font-mono text-xs text-neutral-400">{entry.serial ? `S/N: ${entry.serial} · ` : ""}MAC: {entry.mac}</p>
                 {entry.error && <p className="text-sm text-red-600">{entry.error}</p>}
                 {notice && <p className="mb-2 text-xs italic text-neutral-500">{notice}</p>}
