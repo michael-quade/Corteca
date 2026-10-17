@@ -31,10 +31,3 @@ export function StatusPill({ tone, children, chevron, className }: {
     </span>
   );
 }
-
-/** Good / Fair / Poor from a percentage: ≥ good → Good, ≥ fair → Fair, else Poor. */
-export function toneForPercent(pct: number, good: number, fair: number): { tone: PillTone; label: string } {
-  if (pct >= good) return { tone: "good", label: "Good" };
-  if (pct >= fair) return { tone: "fair", label: "Fair" };
-  return { tone: "poor", label: "Poor" };
-}
