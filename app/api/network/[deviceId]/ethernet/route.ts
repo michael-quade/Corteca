@@ -12,6 +12,9 @@ export interface EthernetPort {
   duplexMode: string;
   macAddress: string;
   connectedHost: { hostName: string; ipAddress: string; macAddress: string } | null;
+  /** Every active host the gateway has learned on this port. More than one means
+   *  something that bridges sits behind it (a switch, or a mesh AP and its clients). */
+  connectedHosts?: { hostName: string; ipAddress: string; macAddress: string }[];
 }
 
 export async function GET(
@@ -64,12 +67,12 @@ export async function GET(
   const ifaceGroups = groupByObject(ifaceData, 'Device.Ethernet.Interface.');
   const hostGroups  = groupByObject(hostsData, 'Device.Hosts.Host.');
 
-  // Build host lookup by Layer1Interface
-  const hostByIface: Record<string, EthernetPort['connectedHost']> = {};
+  // All active hosts per physical interface (Layer1Interface).
+  const hostsByIface: Record<string, NonNullable<EthernetPort['connectedHosts']>> = {};
   for (const p of Object.values(hostGroups)) {
     const iface = (p.Layer1Interface ?? '').replace(/\.$/, '');
     if (iface && p.Active === 'true') {
-      hostByIface[iface] = { hostName: p.HostName ?? '', ipAddress: p.IPAddress ?? '', macAddress: p.PhysAddress ?? '' };
+      (hostsByIface[iface] ??= []).push({ hostName: p.HostName ?? '', ipAddress: p.IPAddress ?? '', macAddress: p.PhysAddress ?? '' });
     }
   }
 
@@ -88,7 +91,9 @@ export async function GET(
       currentBitRate: parseInt(p.CurrentBitRate ?? '0', 10),
       duplexMode:     p.DuplexMode  ?? '',
       macAddress:     p.MACAddress  ?? '',
-      connectedHost:  hostByIface[objPath.replace(/\.$/, '')] ?? null,
+      // Single-host view kept for the REST visualizer: only meaningful when exactly one host is on the port.
+      connectedHost:  (hostsByIface[objPath.replace(/\.$/, '')] ?? []).length === 1 ? hostsByIface[objPath.replace(/\.$/, '')][0] : null,
+      connectedHosts: hostsByIface[objPath.replace(/\.$/, '')] ?? [],
     });
   }
   // WAN (upstream) port first, then LAN ports by index

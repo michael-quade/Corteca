@@ -3,6 +3,8 @@
 
 import type { EthernetPort } from "@/web/components/EthernetPortPanel";
 import type { NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
+import type { Member } from "@/web/lib/corteca/types";
+import type { PortContext } from "@/web/lib/portHosts";
 
 export interface ApEthData { ports: EthernetPort[]; error?: string; notice?: string; label: string; serial: string; mac: string }
 
@@ -59,4 +61,17 @@ export function resolvePorts(entry: ApEthData, topoData: NetworkTopologyData): {
   const specPorts = getModelFallbackPorts(model);
   if (specPorts.length > 0) return { ports: specPorts, notice: `Port layout from ${model || "device"} spec — live status unavailable` };
   return { ports: [], notice: entry.notice };
+}
+
+/** Mesh APs + clients from the REST topology, for classifying hosts learned on each port. */
+export function portContextFromTopology(topoData: NetworkTopologyData): PortContext {
+  const mesh = (topoData.mesh ?? {}) as { aps?: Record<string, unknown>[] };
+  const aps = (mesh.aps ?? []).map((a) => ({
+    mac: String(a.macaddress ?? "").toUpperCase().replace(/:/g, "-"),
+    role: String(a.role ?? ""),
+    model: String(a.ManufacturerModel ?? a.model ?? "Beacon").replace(/^nokia\s+wifi\s+/i, ""),
+  })).filter((a) => a.mac);
+  const raw = topoData.members as unknown;
+  const members = (Array.isArray(raw) ? raw : ((raw as { content?: unknown[] })?.content ?? [])) as Member[];
+  return { aps, members };
 }

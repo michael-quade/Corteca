@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { cn } from "@/web/lib/utils";
+import { clientName } from "@/web/lib/topologyFlow";
+import { classifyPortHosts, looksLikeSwitch, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import type { EthernetPort } from "@/app/api/network/[deviceId]/ethernet/route";
 
 export type { EthernetPort };
@@ -69,11 +71,67 @@ function StatusCell({ port }: { port: EthernetPort }) {
   );
 }
 
+// ── Connected-to cell ─────────────────────────────────────────────────────────
+
+const apName = (a: { model: string; nickname?: string; mac: string }) => a.nickname ?? `${a.model} · ${a.mac.slice(-5)}`;
+
+/** One device, one Beacon, or an inferred switch (several devices learned on the port). */
+function ConnectedTo({ port, hosts, open, onToggle }: { port: EthernetPort; hosts: PortHosts | null; open: boolean; onToggle: () => void }) {
+  if (port.upstream) return <>WAN</>;
+  if (!hosts) {
+    const host = port.connectedHost;
+    return <>{host?.hostName || host?.ipAddress || "—"}</>;
+  }
+  const { beacons, direct, via } = hosts;
+  if (!beacons.length && !direct.length && !via.length) return <>—</>;
+  if (!looksLikeSwitch(hosts)) {
+    if (beacons.length === 1) return <>{apName(beacons[0])} <span className="text-neutral-400">(Beacon)</span></>;
+    const d = direct[0];
+    return <>{d ? (d.member ? clientName(d.member) : d.hostName || d.mac) : "—"}</>;
+  }
+  const total = beacons.length + direct.length;
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={open} className="font-medium text-blue-600 hover:underline">
+      Switch · {beacons.length && !direct.length ? `${beacons.length} Beacons` : `${total} devices`} {open ? "▴" : "▾"}
+    </button>
+  );
+}
+
+function SwitchRow({ hosts }: { hosts: PortHosts }) {
+  return (
+    <tr className="bg-neutral-50">
+      <td colSpan={6} className="px-4 pb-3 pt-1">
+        <div className="flex flex-wrap gap-2 text-xs">
+          {hosts.beacons.map((b) => (
+            <span key={b.mac} className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
+              {apName(b)} · Beacon · {hosts.via.filter((v) => v.ap.mac === b.mac).length} clients
+            </span>
+          ))}
+          {hosts.direct.map((d) => (
+            <span key={d.mac} className="rounded-full bg-white px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200" title={d.mac}>
+              {d.member ? clientName(d.member) : d.hostName || d.mac}
+            </span>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[11px] text-neutral-400">
+          Inferred: several devices share this port, so a switch or pass-through device is connected.
+          {hosts.via.length > 0 && ` ${hosts.via.length} more devices reach the gateway through these Beacons.`}
+        </p>
+      </td>
+    </tr>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { ports: EthernetPort[] }
+interface Props {
+  ports: EthernetPort[];
+  /** Mesh APs and clients, so hosts learned on a port can be split into Beacons / devices / switch. */
+  context?: PortContext;
+}
 
-export function EthernetPortPanel({ ports }: Props) {
+export function EthernetPortPanel({ ports, context }: Props) {
+  const [openPort, setOpenPort] = useState<number | null>(null);
   const labeled = useMemo(() => {
     let lanIdx = 0;
     return ports.map((p) => ({ ...p, label: p.upstream ? "WAN" : `${++lanIdx}` }));
@@ -125,10 +183,11 @@ export function EthernetPortPanel({ ports }: Props) {
           </thead>
           <tbody>
             {labeled.map((port) => {
-              const host = port.connectedHost;
-              const connTo = port.upstream ? "WAN" : host?.hostName || host?.ipAddress || (port.status === "Up" ? "—" : "—");
+              const hosts = context && port.connectedHosts ? classifyPortHosts(port, context) : null;
+              const open = openPort === port.index;
               return (
-                <tr key={port.index} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/60">
+                <Fragment key={port.index}>
+                <tr className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/60">
                   <td className="px-4 py-3 font-medium text-neutral-900 whitespace-nowrap">
                     {port.upstream ? "WAN" : `Port ${port.label}`}
                     {!port.enable && <span className="ml-1.5 text-[10px] text-neutral-400">(disabled)</span>}
@@ -143,8 +202,12 @@ export function EthernetPortPanel({ ports }: Props) {
                   </td>
                   <td className="px-4 py-3 text-neutral-700">{fmtNeg(port.currentBitRate, port.status)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-neutral-500 whitespace-nowrap">{port.macAddress || "—"}</td>
-                  <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{connTo}</td>
+                  <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">
+                    <ConnectedTo port={port} hosts={hosts} open={open} onToggle={() => setOpenPort(open ? null : port.index)} />
+                  </td>
                 </tr>
+                {open && hosts && looksLikeSwitch(hosts) && <SwitchRow hosts={hosts} />}
+                </Fragment>
               );
             })}
           </tbody>

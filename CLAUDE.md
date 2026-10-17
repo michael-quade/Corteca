@@ -159,7 +159,7 @@ Nokia's Corteca AI MCP server (`corteca-mcp-server`, R26.03) exposes Corteca net
 - `retrieve-network-data` lets the agent choose APIs, so an expected `apiId` can be missing or `ok: false` — always handle that.
 - Mesh data has no explicit tree: each AP's `meshbackhaulnodes` lists its downstream AP serials (`web/lib/mcpNetwork.ts` builds the tree from it).
 - **Nicknames are not in MCP** (or the REST topology/mesh/members endpoints), but they **are on the gateway**: USP `Device.X_ALU-COM_LAN_DEVICE_MAP.DeviceMap.{i}.HostAlias` holds the user-given names the Corteca console shows — Beacons (`DeviceCategory = WIFI_EXTENDER`, e.g. "MBR", "Kitchen") and clients (e.g. "TV Living Room") — plus `DeviceCategory`, `Manufacturer`, `ModelName`. `Device.X_ALU-COM_BeaconInfo.Beacon.{i}.FriendlyName` and the Beacon's own `X_ALU-COM_FriendlyName` are empty/defaults. The MCP visualizer reads it via `GET /api/network/[gatewayMac]/device-names` after the MCP data loads and applies it with `applyDeviceNames()` (`web/lib/deviceNames.ts`): AP cards show the nickname with the model as the kicker, client aliases are replaced (the original kept as "Detected name"), and the client panel adds "Detected as" (manufacturer · model — the gateway's own guess, sometimes wrong) and category. If the call fails (gateway offline), formal model names are kept (never sequential numbering).
-- **Ethernet ports:** MCP has no per-port data. The **gateway** exposes live `Device.Ethernet.Interface.*` + `Device.Hosts.Host.*` (via `/api/network/[deviceId]/ethernet`). **Mesh APs don't** — their data model only has `DeviceInfo`/`X_ALU-COM_Wifi` (Ethernet isn't in the TR-181 Data Elements yet). For mesh APs the visualizer builds ports from MCP members (wired clients' `port_number`, 1 = WAN so 2 = LAN 1, and rx rate) plus the Ethernet backhaul link — labelled as reported, not live; empty ports can't be confirmed.
+- **Ethernet ports:** MCP has no per-port data. The **gateway** exposes live `Device.Ethernet.Interface.*` + `Device.Hosts.Host.*` (via `/api/network/[deviceId]/ethernet`). **Mesh APs don't** — their data model only has `DeviceInfo`/`X_ALU-COM_Wifi` (Ethernet isn't in the TR-181 Data Elements yet). For mesh APs the visualizer builds ports from MCP members (wired clients' `port_number`, 1 = WAN so 2 = LAN 1, and rx rate) plus the Ethernet backhaul link — labelled as reported, not live; empty ports can't be confirmed. **A gateway port's host list includes everything bridged behind it** — with Ethernet-backhauled Beacons that is every Beacon client too. `/api/network/[deviceId]/ethernet` returns all active hosts per port (`connectedHosts`; `connectedHost` only when exactly one), and `web/lib/portHosts.ts` splits them using MCP data into Beacons on the port, devices reached via those Beacons, and direct devices. ≥2 Beacons/direct devices on a port ⇒ shown as an inferred "Switch"; a mesh AP's Ethernet uplink is labelled with the gateway port it lands on ("Gateway LAN 1 (switch)"). The REST visualizer's `EthernetPortPanel` takes the same classification via its optional `context` prop (`portContextFromTopology()` in `web/lib/ethernetPorts.ts`).
 - Units: link/client `data-rate-*`, `derivedData.dataRate|phyRate` and client `rx/tx_statistics.rate` are kbps; `*-bytes` / `statistics.bytes` are cumulative byte counters. From the AP's view, its tx is the client's download.
 - Topology canvas rule: **no edge may run under a card it doesn't connect, and no backhaul label may cover a card or another label, in any layout.** Tree/Sideways draw edges along ELK's orthogonal routes (never bezier between handles); Radial uses straight routes after `spreadRadial()`. Edge components must take their path and label position from `edge.data.points` + `labelBox()`, not from React Flow's `sourceX/targetX`.
 - In-app usage: `/mcp-network-visualizer` → `GET /api/mcp/network/[homeWifiId]` → `retrieve-network-data`.
@@ -257,6 +257,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured), `layoutFlowGraph()` (ELK; returns node positions **and** edge routes in `edge.data.points`), `backhaulLabel()` |
 | `edgeGeometry.ts` | Edge/label geometry for the topology canvas: `labelBox()` (where a backhaul label sits), `layoutProblems()` (edge under a card, label covering a card/label), `spreadRadial()` (scales a radial layout out from the gateway until `layoutProblems()` is empty) |
 | `ethernetPorts.ts` | REST visualizer Ethernet ports: live → device config → model-spec fallback (`resolvePorts`) |
+| `portHosts.ts` | Classifies hosts learned on a gateway Ethernet port (Beacons / via-Beacon / direct), infers switches, finds the gateway port a mesh AP's backhaul uses |
 | `deviceNames.ts` | `applyDeviceNames()` — overlays gateway device-map nicknames onto an `McpNetwork` (AP `nickname`, client `alias`, identity fields) |
 | `clientInsights.ts` | Client traffic, supported bands, `bandUpgrade()` (client on a slower band than it and its AP support for that SSID), IEEE disconnect-reason text, top talkers per AP |
 | `topologySelection.ts` | Selection types, path highlight (`highlightFor`), client filters, search, keyboard order, and URL (de)serialisation for the MCP visualizer |
@@ -388,6 +389,7 @@ web/
       BackhaulEdge.tsx            # Quality-coloured, rate-weighted backhaul edge drawn along its layout route
       RouteEdge.tsx               # AP → client-card connector; routePath() rounds orthogonal routes
       ApEthernetPorts.tsx         # AP detail panel "Ethernet ports": gateway live (REST, fetched on open, cached), mesh APs from MCP wired clients
+      useGatewayPorts.ts          # Cached fetch of the gateway's live Ethernet ports (shared by gateway and mesh AP panels)
       TopologyLegend.tsx
       ZoomControls.tsx            # +/−/Fit buttons shown beside the legend
       TopologyToolbar.tsx         # Client search, filter chips, layout switch, full screen
@@ -449,6 +451,7 @@ web/
     fetchWithAuth.ts
     clientInsights.ts
     deviceNames.ts
+    portHosts.ts
     ethernetPorts.ts
     edgeGeometry.ts
     geoUtils.ts

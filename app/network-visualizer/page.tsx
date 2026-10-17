@@ -8,7 +8,7 @@ import { SubscriberSearch } from "@/web/components/SubscriberSearch";
 import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
 import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
-import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, type ApEthData } from "@/web/lib/ethernetPorts";
+import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, portContextFromTopology, type ApEthData } from "@/web/lib/ethernetPorts";
 import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
 import type { Subscriber } from "@/web/lib/corteca/types";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
@@ -115,6 +115,7 @@ export default function NetworkVisualizerPage() {
 
   const networkId = selected?.home_wifis?.[0]?.id;
   const online    = selected?.home_wifis?.[0]?.status?.online;
+  const portContext = topoData ? portContextFromTopology(topoData) : undefined;
   const fullName  = selected
     ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
     : null;
@@ -177,7 +178,7 @@ export default function NetworkVisualizerPage() {
                 {entry.error && <p className="text-sm text-red-600">{entry.error}</p>}
                 {notice && <p className="mb-2 text-xs italic text-neutral-500">{notice}</p>}
                 {!entry.error && ports.length === 0 && <p className="text-sm text-neutral-500">No Ethernet data returned.</p>}
-                {ports.length > 0 && <EthernetPortPanel ports={ports} />}
+                {ports.length > 0 && <EthernetPortPanel ports={ports} context={portContext} />}
               </CortecaCard>
             );
           })}

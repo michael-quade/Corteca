@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
+import { useState } from "react";
 import { cn } from "@/web/lib/utils";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName, isEthernet } from "@/web/lib/topologyFlow";
 import type { Selection } from "@/web/lib/topologySelection";
-import type { EthernetPort } from "@/web/components/EthernetPortPanel";
+import { classifyPortHosts, gatewayPortOf, labelPorts, looksLikeSwitch, type PortAp, type PortHosts } from "@/web/lib/portHosts";
 import { DetailSection, JumpButton } from "./DetailParts";
-
-// Live port status per gateway MAC, kept while the page is open.
-const liveCache = new Map<string, EthernetPort[] | "error">();
-
-const normMac = (m: string) => m.toUpperCase().replace(/[:\-]/g, "");
+import { useGatewayPorts } from "./useGatewayPorts";
 
 function fmtMbps(mbps: number): string {
   return mbps >= 1000 ? `${mbps % 1000 ? (mbps / 1000).toFixed(1) : mbps / 1000} Gbps` : `${mbps} Mbps`;
@@ -41,24 +36,74 @@ function Row({ port, status, rate, device, deviceTitle, title }: {
   );
 }
 
+const apShortName = (a: PortAp) => a.nickname ?? `${a.model} · ${a.mac.slice(-5)}`;
+
+/** Device cell for a gateway port: one device, one Beacon, or an inferred switch that expands. */
+function PortDevice({ hosts, onSelect, open, onToggle }: {
+  hosts: PortHosts;
+  onSelect: (s: Selection) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const { beacons, via, direct } = hosts;
+  if (!beacons.length && !direct.length && !via.length) return null;
+  if (!looksLikeSwitch(hosts)) {
+    if (beacons.length === 1) {
+      return <JumpButton onClick={() => onSelect({ kind: "ap", id: beacons[0].mac })}>{apShortName(beacons[0])}</JumpButton>;
+    }
+    const d = direct[0];
+    if (d?.member) return <JumpButton onClick={() => onSelect({ kind: "client", id: d.member!.id })}>{clientName(d.member)}</JumpButton>;
+    if (d) return <span className="text-neutral-700">{d.hostName || d.mac}</span>;
+  }
+  const total = beacons.length + direct.length;
+  const summary = beacons.length && direct.length
+    ? `${total} devices`
+    : beacons.length ? `${beacons.length} Beacons` : `${direct.length} devices`;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      title={`Switch: ${beacons.length} Beacon(s), ${direct.length} other device(s)`}
+      className="whitespace-nowrap font-medium text-blue-600 hover:underline"
+    >
+      Switch · {summary} {open ? "▴" : "▾"}
+    </button>
+  );
+}
+
+/** Expanded list under an inferred-switch row. */
+function SwitchDetails({ hosts, onSelect }: { hosts: PortHosts; onSelect: (s: Selection) => void }) {
+  return (
+    <div className="mb-1.5 space-y-1 rounded-lg bg-neutral-50 px-3 py-2 text-xs">
+      {hosts.beacons.map((b) => (
+        <div key={b.mac} className="grid grid-cols-[1fr_auto] items-baseline gap-2">
+          <span className="truncate whitespace-nowrap"><JumpButton onClick={() => onSelect({ kind: "ap", id: b.mac })}>{apShortName(b)}</JumpButton></span>
+          <span className="whitespace-nowrap text-[11px] text-neutral-400">Beacon · {hosts.via.filter((v) => v.ap.mac === b.mac).length} clients</span>
+        </div>
+      ))}
+      {hosts.direct.map((d) => (
+        <div key={d.mac} className="grid grid-cols-[1fr_auto] items-baseline gap-2">
+          <span className="truncate whitespace-nowrap">
+            {d.member
+              ? <JumpButton onClick={() => onSelect({ kind: "client", id: d.member!.id })}>{clientName(d.member)}</JumpButton>
+              : <span className="text-neutral-700">{d.hostName || d.mac}</span>}
+          </span>
+          <span className="font-mono text-[10px] text-neutral-400">{d.mac.toUpperCase()}</span>
+        </div>
+      ))}
+      <p className="pt-0.5 text-[10px] text-neutral-400">
+        Inferred: several devices share this port, so a switch or pass-through device is connected.
+        {hosts.via.length > 0 && ` ${hosts.via.length} more devices reach the gateway through these Beacons.`}
+      </p>
+    </div>
+  );
+}
+
 /** Gateway: live TR-181 Ethernet status via the REST route (fetched when the panel opens). */
 function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void }) {
-  const [ports, setPorts] = useState<EthernetPort[] | "error" | null>(liveCache.get(ap.mac) ?? null);
-
-  useEffect(() => {
-    if (liveCache.has(ap.mac)) { setPorts(liveCache.get(ap.mac)!); return; }
-    let cancelled = false;
-    setPorts(null);
-    fetchWithAuth(`/api/network/${encodeURIComponent(ap.mac)}/ethernet`)
-      .then(async (r) => {
-        const body = await r.json().catch(() => null) as { ports?: EthernetPort[] } | null;
-        const result = r.ok && body?.ports?.length ? body.ports : "error";
-        liveCache.set(ap.mac, result);
-        if (!cancelled) setPorts(result);
-      })
-      .catch(() => { if (!cancelled) setPorts("error"); });
-    return () => { cancelled = true; };
-  }, [ap.mac]);
+  const ports = useGatewayPorts(ap.mac);
+  const [openPort, setOpenPort] = useState<number | null>(null);
 
   if (ports === null) {
     return (
@@ -70,28 +115,25 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
   }
   if (ports === "error") return <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Live port status unavailable — showing wired devices reported by Corteca." />;
 
-  const memberByMac = new Map(network.members.map((m) => [normMac(m.id), m]));
-  let lan = 0;
   return (
     <>
-      {ports.map((p) => {
-        const label = p.upstream ? "WAN" : `LAN ${++lan}`;
-        const host = p.connectedHost;
-        const member = host?.macAddress ? memberByMac.get(normMac(host.macAddress)) : undefined;
-        const name = member ? clientName(member) : host ? (host.hostName || host.macAddress) : undefined;
+      {labelPorts(ports).map(({ port: p, label }) => {
         const up = p.status === "Up";
+        const hosts = classifyPortHosts(p, network);
+        const open = openPort === p.index;
         return (
-          <Row
-            key={p.index}
-            port={label}
-            status={{ up, label: up ? "Up" : p.status === "Down" ? "Empty" : p.status }}
-            rate={up && p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined}
-            deviceTitle={name}
-            device={p.upstream ? <span className="text-neutral-600">Internet</span>
-              : member ? <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{name}</JumpButton>
-              : name && <span className="text-neutral-700">{name}</span>}
-            title={[p.name, p.maxBitRate > 0 ? `max ${fmtMbps(p.maxBitRate)}` : null, p.duplexMode || null, p.macAddress || null].filter(Boolean).join(" · ")}
-          />
+          <div key={p.index}>
+            <Row
+              port={label}
+              status={{ up, label: up ? "Up" : p.status === "Down" ? "Empty" : p.status }}
+              rate={up && p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined}
+              device={p.upstream
+                ? <span className="text-neutral-600">Internet</span>
+                : <PortDevice hosts={hosts} onSelect={onSelect} open={open} onToggle={() => setOpenPort(open ? null : p.index)} />}
+              title={[p.name, p.maxBitRate > 0 ? `max ${fmtMbps(p.maxBitRate)}` : null, p.duplexMode || null, p.macAddress || null].filter(Boolean).join(" · ")}
+            />
+            {open && looksLikeSwitch(hosts) && <SwitchDetails hosts={hosts} onSelect={onSelect} />}
+          </div>
         );
       })}
       <p className="pt-1 text-[11px] text-neutral-400">Live status from the gateway (TR-181).</p>
@@ -106,6 +148,11 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
  */
 function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void; note: string }) {
   const uplink = network.backhaul.find((l) => l.childMac === ap.mac);
+  // Where this AP's Ethernet backhaul lands on the gateway, from the gateway's host table.
+  const gatewayMac = network.aps.find((a) => a.role === "root")?.mac;
+  const gatewayPorts = useGatewayPorts(uplink && isEthernet(uplink) && ap.role !== "root" ? gatewayMac : undefined);
+  const landing = Array.isArray(gatewayPorts) ? gatewayPortOf(ap.mac, gatewayPorts, network) : null;
+  const parentIsGateway = uplink?.parentMac === gatewayMac;
   const wired = network.members
     .filter((m) => m.connected && m.device_id === ap.mac && String(m.type ?? "").toLowerCase() === "ethernet")
     .map((m) => ({ m, port: Number((m as unknown as { port_number?: number }).port_number) || null, kbps: Number((m as unknown as { rx_statistics?: { rate?: number } }).rx_statistics?.rate) || 0 }))
@@ -115,7 +162,9 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
     <>
       {uplink && isEthernet(uplink) && (
         <Row port="Uplink" status={{ up: true, label: "Up" }} rate={uplink.rateMbps ? fmtMbps(uplink.rateMbps) : undefined}
-          device={<span className="text-neutral-600">Backhaul</span>} title="Ethernet backhaul to the parent AP (physical port not reported)" />
+          device={<span className="text-neutral-600">{landing && parentIsGateway ? `Gateway ${landing.label}${landing.viaSwitch ? " (switch)" : ""}` : "Backhaul"}</span>}
+          deviceTitle={landing && parentIsGateway ? `Backhaul reaches the gateway on ${landing.label}${landing.viaSwitch ? ", through a switch shared with other devices" : ""}` : undefined}
+          title="Ethernet backhaul to the parent AP" />
       )}
       {wired.map(({ m, port, kbps }) => (
         <Row
