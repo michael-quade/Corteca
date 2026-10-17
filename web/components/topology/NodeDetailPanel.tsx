@@ -93,7 +93,7 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
       <DetailRow label="To">
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
       </DetailRow>
-      <DetailRow label="Medium">{eth ? "Ethernet" : link.medium ? link.medium.replace(/^wifi-/i, "WiFi ") : "WiFi"}</DetailRow>
+      <DetailRow label="Medium">{eth ? "Ethernet" : link.band ? `WiFi · ${link.band}` : "WiFi"}</DetailRow>
       {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}
       {!eth && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
       <DetailRow label="Data rate">{formatMbps(link.rateMbps)}</DetailRow>
