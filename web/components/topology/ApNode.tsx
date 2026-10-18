@@ -66,6 +66,19 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
         </p>
       </div>
 
+      {ap.ai && ap.ai.issues.length > 0 && (
+        <span
+          className="absolute -left-2 -top-2 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-amber-400 px-1.5 text-[11px] font-semibold text-amber-950 shadow"
+          title={`AI analysis — ${ap.ai.issues.length} finding${ap.ai.issues.length === 1 ? "" : "s"}:\n${ap.ai.issues.join("\n")}`}
+          aria-label={`${ap.ai.issues.length} AI analysis findings`}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+          </svg>
+          {ap.ai.issues.length}
+        </span>
+      )}
+
       <span
         className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-[11px] font-semibold text-white shadow"
         title={`${ap.clientCount} connected clients`}

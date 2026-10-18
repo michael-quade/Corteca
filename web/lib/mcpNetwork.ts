@@ -3,6 +3,9 @@
 
 import type { NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import type { Member } from "@/web/lib/corteca/types";
+import type { AssociationStandard } from "@/web/lib/wifiAssociation";
+import type { ApRadio } from "@/web/lib/wifiRadios";
+import type { AiNotes } from "@/web/lib/aiAnalysis";
 
 export interface McpApiResult { apiId: string; ok: boolean; status: number; data: unknown }
 
@@ -28,6 +31,10 @@ export interface McpAccessPoint {
   /** fronthaul SSID → bands it is broadcast on */
   ssidBands: Record<string, string[]>;
   clientCount: number;
+  /** Channel / width / airtime per radio, from the gateway (applyWifiDetails). */
+  radios?: ApRadio[];
+  /** Lines about this AP from the AI analysis report (applyAiReport). */
+  ai?: AiNotes;
 }
 
 export interface McpBackhaulLink {
@@ -38,6 +45,8 @@ export interface McpBackhaulLink {
   band: string | null;
   /** The child AP's backhaul station MAC (its endpoint BSSID, lowercase colon form) — keys the gateway's per-station records. */
   childStaMac: string | null;
+  /** Negotiated WiFi standard, from the gateway (applyWifiDetails); absent when unknown. */
+  standard?: AssociationStandard;
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
   phyRateMbps: number | null;

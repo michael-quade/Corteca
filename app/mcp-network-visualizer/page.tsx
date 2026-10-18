@@ -7,22 +7,22 @@ import { useAuth } from "@/web/contexts/AuthContext";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
 import { McpTopBar } from "@/web/components/McpTopBar";
+import { McpDebugPanel } from "@/web/components/McpDebugPanel";
+import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
 import { RecentNetworksDrawer } from "@/web/components/RecentNetworksDrawer";
 import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
-import { applyDeviceNames, toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
+import { applyDeviceNames } from "@/web/lib/deviceNames";
+import { applyWifiDetails } from "@/web/lib/wifiDetails";
+import { useGatewayExtras } from "@/web/lib/useGatewayExtras";
+import { useAiAnalysis } from "@/web/lib/useAiAnalysis";
+import { applyAiReport } from "@/web/lib/aiAnalysis";
 import { clearRecentNetworks, forgetNetwork, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
 import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
 import type { Subscriber } from "@/web/lib/corteca/types";
 
-interface McpResponse {
-  homeWifiId: string;
-  query: string;
-  durationMs: number;
-  summary: string | null;
-  payload: unknown;
-}
+import type { McpResponse } from "@/web/components/McpDebugPanel";
 
 const TopologyCanvas = dynamic(
   () => import("@/web/components/topology/TopologyCanvas").then((m) => ({ default: m.TopologyCanvas })),
@@ -36,33 +36,6 @@ const TopologyCanvas = dynamic(
   }
 );
 
-function McpDebugPanel({ response }: { response: McpResponse }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-medium text-amber-800"
-      >
-        <span>Raw MCP response (debug) · retrieve-network-data · {(response.durationMs / 1000).toFixed(1)}s</span>
-        <span>{open ? "▲ hide" : "▼ show"}</span>
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-amber-200 p-4">
-          <p className="font-mono text-xs text-amber-700">query: “{response.query}”</p>
-          {response.summary && (
-            <p className="whitespace-pre-wrap rounded bg-white p-2 text-xs text-neutral-700 ring-1 ring-amber-200">{response.summary}</p>
-          )}
-          <pre className="max-h-96 overflow-auto rounded bg-white p-2 text-xs text-neutral-700 ring-1 ring-amber-200">
-            {JSON.stringify(response.payload, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function McpNetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const { view, update, ready } = useTopologyViewState();
@@ -73,28 +46,18 @@ export default function McpNetworkVisualizerPage() {
   const [error, setError]       = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [recent, setRecent]     = useState<RecentNetwork[]>([]);
-  // User-given Beacon/client names from the gateway, fetched after the MCP data.
-  const [names, setNames]       = useState<DeviceNames | null>(null);
 
   useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
-  const network = useMemo(
-    () => (response ? applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names) : null),
-    [response, names]
-  );
-
-  // Names live on the gateway's own data model (not in MCP); a failure just keeps model names.
-  useEffect(() => {
-    if (!response) return;
-    let cancelled = false;
-    fetchWithAuth(`/api/network/${encodeURIComponent(response.homeWifiId)}/device-names`)
-      .then(async (r) => {
-        const body = (await r.json().catch(() => null)) as { devices?: Parameters<typeof toDeviceNames>[0] } | null;
-        if (!cancelled && r.ok && body?.devices) setNames(toDeviceNames(body.devices));
-      })
-      .catch(() => { /* names are optional */ });
-    return () => { cancelled = true; };
-  }, [response]);
+  // Names and WiFi details come from the gateway, after each MCP load.
+  const { names, wifi } = useGatewayExtras(response?.homeWifiId ?? null, response);
+  // On-demand Corteca AI analysis / troubleshooting; findings land on the devices they mention.
+  const ai = useAiAnalysis(response?.homeWifiId ?? null);
+  const network = useMemo(() => {
+    if (!response) return null;
+    const base = applyWifiDetails(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), wifi);
+    return applyAiReport(base, ai.analysis.result);
+  }, [response, names, wifi, ai.analysis.result]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     const networkId = subscriber.home_wifis?.[0]?.id;
@@ -119,7 +82,6 @@ export default function McpNetworkVisualizerPage() {
 
   async function loadNetwork(networkId: string) {
     setResponse(null);
-    setNames(null);
     setError(null);
     setFetching(true);
     try {
@@ -202,6 +164,11 @@ export default function McpNetworkVisualizerPage() {
             onSelectSubscriber={handleSubscriberSelect}
             onRefresh={response && !fetching ? () => void refreshNetwork() : undefined}
             refreshing={refreshing}
+            onAiAnalysis={response && !fetching ? () => {
+              document.getElementById("ai-analysis")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              if (!ai.analysis.result && !ai.analysis.running) void ai.analyze();
+            } : undefined}
+            aiRunning={ai.analysis.running}
           />
 
           {!networkId && !fetching && (
@@ -248,6 +215,13 @@ export default function McpNetworkVisualizerPage() {
               ) : (
                 <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>
               )}
+
+              <AiAnalysisCard
+                analysis={ai.analysis}
+                diagnosis={ai.diagnosis}
+                onAnalyze={() => void ai.analyze()}
+                onTroubleshoot={(q) => void ai.troubleshoot(q)}
+              />
 
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold text-neutral-700">Access Points ({network.aps.length})</h2>

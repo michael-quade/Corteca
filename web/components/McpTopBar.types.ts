@@ -8,4 +8,7 @@ export interface McpTopBarProps {
   /** Re-read the current network, keeping the view. Hidden until a network has loaded. */
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Jump to the AI analysis card (running it if it hasn't run). Hidden until a network has loaded. */
+  onAiAnalysis?: () => void;
+  aiRunning?: boolean;
 }

@@ -6,7 +6,8 @@ import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
 import { ApEthernetPorts } from "./ApEthernetPorts";
-import { useBackhaulStandards } from "./useBackhaulStandards";
+import { ApRadios } from "./ApRadios";
+import { AiNotesSection } from "./AiNotesSection";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -41,6 +42,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         <DetailRow label="Last boot">{formatDate(ap.lastBoot)}</DetailRow>
         <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
       </DetailSection>
+      <AiNotesSection notes={ap.ai} />
       {talkers.length > 0 && (
         <DetailSection title="Top clients by traffic">
           {talkers.map(({ member, total }) => (
@@ -51,10 +53,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         </DetailSection>
       )}
       <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
-      <DetailSection title="Radios">
-        <DetailRow label="Bands">{ap.bands.join(" · ")}</DetailRow>
-        <DetailRow label="SSIDs">{ap.ssids.join(", ")}</DetailRow>
-      </DetailSection>
+      <ApRadios ap={ap} />
       <DetailSection title="Mesh">
         {parent && uplink ? (
           <>
@@ -86,9 +85,8 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
   const child = network.aps.find((a) => a.mac === link.childMac);
   const eth = isEthernet(link);
   const slow = eth && link.rateMbps != null && link.rateMbps < SLOW_ETHERNET_MBPS;
-  // WiFi standard from the gateway; without it the band-only view stays.
-  const standards = useBackhaulStandards(!eth && link.childStaMac ? network.aps.find((a) => a.role === "root")?.mac : undefined, network.capturedAt);
-  const std = link.childStaMac ? standards?.[link.childStaMac] : undefined;
+  // WiFi standard from the gateway (applyWifiDetails); without it the band-only view stays.
+  const std = eth ? undefined : link.standard;
   const medium = eth ? "Ethernet" : [std ? `${std.generation} (${std.ieee})` : "WiFi", link.band].filter(Boolean).join(" · ");
   return (
     <DetailSection title="Backhaul link">

@@ -101,6 +101,9 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
         <span className="mx-0.5 h-4 w-px bg-neutral-200" />
         <Chip active={filters.weak} onClick={() => onFiltersChange({ ...filters, weak: !filters.weak })}>Weak signal &lt; {WEAK_SIGNAL_DBM} dBm</Chip>
         <Chip active={filters.slowBand} onClick={() => onFiltersChange({ ...filters, slowBand: !filters.slowBand })}>Could use faster band</Chip>
+        <Chip active={filters.olderWifi} onClick={() => onFiltersChange({ ...filters, olderWifi: !filters.olderWifi })}>
+          <span title="WiFi 5 (802.11ac) or older: these clients use more airtime for the same data, slowing the radio for everyone">Older WiFi (4/5)</span>
+        </Chip>
         {filtersActive(filters) && (
           <>
             <span className="text-xs text-neutral-500">{matchCount} of {total}</span>

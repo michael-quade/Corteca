@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { cn } from "@/web/lib/utils";
 import { SubscriberSearchBox, subscriberName } from "@/web/components/SubscriberSearchBox";
 import type { McpTopBarProps } from "./McpTopBar.types";
@@ -23,8 +24,15 @@ function capturedLabel(iso: string): string {
 }
 
 /** One slim row: back link, title, subscriber search, and the current network chip. */
-export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber, onRefresh, refreshing }: McpTopBarProps) {
+export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber, onRefresh, refreshing, onAiAnalysis, aiRunning }: McpTopBarProps) {
   const online = subscriber?.home_wifis?.[0]?.status?.online;
+  // Re-render every 30 s so "(3 min ago)" keeps counting.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!capturedAt) return;
+    const t = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [capturedAt]);
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-neutral-200 bg-white px-3 py-2">
@@ -53,6 +61,23 @@ export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscribe
               {capturedAt && <span className="font-sans" title={capturedAt}> · data {capturedLabel(capturedAt)}</span>}
             </p>
           </div>
+          {onAiAnalysis && (
+            <button
+              type="button"
+              onClick={onAiAnalysis}
+              title="Corteca AI network analysis and troubleshooting"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+            >
+              {aiRunning
+                ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+                : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+                  </svg>
+                )}
+              AI analysis
+            </button>
+          )}
           {onRefresh && (
             <button
               type="button"

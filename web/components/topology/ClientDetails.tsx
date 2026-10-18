@@ -6,6 +6,9 @@ import { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/topo
 import { highlightFor, memberSsid, type Selection } from "@/web/lib/topologySelection";
 import { bandUpgrade, clientTraffic, disconnectReason, formatBytes, supportedBands } from "@/web/lib/clientInsights";
 import { categoryLabel, deviceKindLabel, memberIdentity } from "@/web/lib/deviceNames";
+import { clientStandard, standardLabel } from "@/web/lib/wifiDetails";
+import { memberAiNotes } from "@/web/lib/aiAnalysis";
+import { AiNotesSection } from "./AiNotesSection";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
 
 // Fields the MCP members payload carries beyond the shared Member type.
@@ -37,6 +40,7 @@ export function ClientDetails({ network, member, onSelect }: {
   const down = formatMbps((raw.tx_statistics?.rate ?? 0) / 1000);
   const up = formatMbps((raw.rx_statistics?.rate ?? 0) / 1000);
   const identity = memberIdentity(member);
+  const standard = clientStandard(member);
   const traffic = clientTraffic(member);
   const upgrade = bandUpgrade(member, network);
   const bands = supportedBands(member);
@@ -44,6 +48,7 @@ export function ClientDetails({ network, member, onSelect }: {
 
   return (
     <>
+      <AiNotesSection notes={memberAiNotes(member)} />
       <DetailSection title="Connection">
         <DetailRow label="Access point">
           {ap ? <JumpButton onClick={() => onSelect({ kind: "ap", id: ap.mac })}>{apLabel(ap)}</JumpButton> : member.device_id}
@@ -76,7 +81,7 @@ export function ClientDetails({ network, member, onSelect }: {
         <DetailRow label="IPv4" mono>{member.ipv4}</DetailRow>
         <DetailRow label="IPv6" mono>{raw.ipv6?.[0]}</DetailRow>
         {!wired && <DetailRow label="Supported bands">{bands.join(" · ") || null}</DetailRow>}
-        {!wired && <DetailRow label="Standard">{caps?.wifi_standard ?? member.wifi_standard}</DetailRow>}
+        {!wired && <DetailRow label="Standard">{standard ? standardLabel(standard) : caps?.wifi_standard ?? member.wifi_standard}</DetailRow>}
         {!wired && <DetailRow label="Mode">{caps?.ht_mode}</DetailRow>}
         {!wired && <DetailRow label="802.11k/v/r">{roaming || null}</DetailRow>}
         <DetailRow label="First seen">{formatDate(member.first_seen)}</DetailRow>
