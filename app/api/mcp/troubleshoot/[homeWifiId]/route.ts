@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { streamJson } from '@/web/lib/corteca/streamJson';
 import { callMcpTool, toolPayload, McpError } from '@/web/lib/corteca/mcpClient';
 
 // Runs the MCP troubleshoot-network tool for a plain-language problem. It returns
@@ -19,15 +20,17 @@ export async function GET(
   if (!query) return NextResponse.json({ error: 'Describe the problem to troubleshoot' }, { status: 400 });
 
   const started = Date.now();
-  try {
-    const result = await callMcpTool(token, 'troubleshoot-network', { homeWifiId: id, query, structuredContent: true }, 290_000);
-    const summary = result.content?.find((c) => c.type === 'text')?.text ?? null;
-    if (result.isError) return NextResponse.json({ error: summary ?? 'MCP troubleshooting failed' }, { status: 502 });
-    return NextResponse.json({ homeWifiId: id, query, durationMs: Date.now() - started, summary, diagnosis: toolPayload(result) });
-  } catch (e) {
-    const status = e instanceof McpError ? e.status : 502;
-    const message = e instanceof Error ? e.message : String(e);
-    console.error('[mcp troubleshoot] error:', message);
-    return NextResponse.json({ error: message }, { status });
-  }
+  // Streams heartbeats while the tool runs, so proxies don't drop the request.
+  return streamJson(async () => {
+    try {
+      const result = await callMcpTool(token, 'troubleshoot-network', { homeWifiId: id, query, structuredContent: true }, 290_000);
+      const summary = result.content?.find((c) => c.type === 'text')?.text ?? null;
+      if (result.isError) return { error: summary ?? 'MCP troubleshooting failed' };
+      return { homeWifiId: id, query, durationMs: Date.now() - started, summary, diagnosis: toolPayload(result) };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('[mcp troubleshoot] error:', message);
+      return { error: e instanceof McpError && e.status === 401 ? 'Session expired — sign in again and rerun.' : message };
+    }
+  });
 }

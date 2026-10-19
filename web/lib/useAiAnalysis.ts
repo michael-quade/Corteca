@@ -14,10 +14,25 @@ export interface AiRun<T> {
 
 const IDLE = { result: null, running: false, startedAt: null, error: null };
 
+// The AI routes stream heartbeats then the JSON, with { error } on failure (status 200).
 async function getJson(url: string): Promise<Record<string, unknown>> {
-  const res = await fetchWithAuth(url);
-  const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!res.ok || !body) throw new Error(String(body?.error ?? `HTTP ${res.status}`));
+  const started = Date.now();
+  const dropped = () => {
+    const s = Math.round((Date.now() - started) / 1000);
+    return new Error(`The connection dropped after ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} before Corteca answered. A proxy or network timeout may have cut it off; try again.`);
+  };
+  let res: Response;
+  try { res = await fetchWithAuth(url); } catch { throw dropped(); }
+  // Errors before streaming starts (auth, bad input, platform timeouts) keep their HTTP status.
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    throw new Error(String(body?.error ?? `HTTP ${res.status}`));
+  }
+  let text: string;
+  try { text = await res.text(); } catch { throw dropped(); }
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(text); } catch { throw dropped(); }
+  if (body.error) throw new Error(String(body.error));
   return body;
 }
 

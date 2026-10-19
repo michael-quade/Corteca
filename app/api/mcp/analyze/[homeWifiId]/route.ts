@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { streamJson } from '@/web/lib/corteca/streamJson';
 import { callMcpTool, McpError } from '@/web/lib/corteca/mcpClient';
 
 // Runs the MCP analyze-network tool (all network-analyzer specialists). It returns
@@ -18,17 +19,17 @@ export async function GET(
   const message = req.nextUrl.searchParams.get('message')?.trim().slice(0, 2000);
 
   const started = Date.now();
-  try {
-    const result = await callMcpTool(token, 'analyze-network', { homeWifiId: id, ...(message ? { message } : {}) }, 290_000);
-    const text = result.content?.filter((c) => c.type === 'text' && c.text).map((c) => c.text).join('\n\n') ?? '';
-    if (result.isError || !text) {
-      return NextResponse.json({ error: text || 'MCP analysis returned no report' }, { status: 502 });
+  // Streams heartbeats while the tool runs, so proxies don't drop the request.
+  return streamJson(async () => {
+    try {
+      const result = await callMcpTool(token, 'analyze-network', { homeWifiId: id, ...(message ? { message } : {}) }, 290_000);
+      const text = result.content?.filter((c) => c.type === 'text' && c.text).map((c) => c.text).join('\n\n') ?? '';
+      if (result.isError || !text) return { error: text || 'MCP analysis returned no report' };
+      return { homeWifiId: id, durationMs: Date.now() - started, report: text };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('[mcp analyze] error:', message);
+      return { error: e instanceof McpError && e.status === 401 ? 'Session expired — sign in again and rerun.' : message };
     }
-    return NextResponse.json({ homeWifiId: id, durationMs: Date.now() - started, report: text });
-  } catch (e) {
-    const status = e instanceof McpError ? e.status : 502;
-    const message = e instanceof Error ? e.message : String(e);
-    console.error('[mcp analyze] error:', message);
-    return NextResponse.json({ error: message }, { status });
-  }
+  });
 }
