@@ -17,14 +17,17 @@ import { ApNode } from "./ApNode";
 import { ClientClusterNode } from "./ClientClusterNode";
 import { BackhaulEdge } from "./BackhaulEdge";
 import { RouteEdge } from "./RouteEdge";
+import { SwitchNode } from "./SwitchNode";
+import { SwitchUplinkEdge } from "./SwitchUplinkEdge";
+import { clientOwner } from "@/web/lib/inferredSwitches";
 import { TopologyLegend } from "./TopologyLegend";
 import { ZoomControls } from "./ZoomControls";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 
-const nodeTypes: NodeTypes = { ap: ApNode, cluster: ClientClusterNode };
-const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge, route: RouteEdge };
+const nodeTypes: NodeTypes = { ap: ApNode, cluster: ClientClusterNode, switch: SwitchNode };
+const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge, route: RouteEdge, switchUplink: SwitchUplinkEdge };
 const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
@@ -68,8 +71,9 @@ function Canvas(props: TopologyCanvasProps) {
   useEffect(() => {
     if (selection?.kind !== "client") return;
     const m = network.members.find((x) => x.id === selection.id);
-    if (!m?.device_id) return;
-    const section = `${m.device_id}:${clientBand(m)}`;
+    const owner = m && clientOwner(network, m);
+    if (!owner) return;
+    const section = `${owner}:${clientBand(m)}`;
     setExpanded((prev) => (prev.has(section) ? prev : new Set(prev).add(section)));
   }, [selection, network]);
 
@@ -112,7 +116,8 @@ function Canvas(props: TopologyCanvasProps) {
     [nodes, highlight]
   );
   const styledEdges = useMemo(
-    () => edges.map((e) => (e.type === "backhaul" ? e : {
+    // Backhaul and switch-uplink edges style and dim themselves; only client-card connectors get this.
+    () => edges.map((e) => (e.type !== "route" ? e : {
       ...e, className: cn("cluster-edge", highlight && !highlight.edges.has(e.id) && "opacity-25"),
     })),
     [edges, highlight]
@@ -220,10 +225,15 @@ function Canvas(props: TopologyCanvasProps) {
               // Registering click handlers also keeps React Flow from turning off
               // pointer events on non-selectable nodes/edges (pills, "+N", labels).
               onNodeClick={(_, node) => {
-                if (node.type !== "ap") return;
-                onSelect(selection?.kind === "ap" && selection.id === node.id ? null : { kind: "ap", id: node.id });
+                if (node.type !== "ap" && node.type !== "switch") return;
+                const kind = node.type === "switch" ? "switch" : "ap";
+                onSelect(selection?.kind === kind && selection.id === node.id ? null : { kind, id: node.id });
               }}
               onEdgeClick={(_, edge) => {
+                if (edge.type === "switchUplink") {
+                  onSelect(selection?.kind === "switch" && selection.id === edge.target ? null : { kind: "switch", id: edge.target });
+                  return;
+                }
                 if (edge.type !== "backhaul") return;
                 const child = edge.target;
                 onSelect(selection?.kind === "link" && selection.id === child ? null : { kind: "link", id: child });

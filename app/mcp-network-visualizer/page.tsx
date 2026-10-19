@@ -17,6 +17,7 @@ import { applyWifiDetails } from "@/web/lib/wifiDetails";
 import { useGatewayExtras } from "@/web/lib/useGatewayExtras";
 import { useAiAnalysis } from "@/web/lib/useAiAnalysis";
 import { applyAiReport } from "@/web/lib/aiAnalysis";
+import { applySwitches } from "@/web/lib/inferredSwitches";
 import { clearRecentNetworks, forgetNetwork, loadRecentNetworks, rememberNetwork, type RecentNetwork } from "@/web/lib/recentNetworks";
 import { EMPTY_FILTERS, type Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
@@ -50,14 +51,14 @@ export default function McpNetworkVisualizerPage() {
   useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
   // Names and WiFi details come from the gateway, after each MCP load.
-  const { names, wifi } = useGatewayExtras(response?.homeWifiId ?? null, response);
+  const { names, wifi, ports } = useGatewayExtras(response?.homeWifiId ?? null, response);
   // On-demand Corteca AI analysis / troubleshooting; findings land on the devices they mention.
   const ai = useAiAnalysis(response?.homeWifiId ?? null);
   const network = useMemo(() => {
     if (!response) return null;
     const base = applyWifiDetails(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), wifi);
-    return applyAiReport(base, ai.analysis.result);
-  }, [response, names, wifi, ai.analysis.result]);
+    return applyAiReport(applySwitches(base, ports), ai.analysis.result);
+  }, [response, names, wifi, ports, ai.analysis.result]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     const networkId = subscriber.home_wifis?.[0]?.id;

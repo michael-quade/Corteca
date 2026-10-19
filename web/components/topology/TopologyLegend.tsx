@@ -23,6 +23,9 @@ export function TopologyLegend() {
         <span className="col-span-2 flex items-center gap-1.5"><LineSample className="stroke-amber-500" />Ethernet below 1 Gbps</span>
       </div>
       <p className="mt-1.5 text-neutral-500">Line width = data rate</p>
+      <p className="mt-1 flex items-center gap-1.5 text-neutral-500">
+        <span className="h-3 w-5 flex-shrink-0 rounded border-2 border-dashed border-neutral-300" />Switch (inferred from port data)
+      </p>
       <p className="mb-1 mt-2 font-semibold text-neutral-700">Client signal</p>
       <div className="flex gap-3">
         {(["good", "fair", "poor"] as const).map((q) => (

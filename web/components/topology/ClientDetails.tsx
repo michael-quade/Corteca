@@ -9,6 +9,7 @@ import { categoryLabel, deviceKindLabel, memberIdentity } from "@/web/lib/device
 import { clientStandard, standardLabel } from "@/web/lib/wifiDetails";
 import { memberAiNotes } from "@/web/lib/aiAnalysis";
 import { AiNotesSection } from "./AiNotesSection";
+import { switchOfClient } from "@/web/lib/inferredSwitches";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
 
 // Fields the MCP members payload carries beyond the shared Member type.
@@ -34,7 +35,9 @@ export function ClientDetails({ network, member, onSelect }: {
   const ap = network.aps.find((a) => a.mac === member.device_id);
   const wired = isWired(member);
   const signal = clientSignalDbm(member);
-  const hops = (highlightFor(network, { kind: "client", id: member.id })?.edges.size ?? 1) - 1;
+  const path = highlightFor(network, { kind: "client", id: member.id });
+  const hops = [...(path?.edges ?? [])].filter((e) => e.startsWith("bh:")).length;
+  const sw = switchOfClient(network, member.id);
   const caps = raw.client_capabilities;
   // Rates are kbps from the AP's view: its tx is the client's download.
   const down = formatMbps((raw.tx_statistics?.rate ?? 0) / 1000);
@@ -53,6 +56,11 @@ export function ClientDetails({ network, member, onSelect }: {
         <DetailRow label="Access point">
           {ap ? <JumpButton onClick={() => onSelect({ kind: "ap", id: ap.mac })}>{apLabel(ap)}</JumpButton> : member.device_id}
         </DetailRow>
+        {sw && (
+          <DetailRow label="Via">
+            <JumpButton onClick={() => onSelect({ kind: "switch", id: sw.id })}>Switch on {sw.port} (inferred)</JumpButton>
+          </DetailRow>
+        )}
         <DetailRow label="Path to gateway">{hops === 0 ? "Direct" : `${hops} backhaul hop${hops === 1 ? "" : "s"}`}</DetailRow>
         <DetailRow label="Type">{wired ? `Wired${raw.port_number ? ` · port ${raw.port_number}` : ""}` : `WiFi · ${clientBand(member)}`}</DetailRow>
         {!wired && <DetailRow label="SSID">{memberSsid(member)}</DetailRow>}

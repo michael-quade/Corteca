@@ -10,11 +10,12 @@ import type { Member } from "@/web/lib/corteca/types";
 // ── Sizes (must match the node components) ───────────────────────────────────
 
 export const AP_W = 232, AP_H = 84;
-export const CLUSTER_W = 232;
-const CLUSTER_PAD = 12, CLUSTER_HEADER = 22, PILL_GAP = 6, SECTION_GAP = 12;
-const PILL_H1 = 24, PILL_H2 = 38, PILL_MAX = CLUSTER_W - 2 * CLUSTER_PAD;
-const CHAR_W = 7.2, PILL_CHROME = 40; // text-xs average glyph width; dot + gap + padding + border
-export const CLUSTER_COLLAPSE_AT = 6;
+export const SW_W = 200, SW_H = 60;
+export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
+export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
+import { clusterNode } from "@/web/lib/clientCluster";
+import { clientBand } from "@/web/lib/clientFields";
+import { clientOwner, switchOfBeacon, switchUplinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,9 +48,13 @@ export interface ClusterNodeData extends Record<string, unknown> {
 export interface BackhaulEdgeData extends Record<string, unknown> { link: McpBackhaulLink; points?: Point[] }
 export interface RouteEdgeData extends Record<string, unknown> { points?: Point[] }
 
+export interface SwitchNodeData extends Record<string, unknown> { sw: InferredSwitch }
+export interface SwitchEdgeData extends Record<string, unknown> { sw: InferredSwitch; points?: Point[] }
+
 export type ApFlowNode = Node<ApNodeData, "ap">;
+export type SwitchFlowNode = Node<SwitchNodeData, "switch">;
 export type ClusterFlowNode = Node<ClusterNodeData, "cluster">;
-export type FlowNode = ApFlowNode | ClusterFlowNode;
+export type FlowNode = ApFlowNode | ClusterFlowNode | SwitchFlowNode;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,69 +86,6 @@ export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: b
   return { text: slowEth ? `⚠ ${text}` : text, slowEth };
 }
 
-export function clientBand(m: Member): Band {
-  if (String(m.type ?? "").toLowerCase() === "ethernet") return "Wired";
-  const f = Number(m.frequency ?? 0);
-  if (f >= 2400 && f < 2500) return "2.4 GHz";
-  if (f >= 4900 && f < 5900) return "5 GHz";
-  if (f >= 5925) return "6 GHz";
-  return "Other";
-}
-
-export const isWired = (m: Member) => String(m.type ?? "").toLowerCase() === "ethernet";
-
-export function clientSignalDbm(m: Member): number | null {
-  if (isWired(m)) return null;
-  const s = Number((m as unknown as { signal?: number }).signal ?? m.rssi);
-  return Number.isFinite(s) && s !== 0 ? s : null;
-}
-
-// Client signal uses the same three-step scale as the links.
-function clientSignal(m: Member): Quality | null {
-  if (isWired(m)) return null;
-  const s = clientSignalDbm(m);
-  if (s == null) return "unknown";
-  return s >= -65 ? "good" : s >= -75 ? "fair" : "poor";
-}
-
-export function clientName(m: Member): string {
-  const host = (m as unknown as { hostname?: string }).hostname;
-  return (m.alias || host || m.id).trim();
-}
-
-// Measure with the page's real text-xs font when in a browser; average glyph width otherwise.
-let measureCtx: CanvasRenderingContext2D | null | undefined;
-function textWidth(text: string): number {
-  if (measureCtx === undefined) {
-    measureCtx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
-    if (measureCtx) measureCtx.font = `12px ${getComputedStyle(document.body).fontFamily}`;
-  }
-  return measureCtx ? measureCtx.measureText(text).width : text.length * CHAR_W;
-}
-
-function toPill(m: Member): ClientPill {
-  const name = clientName(m);
-  const signal = clientSignal(m);
-  // Wired clients have no signal dot (6px + 6px gap).
-  const natural = Math.ceil(textWidth(name) + PILL_CHROME - (signal ? 0 : 12));
-  return { id: m.id, name, signal, width: Math.min(PILL_MAX, natural), twoLines: natural > PILL_MAX };
-}
-
-// Greedy row packing — mirrors the section's flex-wrap so ELK gets a true height.
-function pillsHeight(pills: ClientPill[], showMore: boolean): number {
-  const items = pills.map((p) => ({ w: p.width, h: p.twoLines ? PILL_H2 : PILL_H1 }));
-  if (showMore) items.push({ w: 44, h: PILL_H1 });
-  let rows = 0, rowW = 0, rowH = 0, total = 0;
-  for (const it of items) {
-    if (rowW > 0 && rowW + PILL_GAP + it.w > PILL_MAX) { total += rowH; rows++; rowW = 0; rowH = 0; }
-    rowW += (rowW > 0 ? PILL_GAP : 0) + it.w;
-    rowH = Math.max(rowH, it.h);
-  }
-  if (rowW > 0) { total += rowH; rows++; }
-  return total + PILL_GAP * Math.max(0, rows - 1);
-}
-
-const BAND_ORDER: Band[] = ["6 GHz", "5 GHz", "2.4 GHz", "Wired", "Other"];
 
 // ── Graph ────────────────────────────────────────────────────────────────────
 
@@ -160,10 +102,18 @@ export function buildFlowGraph(
     nodes.push({ id: ap.mac, type: "ap", position: { x: 0, y: 0 }, data: { ap }, width: AP_W, height: AP_H });
   }
 
+  // An inferred switch sits between its AP port and the Beacons / wired clients behind it.
+  for (const sw of network.switches ?? []) {
+    nodes.push({ id: sw.id, type: "switch", position: { x: 0, y: 0 }, data: { sw }, width: SW_W, height: SW_H });
+    edges.push({ id: `swu:${sw.id}`, source: sw.apMac, target: sw.id, type: "switchUplink", data: { sw } satisfies SwitchEdgeData });
+  }
+
   for (const link of network.backhaul) {
+    const sw = switchOfBeacon(network, link.childMac);
     edges.push({
+      // The id stays parent → child (selection/highlight key) even when drawn from the switch.
       id: `bh:${link.parentMac}:${link.childMac}`,
-      source: link.parentMac,
+      source: sw?.apMac === link.parentMac ? sw.id : link.parentMac,
       target: link.childMac,
       type: "backhaul",
       data: { link } satisfies BackhaulEdgeData,
@@ -171,41 +121,21 @@ export function buildFlowGraph(
   }
 
   const apMacs = new Set(network.aps.map((a) => a.mac));
-  const byApBand = new Map<string, Map<Band, Member[]>>();
+  // One client card per AP — or per switch, for the wired clients behind it.
+  const byOwnerBand = new Map<string, Map<Band, Member[]>>();
   for (const m of network.members) {
     if (!m.connected || !m.device_id || !apMacs.has(m.device_id)) continue;
-    const bands = byApBand.get(m.device_id) ?? new Map<Band, Member[]>();
+    const owner = clientOwner(network, m)!;
+    const bands = byOwnerBand.get(owner) ?? new Map<Band, Member[]>();
     const band = clientBand(m);
     bands.set(band, [...(bands.get(band) ?? []), m]);
-    byApBand.set(m.device_id, bands);
+    byOwnerBand.set(owner, bands);
   }
 
-  for (const [apMac, bands] of byApBand) {
-    const sections: ClientSection[] = [];
-    let height = CLUSTER_PAD * 2;
-    for (const band of BAND_ORDER) {
-      const members = bands.get(band);
-      if (!members?.length) continue;
-      const id = `${apMac}:${band}`;
-      // Only collapsible sections can be "expanded" (avoids a stray "less" toggle).
-      const isOpen = expanded.has(id) && members.length > CLUSTER_COLLAPSE_AT;
-      const all = members.map(toPill).sort((a, b) => a.name.localeCompare(b.name));
-      const shown = isOpen || all.length <= CLUSTER_COLLAPSE_AT ? all : all.slice(0, CLUSTER_COLLAPSE_AT - 1);
-      const showToggle = shown.length < all.length || (isOpen && all.length > CLUSTER_COLLAPSE_AT);
-      if (sections.length) height += SECTION_GAP;
-      height += CLUSTER_HEADER + pillsHeight(shown, showToggle);
-      sections.push({ id, band, total: all.length, pills: shown, hidden: all.length - shown.length, expanded: isOpen });
-    }
-    const id = `cl:${apMac}`;
-    nodes.push({
-      id,
-      type: "cluster",
-      position: { x: 0, y: 0 },
-      width: CLUSTER_W,
-      height,
-      data: { sections, onToggle },
-    });
-    edges.push({ id: `ce:${id}`, source: apMac, target: id, type: "route", className: "cluster-edge", data: {} });
+  for (const [owner, bands] of byOwnerBand) {
+    const node = clusterNode(owner, bands, expanded, onToggle);
+    nodes.push(node);
+    edges.push({ id: `ce:${node.id}`, source: owner, target: node.id, type: "route", className: "cluster-edge", data: {} });
   }
 
   return { nodes, edges };
@@ -267,7 +197,8 @@ export async function layoutFlowGraph(
     const root = nodes.find((n) => n.type === "ap" && (n.data as ApNodeData).ap.role === "root")?.id ?? nodes[0]?.id;
     boxes = spreadRadial(boxes, root, edges.map((e) => ({
       id: e.id, source: e.source, target: e.target,
-      label: e.type === "backhaul" ? backhaulLabel((e.data as BackhaulEdgeData).link).text : undefined,
+      label: e.type === "backhaul" ? backhaulLabel((e.data as BackhaulEdgeData).link).text
+        : e.type === "switchUplink" ? switchUplinkLabel((e.data as SwitchEdgeData).sw) : undefined,
     })));
     routes = new Map(edges.map((e) => [e.id, straightRoute(boxes.get(e.source)!, boxes.get(e.target)!)]));
   } else {

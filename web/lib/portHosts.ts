@@ -48,8 +48,13 @@ export function classifyPortHosts(port: EthernetPort, network: PortContext): Por
   return out;
 }
 
-/** More than one Beacon/device on a single port means something bridges there (switch, hub, pass-through). */
-export const looksLikeSwitch = (c: PortHosts) => c.beacons.length + c.direct.length > 1;
+/**
+ * More than one Beacon/device on a single port means something bridges there (switch,
+ * hub, pass-through). Only devices Corteca knows count: an active host Corteca doesn't
+ * list (e.g. an old randomized iPhone MAC) is a leftover, and every connected wired
+ * device shows up in Corteca's clients.
+ */
+export const looksLikeSwitch = (c: PortHosts) => c.beacons.length + c.direct.filter((d) => d.member).length > 1;
 
 /** A Beacon's connected clients by medium, from Corteca's member records. */
 export function beaconClients(ap: PortAp, network: PortContext): { wifi: number; wired: number } {

@@ -88,7 +88,7 @@ function ConnectedTo({ port, hosts, open, onToggle }: { port: EthernetPort; host
   }
   if (!looksLikeSwitch(hosts)) {
     if (beacons.length === 1) return <>{apName(beacons[0])} <span className="text-neutral-400">(Beacon)</span></>;
-    const d = direct[0];
+    const d = direct.find((x) => x.member) ?? direct[0];
     return <>{d ? (d.member ? clientName(d.member) : d.hostName || d.mac) : "—"}</>;
   }
   const total = beacons.length + direct.length;

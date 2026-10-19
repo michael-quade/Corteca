@@ -6,6 +6,7 @@ import type { Member } from "@/web/lib/corteca/types";
 import type { AssociationStandard } from "@/web/lib/wifiAssociation";
 import type { ApRadio } from "@/web/lib/wifiRadios";
 import type { AiNotes } from "@/web/lib/aiAnalysis";
+import type { InferredSwitch } from "@/web/lib/inferredSwitches";
 
 export interface McpApiResult { apiId: string; ok: boolean; status: number; data: unknown }
 
@@ -66,6 +67,8 @@ export interface McpNetwork {
   results: McpApiResult[];
   /** When Corteca captured the mesh snapshot (ISO), from the payload's `timestamp`. */
   capturedAt: string | null;
+  /** Inferred L2 switches (applySwitches). */
+  switches?: InferredSwitch[];
 }
 
 type Obj = Record<string, unknown>;

@@ -53,7 +53,7 @@ function PortDevice({ hosts, onSelect, open, onToggle }: {
     if (beacons.length === 1) {
       return <JumpButton onClick={() => onSelect({ kind: "ap", id: beacons[0].mac })}>{apShortName(beacons[0])}</JumpButton>;
     }
-    const d = direct[0];
+    const d = direct.find((x) => x.member) ?? direct[0];
     if (d?.member) return <JumpButton onClick={() => onSelect({ kind: "client", id: d.member!.id })}>{clientName(d.member)}</JumpButton>;
     if (d) return <span className="text-neutral-700">{d.hostName || d.mac}</span>;
   }

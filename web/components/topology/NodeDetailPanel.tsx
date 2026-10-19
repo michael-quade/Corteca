@@ -8,6 +8,8 @@ import { ClientDetails } from "./ClientDetails";
 import { ApEthernetPorts } from "./ApEthernetPorts";
 import { ApRadios } from "./ApRadios";
 import { AiNotesSection } from "./AiNotesSection";
+import { SwitchDetails } from "./SwitchDetails";
+import { switchById } from "@/web/lib/inferredSwitches";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -126,10 +128,11 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   const ap = selection.kind === "ap" ? network.aps.find((a) => a.mac === selection.id) : undefined;
   const member = selection.kind === "client" ? network.members.find((m) => m.id === selection.id) : undefined;
   const link = selection.kind === "link" ? network.backhaul.find((l) => l.childMac === selection.id) : undefined;
-  if (!ap && !member && !link) return null;
+  const sw = selection.kind === "switch" ? switchById(network, selection.id) : undefined;
+  if (!ap && !member && !link && !sw) return null;
 
-  const title = ap ? apLabel(ap) : member ? clientName(member) : "Backhaul link";
-  const kicker = ap ? "Access point" : member ? "Client" : "Link";
+  const title = ap ? apLabel(ap) : member ? clientName(member) : sw ? `Switch on ${sw.port}` : "Backhaul link";
+  const kicker = ap ? "Access point" : member ? "Client" : sw ? "Switch (inferred)" : "Link";
 
   return (
     <aside
@@ -154,6 +157,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
         {ap && <ApDetails network={network} ap={ap} onSelect={onSelect} />}
         {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
         {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}
+        {sw && <SwitchDetails network={network} sw={sw} onSelect={onSelect} />}
       </div>
     </aside>
   );

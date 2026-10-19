@@ -6,9 +6,10 @@ import type { Member } from "@/web/lib/corteca/types";
 import { clientBand, clientName, clientSignalDbm, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
 import { bandUpgrade } from "@/web/lib/clientInsights";
 import { isOlderWifi } from "@/web/lib/wifiDetails";
+import { clientOwner, switchById, switchOfBeacon } from "@/web/lib/inferredSwitches";
 
-export type SelectionKind = "ap" | "client" | "link";
-/** `link` ids are the child AP's MAC (each AP has at most one backhaul parent). */
+export type SelectionKind = "ap" | "client" | "link" | "switch";
+/** `link` ids are the child AP's MAC (each AP has at most one backhaul parent); `switch` ids are InferredSwitch ids. */
 export interface Selection { kind: SelectionKind; id: string }
 
 /** `slowBand`: on a slower band than the client and its AP both support. `olderWifi`: WiFi 5 or older. */
@@ -44,15 +45,28 @@ function parentMap(network: McpNetwork): Map<string, string> {
   return new Map(network.backhaul.map((l) => [l.childMac, l.parentMac]));
 }
 
-// AP → gateway chain: node ids plus the backhaul edge ids between them.
-function chainToGateway(apMac: string, parents: Map<string, string>, out: Highlight) {
+/** A switch, its uplink edge, and the chain from its AP to the gateway. */
+function addSwitch(network: McpNetwork, id: string, parents: Map<string, string>, out: Highlight) {
+  const sw = switchById(network, id);
+  if (!sw) return;
+  out.nodes.add(sw.id);
+  out.edges.add(`swu:${sw.id}`);
+  chainToGateway(network, sw.apMac, parents, out);
+}
+
+// AP → gateway chain: node ids plus the backhaul edge ids between them (through any inferred switch).
+function chainToGateway(network: McpNetwork, apMac: string, parents: Map<string, string>, out: Highlight) {
   let cur: string | undefined = apMac;
   const seen = new Set<string>();
   while (cur && !seen.has(cur)) {
     seen.add(cur);
     out.nodes.add(cur);
     const parent = parents.get(cur);
-    if (parent) out.edges.add(`bh:${parent}:${cur}`);
+    if (parent) {
+      out.edges.add(`bh:${parent}:${cur}`);
+      const sw = switchOfBeacon(network, cur);
+      if (sw?.apMac === parent) { out.nodes.add(sw.id); out.edges.add(`swu:${sw.id}`); }
+    }
     cur = parent;
   }
 }
@@ -62,20 +76,32 @@ export function highlightFor(network: McpNetwork, sel: Selection | null): Highli
   const parents = parentMap(network);
   const out: Highlight = { nodes: new Set(), edges: new Set() };
   if (sel.kind === "client") {
-    const ap = network.members.find((m) => m.id === sel.id)?.device_id;
-    if (!ap) return null;
-    out.nodes.add(`cl:${ap}`);
-    out.edges.add(`ce:cl:${ap}`);
-    chainToGateway(ap, parents, out);
+    const m = network.members.find((x) => x.id === sel.id);
+    const owner = m && clientOwner(network, m);
+    if (!m?.device_id || !owner) return null;
+    out.nodes.add(`cl:${owner}`);
+    out.edges.add(`ce:cl:${owner}`);
+    if (owner !== m.device_id) addSwitch(network, owner, parents, out);
+    else chainToGateway(network, owner, parents, out);
   } else if (sel.kind === "ap") {
     out.nodes.add(`cl:${sel.id}`);
     out.edges.add(`ce:cl:${sel.id}`);
-    chainToGateway(sel.id, parents, out);
+    chainToGateway(network, sel.id, parents, out);
+  } else if (sel.kind === "switch") {
+    const sw = switchById(network, sel.id);
+    if (!sw) return null;
+    addSwitch(network, sw.id, parents, out);
+    // …and everything behind it.
+    out.nodes.add(`cl:${sw.id}`);
+    out.edges.add(`ce:cl:${sw.id}`);
+    for (const b of sw.beaconMacs) { out.nodes.add(b); out.edges.add(`bh:${sw.apMac}:${b}`); }
   } else {
     const parent = parents.get(sel.id);
     if (!parent) return null;
     out.nodes.add(parent).add(sel.id);
     out.edges.add(`bh:${parent}:${sel.id}`);
+    const sw = switchOfBeacon(network, sel.id);
+    if (sw?.apMac === parent) { out.nodes.add(sw.id); out.edges.add(`swu:${sw.id}`); }
   }
   return out;
 }
@@ -83,8 +109,9 @@ export function highlightFor(network: McpNetwork, sel: Selection | null): Highli
 /** React Flow node id that represents a selection on the canvas (for panning to it). */
 export function anchorNodeId(network: McpNetwork, sel: Selection): string | null {
   if (sel.kind === "client") {
-    const ap = network.members.find((m) => m.id === sel.id)?.device_id;
-    return ap ? `cl:${ap}` : null;
+    const m = network.members.find((x) => x.id === sel.id);
+    const owner = m && clientOwner(network, m);
+    return owner ? `cl:${owner}` : null;
   }
   return sel.id;
 }
@@ -153,7 +180,7 @@ export function parseViewState(search: string): ViewState {
   const layout = p.get("layout") as LayoutMode | null;
   return {
     network: p.get("network"),
-    selection: (kind === "ap" || kind === "client" || kind === "link") && selId ? { kind, id: selId } : null,
+    selection: (kind === "ap" || kind === "client" || kind === "link" || kind === "switch") && selId ? { kind, id: selId } : null,
     filters: {
       bands: (p.get("band") ?? "").split(",").map((k) => BAND_BY_KEY[k]).filter(Boolean),
       ssids: p.getAll("ssid"),

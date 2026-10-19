@@ -4,20 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
 import { sanitiseWifiDetails, type WifiDetails } from "@/web/lib/wifiDetails";
+import type { EthernetPort } from "@/web/components/EthernetPortPanel";
 
 /**
  * Data the MCP payload lacks, read from the gateway's own data model after each
- * MCP load: user-given names and WiFi details (radios, standards). Both are
- * optional — on failure the MCP-only view stays. A refresh of the same network
+ * MCP load: user-given names, WiFi details (radios, standards) and live Ethernet
+ * ports (for inferring switches). All are optional — on failure the MCP-only view stays. A refresh of the same network
  * keeps the previous values until the new ones arrive; a different network clears them.
  */
-export function useGatewayExtras(networkId: string | null, snapshot: unknown): { names: DeviceNames | null; wifi: WifiDetails | null } {
+export function useGatewayExtras(networkId: string | null, snapshot: unknown): {
+  names: DeviceNames | null;
+  wifi: WifiDetails | null;
+  ports: EthernetPort[] | null;
+} {
   const [names, setNames] = useState<DeviceNames | null>(null);
   const [wifi, setWifi] = useState<WifiDetails | null>(null);
+  const [ports, setPorts] = useState<EthernetPort[] | null>(null);
   const lastId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (lastId.current !== networkId) { setNames(null); setWifi(null); }
+    if (lastId.current !== networkId) { setNames(null); setWifi(null); setPorts(null); }
     lastId.current = networkId;
     if (!networkId || !snapshot) return;
     let cancelled = false;
@@ -37,8 +43,15 @@ export function useGatewayExtras(networkId: string | null, snapshot: unknown): {
       })
       .catch(() => { /* details are optional */ });
 
+    fetchWithAuth(`${base}/ethernet`)
+      .then(async (r) => {
+        const body = (await r.json().catch(() => null)) as { ports?: unknown } | null;
+        if (!cancelled && r.ok && Array.isArray(body?.ports) && body.ports.length) setPorts(body.ports as EthernetPort[]);
+      })
+      .catch(() => { /* ports are optional: switches then come from Corteca's wired clients only */ });
+
     return () => { cancelled = true; };
   }, [networkId, snapshot]);
 
-  return { names, wifi };
+  return { names, wifi, ports };
 }
