@@ -1,3 +1,5 @@
+import { formatRate } from '@/web/lib/rateFormat';
+
 // ── Raw API shapes ────────────────────────────────────────────────────────────
 
 export interface RawTopoNode {
@@ -231,15 +233,15 @@ export function linkTip(ld: LinkData | undefined): [string, string] {
   const isEth = (ld?.medium ?? '').includes('eth');
   if (isEth) {
     const s = ld?.linkSpeed;
-    return ['Ethernet Backhaul', s ? (s >= 1000 ? `${s / 1000} Gbps` : `${s} Mbps`) : 'Wired link'];
+    return ['Ethernet Backhaul', s ? formatRate(s) : 'Wired link'];
   }
   const parts = [
     ld?.band,
     ld?.channel != null ? `Ch ${ld.channel}` : null,
     ld?.rssi    != null ? `RSSI ${ld.rssi} dBm` : null,
     ld?.snr     != null ? `SNR ${ld.snr} dB` : null,
-    (ld?.rxRate ?? 0) > 0 ? `↓${ld!.rxRate} Mbps` : null,
-    (ld?.txRate ?? 0) > 0 ? `↑${ld!.txRate} Mbps` : null,
+    (ld?.rxRate ?? 0) > 0 ? `↓${formatRate(ld!.rxRate!)}` : null,
+    (ld?.txRate ?? 0) > 0 ? `↑${formatRate(ld!.txRate!)}` : null,
   ].filter(Boolean);
   return ['WiFi Backhaul', parts.join(' · ') || 'WiFi link'];
 }

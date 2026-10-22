@@ -12,6 +12,7 @@ import type { EthernetPort } from "@/web/components/EthernetPortPanel";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
 import { classifyPortHosts, labelPorts, looksLikeSwitch } from "@/web/lib/portHosts";
+import { formatRate } from "@/web/lib/rateFormat";
 
 export interface InferredSwitch {
   /** React Flow node id: "sw:<AP MAC>:<port label>". */
@@ -115,10 +116,10 @@ export function clientOwner(network: McpNetwork, m: Member): string | undefined 
   return switchOfClient(network, m.id)?.id ?? m.device_id;
 }
 
-/** Label on the AP → switch line, e.g. "LAN 1 · 1.0 Gbps". */
+/** Label on the AP → switch line, e.g. "LAN 1 · 1 Gbps". */
 export function switchUplinkLabel(sw: InferredSwitch): string {
   const rate = sw.rateMbps;
-  return [sw.port, rate ? (rate >= 1000 ? `${(rate / 1000).toFixed(1)} Gbps` : `${rate} Mbps`) : null].filter(Boolean).join(" · ");
+  return [sw.port, rate ? formatRate(rate) : null].filter(Boolean).join(" · ");
 }
 
 // ── Wired clients' port and link speed ───────────────────────────────────────
@@ -148,15 +149,13 @@ export function wiredPort(network: McpNetwork, m: Member): WiredPort | null {
   };
 }
 
-/** "1G", "2.5G", "100M". */
-export const shortSpeed = (mbps: number) => (mbps >= 1000 ? `${+(mbps / 1000).toFixed(1)}G` : `${mbps}M`);
 
 /**
- * Label on the line to a wired client's node: "LAN 3 · 100M". Behind an inferred
+ * Label on the line to a wired client's node: "LAN 3 · 100 Mbps". Behind an inferred
  * switch there is none — the switch's line carries the port and shared speed.
  */
 export function wiredLinkLabel(network: McpNetwork, m: Member): string | null {
   const wp = wiredPort(network, m);
   if (!wp || wp.viaSwitch) return null;
-  return [wp.port, wp.speedMbps ? shortSpeed(wp.speedMbps) : null].filter(Boolean).join(" · ") || null;
+  return [wp.port, wp.speedMbps ? formatRate(wp.speedMbps) : null].filter(Boolean).join(" · ") || null;
 }

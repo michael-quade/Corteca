@@ -15,6 +15,7 @@ export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
 export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
 import { clusterNode, WIRED_H, wiredNodeWidth } from "@/web/lib/clientCluster";
 import { orderForLayout } from "@/web/lib/flowOrder";
+import { formatRate } from "@/web/lib/rateFormat";
 import { clientBand } from "@/web/lib/clientFields";
 import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredLinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
@@ -73,9 +74,7 @@ export const isEthernet = (link: McpBackhaulLink) => link.medium.includes("eth")
 /** Ethernet backhaul that negotiated below gigabit usually means a bad cable or port. */
 export const SLOW_ETHERNET_MBPS = 1000;
 
-export function formatLinkRate(mbps: number): string {
-  return mbps >= 1000 ? `${(mbps / 1000).toFixed(1)} Gbps` : `${mbps} Mbps`;
-}
+export const formatLinkRate = (mbps: number) => formatRate(mbps);
 
 /** Text of a backhaul edge's label — shared by the edge and the layout checks. */
 export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: boolean } {

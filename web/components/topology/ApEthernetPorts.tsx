@@ -8,10 +8,9 @@ import type { Selection } from "@/web/lib/topologySelection";
 import { beaconClientsLabel, classifyPortHosts, gatewayPortOf, labelPorts, looksLikeSwitch, staleLabel, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import { DetailSection, JumpButton } from "./DetailParts";
 import { useGatewayPorts } from "./useGatewayPorts";
+import { formatRate } from "@/web/lib/rateFormat";
 
-function fmtMbps(mbps: number): string {
-  return mbps >= 1000 ? `${mbps % 1000 ? (mbps / 1000).toFixed(1) : mbps / 1000} Gbps` : `${mbps} Mbps`;
-}
+const fmtMbps = (mbps: number) => formatRate(mbps);
 
 function Row({ port, status, rate, device, deviceTitle, title }: {
   port: string;

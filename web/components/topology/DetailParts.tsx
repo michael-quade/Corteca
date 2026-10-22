@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { formatRate } from "@/web/lib/rateFormat";
 import { cn } from "@/web/lib/utils";
 
 export function DetailSection({ title, children }: { title: string; children: ReactNode }) {
@@ -33,7 +34,7 @@ export function JumpButton({ onClick, children }: { onClick: () => void; childre
 
 export function formatMbps(mbps: number | null | undefined): string | null {
   if (mbps == null || mbps <= 0) return null;
-  return mbps >= 1000 ? `${(mbps / 1000).toFixed(2)} Gbps` : `${Math.round(mbps)} Mbps`;
+  return formatRate(mbps, 2);
 }
 
 export function formatDuration(seconds: number): string {

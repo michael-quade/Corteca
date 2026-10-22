@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { formatRate } from "@/web/lib/rateFormat";
 import { cn } from "@/web/lib/utils";
 import { clientName } from "@/web/lib/topologyFlow";
 import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleLabel, staleTitle, type PortContext, type PortHosts } from "@/web/lib/portHosts";
@@ -12,16 +13,12 @@ export type { EthernetPort };
 
 function fmtMax(mbps: number): string {
   if (mbps < 0) return "Auto";
-  if (mbps >= 10000) return "10GbE";
-  if (mbps >= 5000) return "5GbE";
-  if (mbps >= 2500) return "2.5GbE";
-  if (mbps >= 1000) return "1GbE";
-  return mbps >= 100 ? "100MbE" : (mbps ? `${mbps}M` : "—");
+  return mbps > 0 ? formatRate(mbps) : "—";
 }
 
 function fmtNeg(cur: number, status: string): string {
   if (status !== "Up" || cur <= 0) return "N/A";
-  return cur >= 1000 ? `${cur / 1000} Gbps` : `${cur} Mbps`;
+  return formatRate(cur);
 }
 
 // ── Rear-view port chip ───────────────────────────────────────────────────────
