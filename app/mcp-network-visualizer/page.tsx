@@ -149,7 +149,7 @@ export default function McpNetworkVisualizerPage() {
   const failedApis = network?.results.filter((r) => !r.ok) ?? [];
 
   return (
-    <main className="mx-auto max-w-screen-2xl px-4 py-3">
+    <main className="mx-auto max-w-[2304px] px-4 py-3">
       <div className="flex gap-3">
         <RecentNetworksDrawer
           entries={recent}
