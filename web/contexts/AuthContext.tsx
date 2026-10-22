@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -59,10 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ isAuthenticated: true, email: data.email, isLoading: false, sessionExpired: false });
   }, []);
 
+  // Sign out lands on the login page ("/"). The jump waits for the commit that
+  // marks the user signed out, so ApiStatsProvider (a child, whose effects run
+  // first) has already flushed the session with keepalive.
+  const goHome = useRef(false);
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    goHome.current = true;
     setState({ isAuthenticated: false, email: null, isLoading: false, sessionExpired: false });
   }, []);
+
+  useEffect(() => {
+    if (state.isAuthenticated || !goHome.current) return;
+    goHome.current = false;
+    // Full load: clears page state and shows the login page even if already on "/".
+    window.location.assign("/");
+  }, [state.isAuthenticated]);
 
   const refreshSession = useCallback(async () => {
     const data = await fetch("/api/auth/session").then((r) => r.json());
