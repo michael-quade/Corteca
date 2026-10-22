@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-import { toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
+import { toDeviceNames, withAlias, type DeviceNames } from "@/web/lib/deviceNames";
 import { sanitiseWifiDetails, type WifiDetails } from "@/web/lib/wifiDetails";
 import type { EthernetPort } from "@/web/components/EthernetPortPanel";
 
@@ -16,6 +16,8 @@ export function useGatewayExtras(networkId: string | null, snapshot: unknown): {
   names: DeviceNames | null;
   wifi: WifiDetails | null;
   ports: EthernetPort[] | null;
+  /** Apply a nickname saved on the gateway without re-reading the device map. */
+  setNickname: (mac: string, alias: string) => void;
 } {
   const [names, setNames] = useState<DeviceNames | null>(null);
   const [wifi, setWifi] = useState<WifiDetails | null>(null);
@@ -53,5 +55,7 @@ export function useGatewayExtras(networkId: string | null, snapshot: unknown): {
     return () => { cancelled = true; };
   }, [networkId, snapshot]);
 
-  return { names, wifi, ports };
+  const setNickname = useCallback((mac: string, alias: string) => setNames((n) => withAlias(n, mac, alias)), []);
+
+  return { names, wifi, ports, setNickname };
 }

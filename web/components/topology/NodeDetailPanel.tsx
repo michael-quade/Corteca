@@ -10,6 +10,8 @@ import { ApRadios } from "./ApRadios";
 import { AiNotesSection } from "./AiNotesSection";
 import { SwitchDetails } from "./SwitchDetails";
 import { switchById } from "@/web/lib/inferredSwitches";
+import { memberIdentity } from "@/web/lib/deviceNames";
+import { useDeviceRename, type RenameTarget } from "./DeviceRename";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -133,6 +135,13 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
 
   const title = ap ? apLabel(ap) : member ? clientName(member) : sw ? `Switch on ${sw.port}` : "Backhaul link";
   const kicker = ap ? "Access point" : member ? "Client" : sw ? "Switch (inferred)" : "Link";
+  const rename = useDeviceRename();
+  const renameTarget: RenameTarget | null = ap
+    ? { mac: ap.mac, kind: "Beacon", description: `${ap.model} · ${ap.mac}` }
+    : member
+      ? { mac: member.id, kind: "client", description: `${memberIdentity(member).autoAlias ?? (member as { hostname?: string }).hostname ?? "Client"} · ${member.id}` }
+      : null;
+  const canRename = !!renameTarget && !!rename?.canRename(renameTarget.mac);
 
   return (
     <aside
@@ -142,7 +151,21 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
       <header className="flex items-start justify-between gap-2 border-b border-neutral-100 px-4 py-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600">{kicker}</p>
-          <h3 className="break-words text-sm font-semibold text-neutral-900">{title}</h3>
+          <h3 className="flex items-start gap-1.5 break-words text-sm font-semibold text-neutral-900">
+            {title}
+            {canRename && (
+              <button
+                type="button"
+                onClick={() => rename!.start(renameTarget!)}
+                aria-label={`Rename ${title}`}
+                className="mt-px flex-shrink-0 rounded p-0.5 text-neutral-400 hover:bg-blue-50 hover:text-blue-600"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                </svg>
+              </button>
+            )}
+          </h3>
         </div>
         <button
           type="button"

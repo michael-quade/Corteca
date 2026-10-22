@@ -109,3 +109,12 @@ export function applyNamesToTopology<T extends { mesh: unknown; members?: unknow
 export function nicknameFor(names: DeviceNames | null, mac: string): string | undefined {
   return names?.get(key(mac))?.alias || undefined;
 }
+
+/** A copy of `names` with one device's nickname changed (after a rename). */
+export function withAlias(names: DeviceNames | null, mac: string, alias: string): DeviceNames {
+  const next = new Map(names ?? []);
+  const k = key(mac);
+  const prev = next.get(k);
+  next.set(k, prev ? { ...prev, alias } : { mac, alias, hostName: "", category: "", manufacturer: "", model: "" });
+  return next;
+}

@@ -9,6 +9,7 @@ import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable
 import { McpTopBar } from "@/web/components/McpTopBar";
 import { McpDebugPanel } from "@/web/components/McpDebugPanel";
 import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
+import { DeviceRenameProvider } from "@/web/components/topology/DeviceRename";
 import { RecentNetworksDrawer } from "@/web/components/RecentNetworksDrawer";
 import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
@@ -51,7 +52,7 @@ export default function McpNetworkVisualizerPage() {
   useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
   // Names and WiFi details come from the gateway, after each MCP load.
-  const { names, wifi, ports } = useGatewayExtras(response?.homeWifiId ?? null, response);
+  const { names, wifi, ports, setNickname } = useGatewayExtras(response?.homeWifiId ?? null, response);
   // On-demand Corteca AI analysis / troubleshooting; findings land on the devices they mention.
   const ai = useAiAnalysis(response?.homeWifiId ?? null);
   const network = useMemo(() => {
@@ -191,6 +192,7 @@ export default function McpNetworkVisualizerPage() {
           )}
 
           {network && response && !fetching && (
+            <DeviceRenameProvider networkId={response.homeWifiId} names={names} onRenamed={setNickname}>
             <div className="space-y-6">
               {failedApis.length > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
@@ -248,6 +250,7 @@ export default function McpNetworkVisualizerPage() {
 
               <McpDebugPanel response={response} />
             </div>
+            </DeviceRenameProvider>
           )}
         </div>
       </div>
