@@ -29,22 +29,58 @@ export function memberIdentity(m: Member): MemberIdentity {
   return m as unknown as MemberIdentity;
 }
 
+// ── Names for clients without a nickname ─────────────────────────────────────
+// Corteca reports "Unknown_<mac>" when a client sends no hostname. Like the
+// Corteca console, show the gateway's detected model instead ("iPad Pro 12.9"
+// 2nd Gen (Wi-Fi)"), else manufacturer + category ("Google sensor"). Identical
+// derived names get the end of the MAC ("Nest Protect · 5A-94").
+
+const PLACEHOLDER = /^(unknown[_\s-]|[0-9a-f]{2}([:-]?[0-9a-f]{2}){5}$)/i;
+export const isPlaceholderName = (name: string | undefined) => !name?.trim() || PLACEHOLDER.test(name.trim());
+
+function detectedName(e: DeviceNameEntry): string | null {
+  if (e.model) return e.model;
+  const cat = categoryLabel(e.category)?.toLowerCase();
+  return e.manufacturer ? [e.manufacturer, cat].filter(Boolean).join(" ") : null;
+}
+
+/** Client id → name to show when it has no nickname and only a placeholder name. */
+function derivedNames(clients: { id: string; current: string | undefined }[], names: DeviceNames): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of clients) {
+    const e = names.get(key(c.id));
+    const name = e && !e.alias && isPlaceholderName(c.current) ? detectedName(e) : null;
+    if (name) out.set(c.id, name);
+  }
+  const count = new Map<string, number>();
+  for (const n of out.values()) count.set(n, (count.get(n) ?? 0) + 1);
+  for (const [id, n] of out) {
+    if (count.get(n)! > 1) out.set(id, `${n} · ${id.toUpperCase().replace(/:/g, "-").slice(-5)}`);
+  }
+  return out;
+}
+
 export function applyDeviceNames(network: McpNetwork, names: DeviceNames | null): McpNetwork {
   if (!names || names.size === 0) return network;
   const aps = network.aps.map((ap) => {
     const alias = names.get(key(ap.mac))?.alias;
     return alias ? { ...ap, nickname: alias } : ap;
   });
+  const derived = derivedNames(
+    network.members.map((m) => ({ id: m.id, current: m.alias || (m as unknown as { hostname?: string }).hostname })),
+    names,
+  );
   const members = network.members.map((m) => {
     const n = names.get(key(m.id));
     if (!n) return m;
+    const name = n.alias || derived.get(m.id);
     const extra: MemberIdentity = {
       manufacturer: n.manufacturer || undefined,
       model: n.model || undefined,
       category: n.category || undefined,
     };
-    return n.alias
-      ? ({ ...m, alias: n.alias, autoAlias: m.alias, ...extra } as Member)
+    return name
+      ? ({ ...m, alias: name, autoAlias: m.alias, ...extra } as Member)
       : ({ ...m, ...extra } as Member);
   });
   return { ...network, aps, members, topology: { ...network.topology, members } };
@@ -91,11 +127,15 @@ export function applyNamesToTopology<T extends { mesh: unknown; members?: unknow
     const alias = names.get(key(String(ap.macaddress ?? "")))?.alias;
     return alias ? { ...ap, nickname: alias } : ap;
   });
-  const rename = (list: unknown[]) => list.map((m) => {
-    const rec = m as Record<string, unknown>;
-    const alias = names.get(key(String(rec.id ?? rec.mac ?? "")))?.alias;
-    return alias ? { ...rec, alias, autoAlias: rec.alias } : rec;
-  });
+  const rename = (list: unknown[]) => {
+    const recs = list as Record<string, unknown>[];
+    const idOf = (r: Record<string, unknown>) => String(r.id ?? r.mac ?? "");
+    const derived = derivedNames(recs.map((r) => ({ id: idOf(r), current: String(r.alias ?? r.hostname ?? "") })), names);
+    return recs.map((rec) => {
+      const alias = names.get(key(idOf(rec)))?.alias || derived.get(idOf(rec));
+      return alias ? { ...rec, alias, autoAlias: rec.alias } : rec;
+    });
+  };
   const raw = data.members;
   const members = Array.isArray(raw)
     ? rename(raw)
