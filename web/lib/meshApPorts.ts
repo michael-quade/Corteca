@@ -15,12 +15,13 @@ import { clientName } from "@/web/lib/topologyFlow";
 import { getModelFallbackPorts } from "@/web/lib/ethernetPorts";
 
 export interface ReportedPort {
-  kind: "uplink" | "device" | "switch" | "none";
+  /** `wireless`: the WAN port of an AP whose backhaul is WiFi (nothing wired reported on it). */
+  kind: "uplink" | "wireless" | "device" | "switch" | "none";
   /** Label on the port chip: "WAN", "1", … ("?" when Corteca gave no port number). */
   portLabel: string;
   /** Wired clients on the port (one, or several behind an inferred switch). */
   devices: { name: string; mac: string; speedMbps: number | null }[];
-  /** Uplink: where the backhaul lands, e.g. "Gateway LAN 1 (switch)". */
+  /** Uplink: where the backhaul lands, e.g. "Gateway LAN 1 (switch)"; wireless: the band, e.g. "6 GHz". */
   uplink?: string;
   switch?: InferredSwitch;
 }
@@ -99,6 +100,9 @@ export function meshApPorts(network: McpNetwork, apMac: string, basePorts: Ether
     }
     if (port.upstream && ethernetUplink) {
       return { ...port, status: "Up", currentBitRate: uplink.rateMbps ?? 0, reported: { kind: "uplink", portLabel, devices: [], uplink: uplinkText } };
+    }
+    if (port.upstream && uplink && !ethernetUplink) {
+      return { ...port, status: "Unknown", currentBitRate: 0, reported: { kind: "wireless", portLabel, devices: [], uplink: uplink.band ?? undefined } };
     }
     return { ...port, status: "Unknown", currentBitRate: 0, reported: { kind: "none", portLabel, devices: [] } };
   };

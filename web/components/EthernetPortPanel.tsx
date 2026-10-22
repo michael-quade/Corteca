@@ -202,7 +202,7 @@ export function EthernetPortPanel({ ports, context }: Props) {
                       : "bg-neutral-100 text-neutral-600"
                     )}>{fmtMax(port.maxBitRate)}</span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-700">{port.reported?.kind === "none" ? "—" : fmtNeg(port.currentBitRate, port.status)}</td>
+                  <td className="px-4 py-3 text-neutral-700">{port.reported?.kind === "none" || port.reported?.kind === "wireless" ? "—" : fmtNeg(port.currentBitRate, port.status)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-neutral-500 whitespace-nowrap">{port.macAddress || "—"}</td>
                   <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">
                     {port.reported

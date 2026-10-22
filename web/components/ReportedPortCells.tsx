@@ -9,6 +9,12 @@ const NOTHING = <span className="text-neutral-400">Nothing reported</span>;
 
 export function ReportedStatusCell({ reported }: { reported: ReportedPort }) {
   if (reported.kind === "none") return <span className="text-xs">{NOTHING}</span>;
+  if (reported.kind === "wireless") return (
+    <span className="flex items-center gap-1.5 text-xs text-sky-600">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14 0M8.5 16.05a6 6 0 0 1 7 0M2 8.82a15 15 0 0 1 20 0"/><circle cx="12" cy="20" r="0.5"/></svg>
+      Wireless
+    </span>
+  );
   if (reported.kind === "uplink") return (
     <span className="flex items-center gap-1.5 text-xs text-sky-600">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
@@ -26,6 +32,7 @@ export function ReportedStatusCell({ reported }: { reported: ReportedPort }) {
 export function ReportedConnectedTo({ reported, open, onToggle }: { reported: ReportedPort; open: boolean; onToggle: () => void }) {
   if (reported.kind === "none") return NOTHING;
   if (reported.kind === "uplink") return <>Backhaul · {reported.uplink}</>;
+  if (reported.kind === "wireless") return <>Wireless backhaul{reported.uplink ? ` · ${reported.uplink}` : ""}</>;
   if (reported.kind === "device") {
     const d = reported.devices[0];
     return <span title={d.mac}>{d.name}</span>;

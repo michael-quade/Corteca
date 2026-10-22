@@ -172,6 +172,13 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         if (r.kind === "none") {
           return <Row key={p.index} port={label} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
         }
+        if (r.kind === "wireless") {
+          return (
+            <Row key={p.index} port={label}
+              device={<JumpButton onClick={() => onSelect({ kind: "link", id: ap.mac })}>Wireless backhaul{r.uplink ? ` · ${r.uplink}` : ""}</JumpButton>}
+              title="The backhaul to the parent AP is WiFi; nothing wired is reported on this port" />
+          );
+        }
         if (r.kind === "uplink") {
           return (
             <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
