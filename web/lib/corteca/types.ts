@@ -25,14 +25,22 @@ export type CustomerId = string;      // subscriber UUID
 
 export interface HomeWifi {
   id: NetworkId;
+  /** Root node MAC */
+  root?: MacAddress;
+  /** Root node serial number */
+  sn?: string;
+  /** Product class (model), e.g. "Beacon 19" */
+  pc?: string;
+  oui?: string;
   status: {
     online: boolean;
   };
 }
 
+/** A search result; MAC / serial searches also return networks with no subscriber (no IDs, name or email). */
 export interface Subscriber {
-  customer_id: CustomerId;
-  uuid: CustomerId;
+  customer_id?: CustomerId;
+  uuid?: CustomerId;
   name?: string;
   first_name?: string;
   last_name?: string;

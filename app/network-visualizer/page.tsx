@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
+import { subscriberKey, subscriberName } from "@/web/lib/subscriberSearch";
 import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
 import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
@@ -155,7 +156,7 @@ export default function NetworkVisualizerPage() {
   const rootId = topoData?.rootDeviceId;
   const gatewayModel = rootId ? apEthData?.[rootId]?.model : undefined;
   const fullName  = selected
-    ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
+    ? subscriberName(selected)
     : null;
 
   return (
@@ -163,7 +164,7 @@ export default function NetworkVisualizerPage() {
       <CortecaCard title="Find a subscriber">
         <SubscriberSearch
           onSelect={handleSubscriberSelect}
-          selectedId={selected?.customer_id ?? selected?.uuid}
+          selectedKey={selected ? subscriberKey(selected) : undefined}
         />
       </CortecaCard>
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
+import { subscriberKey, subscriberName } from "@/web/lib/subscriberSearch";
 import { DataModelBrowser } from "@/web/components/DataModelBrowser";
 import type { Subscriber } from "@/web/lib/corteca/types";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
@@ -18,13 +19,13 @@ export default function DeviceBrowserPage() {
   const deviceId  = selected?.home_wifis?.[0]?.id;
   const online    = selected?.home_wifis?.[0]?.status?.online;
   const fullName  = selected
-    ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
+    ? subscriberName(selected)
     : null;
 
   return (
     <CortecaPage title="Device Data Model Browser" meta="Explore and configure the full USP data model for any managed device.">
       <CortecaCard title="Find a subscriber">
-        <SubscriberSearch onSelect={setSelected} selectedId={selected?.customer_id ?? selected?.uuid} />
+        <SubscriberSearch onSelect={setSelected} selectedKey={selected ? subscriberKey(selected) : undefined} />
       </CortecaCard>
 
       {selected && (

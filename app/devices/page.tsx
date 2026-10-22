@@ -8,6 +8,7 @@ import { CortecaCard } from "@/web/components/corteca/CortecaCard";
 import { StatusPill } from "@/web/components/corteca/StatusPill";
 import { Notice } from "@/web/components/corteca/Notice";
 import { SubscriberSearch } from "@/web/components/SubscriberSearch";
+import { subscriberKey, subscriberName } from "@/web/lib/subscriberSearch";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
 import type { Subscriber, Member } from "@/web/lib/corteca/types";
 
@@ -58,10 +59,7 @@ export default function DevicesPage() {
   const networkId = selectedSubscriber?.home_wifis?.[0]?.id;
   const online = selectedSubscriber?.home_wifis?.[0]?.status?.online;
   const fullName = selectedSubscriber
-    ? (selectedSubscriber.name ||
-        `${selectedSubscriber.first_name ?? ""} ${selectedSubscriber.last_name ?? ""}`.trim() ||
-        selectedSubscriber.email ||
-        selectedSubscriber.customer_id)
+    ? subscriberName(selectedSubscriber)
     : null;
 
   return (
@@ -69,7 +67,7 @@ export default function DevicesPage() {
       <CortecaCard title="Find a subscriber">
         <SubscriberSearch
           onSelect={handleSubscriberSelect}
-          selectedId={selectedSubscriber?.customer_id ?? selectedSubscriber?.uuid}
+          selectedKey={selectedSubscriber ? subscriberKey(selectedSubscriber) : undefined}
         />
       </CortecaCard>
 

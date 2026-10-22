@@ -8,6 +8,7 @@ import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { NAV_ITEMS } from "@/web/lib/navItems";
 import { useAuth } from "@/web/contexts/AuthContext";
 import type { Subscriber } from "@/web/lib/corteca/types";
+import { subscriberKey, subscriberName } from "@/web/lib/subscriberSearch";
 
 export const PALETTE_SUBSCRIBER_KEY = "corteca:palette-subscriber";
 export const OPEN_PALETTE_EVENT = "corteca:open-command-palette";
@@ -70,10 +71,10 @@ export function CommandPalette() {
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetchWithAuth(`/api/subscribers?name=${encodeURIComponent(term)}`);
+        const res = await fetchWithAuth(`/api/subscribers?q=${encodeURIComponent(term)}&field=auto`);
         const data = await res.json();
-        const list: Subscriber[] = Array.isArray(data) ? data : (data.content ?? []);
-        setSubscribers(res.ok ? list.slice(0, 6) : []);
+        const list: Subscriber[] = data.results ?? [];
+        setSubscribers(res.ok ? list.filter((s) => s.home_wifis?.[0]?.id).slice(0, 6) : []);
       } catch {
         setSubscribers([]);
       } finally {
@@ -135,7 +136,7 @@ export function CommandPalette() {
             <input
               autoFocus
               type="text"
-              placeholder="Search pages or subscribers…"
+              placeholder="Search pages, or subscribers by name, email, MAC, serial…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="flex-1 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
@@ -155,20 +156,20 @@ export function CommandPalette() {
                   <p className="px-2.5 py-1.5 text-xs text-neutral-400">No matching subscribers.</p>
                 )}
                 {subscribers.map((sub) => {
-                  const id = sub.customer_id ?? sub.uuid;
-                  const displayName =
-                    sub.name || `${sub.first_name ?? ""} ${sub.last_name ?? ""}`.trim() || sub.email || id;
+                  const net = sub.home_wifis?.[0];
                   const online = sub.home_wifis?.[0]?.status?.online;
                   return (
                     <button
-                      key={id}
+                      key={subscriberKey(sub)}
                       type="button"
                       onClick={() => goToSubscriber(sub)}
                       className="flex w-full items-center justify-between gap-3 rounded px-2.5 py-2 text-left text-sm hover:bg-neutral-100"
                     >
-                      <span className="flex flex-col">
-                        <span className="font-medium text-neutral-900">{displayName}</span>
-                        {sub.email && <span className="text-xs text-neutral-400">{sub.email}</span>}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium text-neutral-900">{subscriberName(sub)}</span>
+                        <span className="truncate text-xs text-neutral-400">
+                          {[sub.email, net?.id, net?.sn].filter(Boolean).join(" · ")}
+                        </span>
                       </span>
                       {sub.home_wifis?.[0]?.id && (
                         <span className="flex items-center gap-1.5 shrink-0 text-xs text-neutral-500">

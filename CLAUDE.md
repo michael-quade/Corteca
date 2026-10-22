@@ -17,7 +17,7 @@ The app runs on Vercel (or any Node host) and acts as a secure proxy: all Nokia 
 | `/` | Login | Full-screen landing page with Nokia background image. Authenticates against the Corteca API. Username is plain text — not email type. |
 | `/gate` | Site Gate | Separate username/password gate (SITE_USERNAME / SITE_PASSWORD env vars) that protects the entire app before Corteca login. Enforced by `middleware.ts`. |
 | `/dashboard` | Dashboard | Landing page styled after the Corteca console home: time-of-day greeting with the user's first name, "Corteca dashboards" grid of wide tiles (`DASHBOARD_CARD_HREFS` in `web/lib/navItems.tsx`), a tall featured tile for the MCP visualizer (`DASHBOARD_FEATURED_HREF`), and an "Other applications" dropdown for every remaining page (incl. the REST `/network-visualizer`, which is no longer a tile but stays in the nav menu). |
-| `/devices` | Device Search | Search subscribers by name, email, MAC, UUID, or serial. Shows all devices on their home network with status, model, and IP. |
+| `/devices` | Device Search | Customer search as in the Corteca console (`SubscriberSearch`: Auto detect / Name / Email / Customer ID / MAC / Serial number chips, results table) — see **Subscriber search** below. Shows all devices on their home network with status, model, and IP. |
 | `/network-visualizer` | Home Network Visualizer | Search a subscriber, then renders: interactive D3 topology graph, Leaflet map pin, ethernet port panels per AP (gateway: live TR-181 with config/spec fallback; mesh Beacons: built from Corteca reports by `meshApPorts()` — see Ethernet ports below), and a raw API debug panel. Subscriber card includes a blue "Launch Corteca Console" button linked to the gateway MAC. |
 | `/mcp-network-visualizer` | Home Network Visualizer (MCP) | Compact top bar (title, subscriber search with floating results, subscriber/network chip with data-captured time and Console button) and a left "Recent networks" rail/drawer (localStorage; shows each network's gateway model; per-row × removes one entry, Clear removes all) keep the diagram at the top of the page, sized to the window. Network data comes from the Corteca AI MCP server's `retrieve-network-data` tool. Renders a React Flow topology canvas (`web/components/topology/`: AP cards with status ring and client badge, backhaul links coloured by Corteca's `backhaulQuality` with width/flow animation by data rate, one client card per AP with stacked band sections (6/5/2.4 GHz, wired) collapsing to "+N", legend, minimap, full screen; ELK layout; Ethernet backhaul below 1 Gbps flagged amber; an Ethernet backhaul plugged straight into a gateway port is labelled with the port, "LAN 1 · 10 Gbps", from the live host table — `link.port`, set by `applySwitches()` — and the link panel shows "Gateway port"), per-AP cards (`McpAccessPointCards`), the `NetworkMembersTable`, and a raw MCP debug panel. No Leaflet map (MCP returns no geo data). AP cards show model + MAC (firmware is in the detail panel); zoom/fit buttons sit beside the legend (top-left). Interaction: click an AP, client pill or link to open a detail side panel and highlight its path to the gateway — if opening the panel pans the diagram aside, closing it pans back (unless the user moved the view meanwhile; dragging never closes the panel); AP cards and table rows select the same node; client search (name/MAC/IP); filter chips (band, SSID, weak signal < -70 dBm, could use faster band) fade non-matching clients; detail panel also shows AP public IP / hardware / last offline / top clients by traffic, link PHY rate and traffic, client traffic, supported bands and last disconnect reason; a "data captured" time sits above the canvas; Tree / Sideways / Radial layouts; arrow keys step through devices, Esc clears (`useCanvasKeyboard`: a click anywhere in the canvas re-focuses it, since clicked edge labels dropped focus to `<body>` and Esc did nothing). View state lives in the URL (`?network=…&sel=client:…&band=5,2.4&ssid=…&weak=1&slowband=1&layout=radial&v=x,y,zoom`) — `?network=<root MAC>` deep-links straight to a network without a subscriber search. A **Refresh** button in the top bar re-reads the network from MCP while keeping the diagram, selection, filters, zoom and expanded sections; gateway reads (Ethernet ports, backhaul standard) are cached per network snapshot (`capturedAt`), so they re-read too, showing the previous values until the new ones arrive. A failed refresh keeps the old data with an error. An **AI analysis** card under the diagram (top-bar "AI analysis" button jumps there and runs it) runs MCP `analyze-network` on demand and shows Corteca's state pill and the Markdown report; Beacons with findings get an amber badge on their diagram card, and AP/client panels show the report lines about them. The same card's "Troubleshoot a problem" box runs `troubleshoot-network`. The AP panel's **Radios** section shows each radio's channel, width, busy airtime split (transmit / own clients / other networks), average, noise and Tx power; the client panel shows the WiFi standard ("WiFi 6 (802.11ax)"); an "Older WiFi (4/5)" filter chip (`oldwifi=1`) fades newer clients. The top bar's "data … ago" time re-renders every 30 s. **Inferred switches** are drawn as dashed "Switch · inferred" cards between the AP port and what sits behind it (Beacons, plus a client card for wired clients behind it); the AP → switch line is labelled with the port and its negotiated rate ("LAN 1 · 1 Gbps"), clicking the card or its line opens a panel with the evidence and the devices behind it (`?sel=switch:<id>`), and selecting a device behind it highlights the path through it. An **Internet** card sits above the gateway (`internet` node, green/red ring from the gateway's WAN connection status, WAN IPv4), joined by a blue `wan` edge whose pill shows "WAN · 5 Gbps" (the WAN port's negotiated rate); clicking the card or pill opens the WAN panel (`?sel=wan:<gateway MAC>`: status, public IP, uptime, traffic, WAN interface name/services/addressing, WAN IPv4/IPv6, default gateway, DNS, LAN IP, a double-NAT / CGNAT note for private WAN addresses, and the WAN port's max/current rate, duplex). Highlighted paths to the gateway continue to the Internet. Wired clients are **their own pill nodes** (`wired`, id `wc:<MAC>`), each linked from the AP or inferred switch it is plugged into by a `wiredLink` line (`wl:<MAC>`) labelled with port and link speed ("LAN 3 · 100 Mbps"); behind a switch the line has no label (the switch line carries the port and shared speed). Client cards hold WiFi clients only. The client panel's Type row says the same ("Wired · LAN 3 · 100 Mbps") and wired clients have no PHY row. |
 | `/network-map` | Global Network Map | Leaflet map of every managed network in the fleet, clustered by location. Color-coded online/offline. Sidebar with deployment stats, search, and per-network detail panel. |
@@ -117,7 +117,7 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/auth/logout` | POST | Clears auth cookies |
 | `/api/auth/session` | GET | Returns `{ authenticated, email }` from cookies |
 | `/api/gate` | POST / DELETE | Site gate login / logout |
-| `/api/subscribers` | GET | Search subscribers by `name` query param |
+| `/api/subscribers` | GET | Subscriber search: `?q=…&field=auto\|name\|email\|customerId\|mac\|serial` (legacy `?name=`). Returns `{ results, fields, truncated }` — see **Subscriber search** |
 | `/api/network/[deviceId]` | GET | Full network topology for a device (mesh, members, configs) |
 | `/api/network/[deviceId]/ethernet` | GET | Ethernet port live status for a device |
 | `/api/network/[deviceId]/datamodel` | GET | USP TR-369 data model for a device |
@@ -142,6 +142,15 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/stats` | GET | In-memory API call stats for current process |
 | `/api/sessions` | GET / PUT | List or update API session records in DB |
 | `/api/cron/keepalive` | GET | Pings Supabase via Prisma to prevent auto-pause; called by Vercel Cron |
+
+### Subscriber search
+
+All three search boxes (`SubscriberSearch` on Device Search / REST visualizer / Device browser, the MCP top bar's `SubscriberSearchBox` with a field select, and the ⌘K `CommandPalette`, Auto only) call `/api/subscribers` via `useSubscriberSearch()`. `web/lib/subscriberSearch.ts` maps the field to `GET /dashboard-bff/subscribers` params (checked on demo2):
+- `name`, `email`: case-insensitive substring. `uuid` (customer ID): **case-sensitive** substring, so a mixed-case input is also sent lowercased. `device_id` (MAC): prefix of **≥ 4 octets, uppercase hyphenated only** (anything else → `Invalid MAC …`), so input is normalised and < 4 octets is rejected with a 400. `serial_no`: **uppercase** prefix.
+- An email containing **`+` never matches** (even `%2B`), so the part before the `+` is searched and results filtered on the full address.
+- **Auto detect**: MAC pattern → MAC; 4 letters + hex with a digit (`ALCL…`) → serial; `@` → email; otherwise name + email + customer ID in parallel, merged by customer ID.
+- MAC/serial searches also return **networks with no subscriber** (only `home_wifis`): shown as "Unassigned network" (`subscriberName()`), keyed by network (`subscriberKey()`), and still openable. `home_wifis[]` carry `root`, `sn` (serial), `pc` (model).
+- Each query asks for 20 rows; `truncated` = some query returned a full page.
 
 ### Corteca AI MCP Server
 
@@ -271,6 +280,8 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `corteca/types.ts` | All shared TypeScript interfaces (Subscriber, Member, MeshAP, etc.) |
 | `fetchWithAuth.ts` | Client-side authenticated fetch; fires DOM events for stats, triggers ReloginModal on 401, fires the `ApiLogInterceptor` for the API log panel |
 | `reportNameEnrichment.ts` | `findDeviceIdInfo()` heuristic to find MAC/serial columns in CSV report rows; `injectAccountNames()` to prepend account name column |
+| `subscriberSearch.ts` | Search fields, Auto detect, Corteca query mapping (`upstreamQueries()`), `subscriberName()` / `subscriberKey()` |
+| `useSubscriberSearch.ts` | Client hook for `/api/subscribers` (latest search wins) |
 | `reportTypes.ts` | `REPORT_CONFIGS` — display name, chart color, Corteca type strings for all 8 report types |
 | `networkTopology.ts` | Parses raw mesh/topo API responses into normalised `NetworkTopologyData` |
 | `topologyFlow.ts` | `buildFlowGraph()` (McpNetwork → React Flow nodes/edges, one client node per AP so each subtree stays one card wide, sizes pre-measured), `layoutFlowGraph()` (ELK; returns node positions **and** edge routes in `edge.data.points`), `backhaulLabel()` |
@@ -407,7 +418,9 @@ web/
     McpTopBar.tsx                 # MCP visualizer top bar: search, subscriber chip, AI analysis, Refresh, Console button (+ .types.ts)
     McpDebugPanel.tsx             # Raw retrieve-network-data response (debug); exports McpResponse
     ai/                           # MCP visualizer AI: AiAnalysisCard, MarkdownReport, DiagnosisView, TroubleshootForm
-    SubscriberSearchBox.tsx       # Compact subscriber search with dropdown results
+    SubscriberSearch.tsx          # Customer search: field chips + SubscriberResultsTable
+    SubscriberSearchBox.tsx       # Compact subscriber search (field select) with dropdown results
+    search/SearchFieldChips.tsx   # Auto detect / Name / Email / Customer ID / MAC / Serial number chips
     RecentNetworksDrawer.tsx      # Left rail + overlay list of recently viewed networks
     topology/                     # React Flow canvas for the MCP visualizer
       TopologyCanvas.tsx          # ReactFlow + ELK layout, legend, minimap, full screen
@@ -444,7 +457,6 @@ web/
     Providers.tsx                 # Wraps ApiLogProvider + ApiLogPanel + Auth + Stats
     RebootChart.tsx
     ReportChart.tsx
-    SubscriberSearch.tsx
     SwDrilldown.tsx
     SwHeatmap.tsx
     UnknownFirmwareList.tsx
@@ -467,6 +479,7 @@ web/
       RebootTable.tsx
       ReportTable.tsx
       SessionTable.tsx
+      SubscriberResultsTable.tsx  # Search results: name, email, MAC, customer ID, serial, model, status
       SwNetworkTable.tsx
     ui/
       Button.tsx
