@@ -40,3 +40,17 @@ model ApiSession {
 
   @@map("api_sessions")
 }
+
+// Ethernet port layout per device model, learned from gateways' live TR-181 ports
+// (mesh Beacons don't report theirs). Keyed by modelKey(): "beacon 10".
+model PortLayout {
+  model           String   @id
+  displayName     String   @map("display_name")
+  hardwareVersion String   @default("") @map("hardware_version")
+  ports           Json     @default("[]")
+  source          String   @default("live")
+  sampleMac       String   @default("") @map("sample_mac")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("port_layouts")
+}

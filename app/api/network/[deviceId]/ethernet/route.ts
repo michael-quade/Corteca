@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { resolveUspEndpointId, uspPost, parseGetResp } from '@/web/lib/corteca/usp';
+import { recordLivePortLayout } from '@/web/lib/corteca/portLayoutStore';
 
 export interface EthernetPort {
   index: number;
@@ -103,5 +104,21 @@ export async function GET(
   });
 
   console.log(`[ethernet:${deviceId}] ${ports.length} interfaces`);
+
+  // Learn this model's port layout for mesh Beacons of the same model (which don't
+  // report their ports). Runs after the response, so it adds no latency.
+  if (ports.length) {
+    after(async () => {
+      try {
+        const info = await uspPost(baseUrl, endpointId, deviceId, authHeaders,
+          getMsg('eth-model', ['Device.DeviceInfo.ModelName', 'Device.DeviceInfo.HardwareVersion']));
+        const d = parseGetResp((info.json as Record<string, unknown>)?.body);
+        const model = d['Device.DeviceInfo.ModelName'] ?? '';
+        if (model) await recordLivePortLayout(model, d['Device.DeviceInfo.HardwareVersion'] ?? '', deviceId, ports);
+      } catch (e) {
+        console.warn(`[ethernet:${deviceId}] port layout not recorded:`, e instanceof Error ? e.message : e);
+      }
+    });
+  }
   return NextResponse.json({ ports });
 }

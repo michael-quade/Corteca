@@ -10,6 +10,8 @@ import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetP
 import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
 import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, portContextFromTopology, type ApEthData } from "@/web/lib/ethernetPorts";
 import { meshApPorts, restNetwork } from "@/web/lib/meshApPorts";
+import { beaconPortLayout, withSpecMaxRates } from "@/web/lib/portLayouts";
+import { usePortLayouts } from "@/web/lib/usePortLayouts";
 import { applyNamesToTopology, nicknameFor, toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
 import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
 import type { Subscriber } from "@/web/lib/corteca/types";
@@ -71,6 +73,8 @@ export default function NetworkVisualizerPage() {
     return gw && !gw.notice && gw.ports.length ? gw.ports : null;
   }, [topoData, apEthData]);
   const meshNetwork = useMemo(() => (named ? restNetwork(named, gatewayLivePorts) : null), [named, gatewayLivePorts]);
+  // Mesh Beacon port layouts per model, learned from gateways' live ports.
+  const portLayouts = usePortLayouts();
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     setSelected(subscriber);
@@ -101,21 +105,24 @@ export default function NetworkVisualizerPage() {
         const livePorts: EthernetPort[] = r.ok ? (body?.ports ?? []) : [];
         let ports = livePorts;
         let notice: string | undefined;
+        let source: ApEthData['source'] = ports.length ? 'live' : undefined;
         if (ports.length === 0) {
           const cfgPorts = parseEthernetFromConfig(cfg);
           if (cfgPorts.length > 0) {
             ports = cfgPorts;
+            source = 'config';
             notice = 'Port capabilities from device config — live status unavailable';
           } else {
             const specPorts = getModelFallbackPorts(model);
             if (specPorts.length > 0) {
               ports = specPorts;
+              source = 'spec';
               notice = `Port layout from ${model} model spec — live status unavailable`;
             }
           }
         }
         const ethErr = livePorts.length === 0 && !r.ok && ports.length === 0 ? (body?.error ?? `HTTP ${r.status}`) : undefined;
-        return [id, { ports, error: ethErr, notice, label, serial: sn, mac: id }] as [string, ApEthData];
+        return [id, { ports, error: ethErr, notice, label, serial: sn, mac: id, model, source }] as [string, ApEthData];
       }));
       setApEthData(Object.fromEntries(ethResults));
     } catch (e) {
@@ -146,6 +153,7 @@ export default function NetworkVisualizerPage() {
   const online    = selected?.home_wifis?.[0]?.status?.online;
   const portContext = named ? portContextFromTopology(named) : undefined;
   const rootId = topoData?.rootDeviceId;
+  const gatewayModel = rootId ? apEthData?.[rootId]?.model : undefined;
   const fullName  = selected
     ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
     : null;
@@ -203,8 +211,12 @@ export default function NetworkVisualizerPage() {
           {apEthData && Object.values(apEthData).map((entry) => {
             const resolved = resolvePorts(entry, topoData);
             const mesh = entry.mac !== rootId && meshNetwork;
-            const ports = mesh ? meshApPorts(meshNetwork, entry.mac, resolved.ports, gatewayLivePorts) : resolved.ports;
-            const notice = mesh ? MESH_PORTS_NOTICE : resolved.notice;
+            // A mesh Beacon's config rarely lists its ports: use its model's learned layout.
+            const layout = mesh && entry.source !== "config"
+              ? beaconPortLayout(entry.model ?? "", portLayouts, gatewayModel && gatewayLivePorts ? { model: gatewayModel, ports: gatewayLivePorts } : null)
+              : null;
+            const ports = mesh ? meshApPorts(meshNetwork, entry.mac, layout?.ports.length ? layout.ports : resolved.ports, gatewayLivePorts) : withSpecMaxRates(entry.model ?? "", resolved.ports);
+            const notice = mesh ? `${MESH_PORTS_NOTICE}${layout?.note ? ` ${layout.note}` : ""}` : resolved.notice;
             return (
               <CortecaCard
                 key={entry.mac}

@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { cn } from "@/web/lib/utils";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
-import { clientName, isEthernet } from "@/web/lib/topologyFlow";
+import { clientName } from "@/web/lib/topologyFlow";
 import type { Selection } from "@/web/lib/topologySelection";
-import { beaconClientsLabel, classifyPortHosts, gatewayPortOf, labelPorts, looksLikeSwitch, staleLabel, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
+import { beaconClientsLabel, classifyPortHosts, labelPorts, looksLikeSwitch, staleLabel, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import { DetailSection, JumpButton } from "./DetailParts";
 import { useGatewayPorts } from "./useGatewayPorts";
 import { formatRate } from "@/web/lib/rateFormat";
+import { meshApPorts } from "@/web/lib/meshApPorts";
+import { beaconPortLayout } from "@/web/lib/portLayouts";
+import { usePortLayouts } from "@/web/lib/usePortLayouts";
 
 const fmtMbps = (mbps: number) => formatRate(mbps);
 
@@ -144,44 +147,56 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
 }
 
 /**
- * Mesh APs expose no Ethernet object in their data model, so ports are built from
- * Corteca's member records (wired clients carry the port they were seen on) and
- * the mesh backhaul link. Empty ports can't be confirmed this way.
+ * Mesh APs expose no Ethernet object in their data model, so every port of the
+ * model's layout (learned from a gateway of that model, see portLayouts.ts) is
+ * filled from Corteca's reports: wired clients' port numbers, switches inferred
+ * from several clients on one port, and the Ethernet backhaul. A port with nothing
+ * reported may be empty or unknown.
  */
 function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void; note: string }) {
-  const uplink = network.backhaul.find((l) => l.childMac === ap.mac);
-  // Where this AP's Ethernet backhaul lands on the gateway, from the gateway's host table.
-  const gatewayMac = network.aps.find((a) => a.role === "root")?.mac;
-  const gatewayPorts = useGatewayPorts(uplink && isEthernet(uplink) && ap.role !== "root" ? gatewayMac : undefined, network.capturedAt);
-  const landing = Array.isArray(gatewayPorts) ? gatewayPortOf(ap.mac, gatewayPorts, network) : null;
-  const parentIsGateway = uplink?.parentMac === gatewayMac;
-  const wired = network.members
-    .filter((m) => m.connected && m.device_id === ap.mac && String(m.type ?? "").toLowerCase() === "ethernet")
-    .map((m) => ({ m, port: Number((m as unknown as { port_number?: number }).port_number) || null, kbps: Number((m as unknown as { rx_statistics?: { rate?: number } }).rx_statistics?.rate) || 0 }))
-    .sort((a, b) => (a.port ?? 99) - (b.port ?? 99));
+  const gateway = network.aps.find((a) => a.role === "root");
+  // The gateway's live ports place the backhaul and, for the same model, give the layout.
+  const gatewayPorts = useGatewayPorts(ap.role !== "root" ? gateway?.mac : undefined, network.capturedAt);
+  const live = Array.isArray(gatewayPorts) ? gatewayPorts : null;
+  const layouts = usePortLayouts();
+  const layout = beaconPortLayout(ap.model, layouts, gateway && live ? { model: gateway.model, ports: live } : null);
+  const ports = meshApPorts(network, ap.mac, layout.ports, live);
 
   return (
     <>
-      {uplink && isEthernet(uplink) && (
-        <Row port="Uplink" status={{ up: true, label: "Up" }} rate={uplink.rateMbps ? fmtMbps(uplink.rateMbps) : undefined}
-          device={<span className="text-neutral-600">{landing && parentIsGateway ? `Gateway ${landing.label}${landing.viaSwitch ? " (switch)" : ""}` : "Backhaul"}</span>}
-          deviceTitle={landing && parentIsGateway ? `Backhaul reaches the gateway on ${landing.label}${landing.viaSwitch ? ", through a switch shared with other devices" : ""}` : undefined}
-          title="Ethernet backhaul to the parent AP" />
-      )}
-      {wired.map(({ m, port, kbps }) => (
-        <Row
-          key={m.id}
-          // Corteca numbers ports from 1 = WAN, so port 2 is the first LAN port.
-          port={port ? (port === 1 ? "WAN" : `LAN ${port - 1}`) : "LAN ?"}
-          status={{ up: true, label: "Up" }}
-          rate={kbps > 0 ? fmtMbps(Math.round(kbps / 1000)) : undefined}
-          deviceTitle={clientName(m)}
-          device={<JumpButton onClick={() => onSelect({ kind: "client", id: m.id })}>{clientName(m)}</JumpButton>}
-          title={`Corteca port ${port ?? "unknown"} · ${m.id}`}
-        />
-      ))}
-      {!wired.length && !(uplink && isEthernet(uplink)) && <p className="py-1 text-xs text-neutral-500">No wired devices reported on this AP.</p>}
-      <p className="pt-1 text-[11px] text-neutral-400">{note}</p>
+      {ports.map((p) => {
+        const r = p.reported;
+        if (!r) return null;
+        const label = r.portLabel === "WAN" ? "WAN" : `LAN ${r.portLabel}`;
+        const rate = p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined;
+        if (r.kind === "none") {
+          return <Row key={p.index} port={label} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
+        }
+        if (r.kind === "uplink") {
+          return (
+            <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+              device={<JumpButton onClick={() => onSelect({ kind: "link", id: ap.mac })}>{r.uplink}</JumpButton>}
+              deviceTitle={`Ethernet backhaul to ${r.uplink}`} title="Ethernet backhaul to the parent AP" />
+          );
+        }
+        if (r.kind === "switch" && r.switch) {
+          const sw = r.switch;
+          return (
+            <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+              device={<JumpButton onClick={() => onSelect({ kind: "switch", id: sw.id })}>Switch · {r.devices.length} devices</JumpButton>}
+              deviceTitle={r.devices.map((d) => d.name).join(", ")}
+              title="Inferred: Corteca reports several wired devices on this port; the rate is the port↔switch link" />
+          );
+        }
+        const d = r.devices[0];
+        return (
+          <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+            device={<JumpButton onClick={() => onSelect({ kind: "client", id: d.mac })}>{d.name}</JumpButton>}
+            deviceTitle={d.name} title={`Corteca port ${r.portLabel} · ${d.mac}`} />
+        );
+      })}
+      {!ports.length && <p className="py-1 text-xs text-neutral-500">No wired devices reported on this AP.</p>}
+      <p className="pt-1 text-[11px] text-neutral-400">{note}{layout.note && ` ${layout.note}`}</p>
     </>
   );
 }
@@ -196,7 +211,7 @@ export function ApEthernetPorts({ network, ap, onSelect }: { network: McpNetwork
       <div className="divide-y divide-neutral-100">
         {ap.role === "root"
           ? <GatewayPorts network={network} ap={ap} onSelect={onSelect} />
-          : <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Mesh APs don't report live port status (not in the TR-181 Data Elements yet). Showing wired devices Corteca has seen on this AP; other ports may be empty or unknown." />}
+          : <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Mesh APs don't report live port status (not in the TR-181 Data Elements yet). Ports show the wired devices and Ethernet backhaul Corteca reports." />}
       </div>
     </DetailSection>
   );

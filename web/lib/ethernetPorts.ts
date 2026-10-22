@@ -6,7 +6,13 @@ import type { NetworkTopologyData } from "@/web/components/NetworkTopologyMap";
 import type { Member } from "@/web/lib/corteca/types";
 import type { PortContext } from "@/web/lib/portHosts";
 
-export interface ApEthData { ports: EthernetPort[]; error?: string; notice?: string; label: string; serial: string; mac: string }
+export interface ApEthData {
+  ports: EthernetPort[]; error?: string; notice?: string; label: string; serial: string; mac: string;
+  /** "Beacon 10", from the device config. */
+  model?: string;
+  /** Where `ports` came from: live TR-181, the device config, or the generic model spec. */
+  source?: "live" | "config" | "spec";
+}
 
 export function parseEthernetFromConfig(params: Record<string, string> | undefined): EthernetPort[] {
   if (!params) return [];
