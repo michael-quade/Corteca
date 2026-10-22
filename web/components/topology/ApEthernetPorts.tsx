@@ -15,7 +15,7 @@ import { usePortLayouts } from "@/web/lib/usePortLayouts";
 
 const fmtMbps = (mbps: number) => formatRate(mbps);
 
-function Row({ port, status, rate, device, deviceTitle, title }: {
+function Row({ port, status, rate, device, deviceTitle, title, wide }: {
   port: string;
   status?: { up: boolean; label: string };
   rate?: string;
@@ -23,7 +23,17 @@ function Row({ port, status, rate, device, deviceTitle, title }: {
   /** Full device name, shown on hover when the column truncates it. */
   deviceTitle?: string;
   title?: string;
+  /** No link/rate: the device cell spans those columns too (long labels like "Wireless backhaul · 6 GHz"). */
+  wide?: boolean;
 }) {
+  if (wide) {
+    return (
+      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
+        <span className="font-semibold text-neutral-800">{port}</span>
+        <span className="col-span-3 min-w-0 truncate text-right" title={deviceTitle}>{device}</span>
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
       <span className="font-semibold text-neutral-800">{port}</span>
@@ -174,7 +184,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         }
         if (r.kind === "wireless") {
           return (
-            <Row key={p.index} port={label}
+            <Row key={p.index} port={label} wide
               device={<JumpButton onClick={() => onSelect({ kind: "link", id: ap.mac })}>Wireless backhaul{r.uplink ? ` · ${r.uplink}` : ""}</JumpButton>}
               title="The backhaul to the parent AP is WiFi; nothing wired is reported on this port" />
           );
