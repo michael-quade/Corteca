@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { AlarmTable } from "@/web/components/tables/AlarmTable";
@@ -44,7 +43,6 @@ function countBySeverity(alarms: AlarmEntry[]): Record<string, number> {
 
 export default function AlarmsPage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
   const toast = useToast();
 
   const [dateStart, setDateStart] = useState(defaultStart);
@@ -61,10 +59,6 @@ export default function AlarmsPage() {
   const [crossRefRows,    setCrossRefRows]    = useState<Record<string, string>[] | null>(null);
   const [crossRefLoading, setCrossRefLoading] = useState(false);
   const [crossRefError,   setCrossRefError]   = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   function toggleSeverity(s: Severity) {
     setSelectedSeverities((prev) => {

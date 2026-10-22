@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { LandingCard } from "@/web/components/landing/LandingCard";
 import { FeaturedCard } from "@/web/components/landing/FeaturedCard";
@@ -27,13 +26,8 @@ function firstName(login: string | null): string | null {
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading, email } = useAuth();
-  const router = useRouter();
   // Time of day is computed after mount so the static prerender doesn't pin it.
   const [hello, setHello] = useState("Welcome");
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => { setHello(greeting()); }, []);
 

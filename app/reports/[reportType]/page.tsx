@@ -3,7 +3,6 @@
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { REPORT_CONFIGS } from "@/web/lib/reportTypes";
 import { ReportChart, type ReportRow } from "@/web/components/ReportChart";
@@ -34,17 +33,12 @@ export default function ReportPage() {
   const config = REPORT_CONFIGS[reportType];
 
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
 
   const [data, setData]           = useState<ReportData | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [fetching, setFetching]   = useState(false);
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [loadingNames, setLoadingNames] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
     if (!config) return;

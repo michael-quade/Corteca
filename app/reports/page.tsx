@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { LandingCard } from "@/web/components/landing/LandingCard";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
@@ -135,11 +133,6 @@ const REPORTS = [
 
 export default function PerformanceReportsPage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   if (isLoading || !isAuthenticated) return <CortecaLoading />;
 

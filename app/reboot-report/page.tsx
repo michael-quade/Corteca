@@ -2,7 +2,6 @@
 
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { RebootChart, type RebootRow } from "@/web/components/RebootChart";
 import { RebootTable } from "@/web/components/tables/RebootTable";
@@ -25,7 +24,6 @@ function RefreshIcon() {
 
 export default function RebootReportPage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
 
   const [rows, setRows]           = useState<RebootRow[]>([]);
   const [columns, setColumns]     = useState<string[]>([]);
@@ -34,10 +32,6 @@ export default function RebootReportPage() {
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [loadingNames, setLoadingNames] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   const fetchReport = useCallback(async () => {
     setFetching(true);

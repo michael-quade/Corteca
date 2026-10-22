@@ -3,11 +3,9 @@
 import { useState, type FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useAuth } from "@/web/contexts/AuthContext";
-import { useRouter } from "next/navigation";
 
 export function ReloginModal() {
   const { sessionExpired, login, logout } = useAuth();
-  const router = useRouter();
 
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -28,9 +26,9 @@ export function ReloginModal() {
     }
   }
 
+  // logout() goes to the login page itself.
   async function handleSignOut() {
     await logout();
-    router.replace("/");
   }
 
   return (

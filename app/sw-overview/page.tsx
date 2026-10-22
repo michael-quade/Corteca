@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { cn } from "@/web/lib/utils";
@@ -44,7 +43,6 @@ function formatAge(ms: number): string {
 
 export default function SwOverviewPage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
 
   const [data, setData] = useState<SwOverviewResponse | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -56,10 +54,6 @@ export default function SwOverviewPage() {
   const [wifiFilter, setWifiFilter] = useState<WifiGeneration[]>([]);
   // Bumped by the "Unknown firmware" health tile to expand and reveal that list.
   const [unknownOpenRequest, setUnknownOpenRequest] = useState(0);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isAuthenticated, isLoading, router]);
 
   const fetchOverview = useCallback(async () => {
     setFetching(true);
