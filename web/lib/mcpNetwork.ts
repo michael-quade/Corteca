@@ -69,6 +69,8 @@ export interface McpNetwork {
   capturedAt: string | null;
   /** Inferred L2 switches (applySwitches). */
   switches?: InferredSwitch[];
+  /** Beacons wired straight into a gateway LAN port → its number (applySwitches), for layout order. */
+  beaconPorts?: Record<string, number>;
 }
 
 type Obj = Record<string, unknown>;

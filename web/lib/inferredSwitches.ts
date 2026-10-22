@@ -85,8 +85,24 @@ export function inferSwitches(network: McpNetwork, gatewayPorts: EthernetPort[] 
 
 export function applySwitches(network: McpNetwork, gatewayPorts: EthernetPort[] | null): McpNetwork {
   const switches = inferSwitches(network, gatewayPorts);
-  return switches.length ? { ...network, switches } : network;
+  const beaconPorts = directBeaconPorts(network, gatewayPorts);
+  return switches.length || Object.keys(beaconPorts).length ? { ...network, switches, beaconPorts } : network;
 }
+
+/** Beacons wired straight into a gateway port (no switch) → that LAN number, from the live host table. */
+function directBeaconPorts(network: McpNetwork, gatewayPorts: EthernetPort[] | null): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const { port, label } of labelPorts(gatewayPorts ?? [])) {
+    if (port.upstream || port.status !== "Up") continue;
+    const hosts = classifyPortHosts(port, network);
+    if (looksLikeSwitch(hosts)) continue;
+    for (const b of hosts.beacons) out[b.mac] = Number(label.replace(/\D/g, ""));
+  }
+  return out;
+}
+
+/** "LAN 3" → 3 (WAN → 0). */
+export const lanNumber = (label: string) => Number(label.replace(/\D/g, "")) || 0;
 
 // ── Lookups shared by the graph, highlighting and panels ─────────────────────
 

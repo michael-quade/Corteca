@@ -14,6 +14,7 @@ export const SW_W = 200, SW_H = 60;
 export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
 export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
 import { clusterNode, WIRED_H, wiredNodeWidth } from "@/web/lib/clientCluster";
+import { orderForLayout } from "@/web/lib/flowOrder";
 import { clientBand } from "@/web/lib/clientFields";
 import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredLinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
@@ -148,7 +149,7 @@ export function buildFlowGraph(
     edges.push({ id: `ce:${node.id}`, source: owner, target: node.id, type: "route", className: "cluster-edge", data: {} });
   }
 
-  return { nodes, edges };
+  return orderForLayout(network, nodes, edges);
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -161,6 +162,8 @@ const LAYOUT_OPTIONS: Record<LayoutMode, Record<string, string>> = {
     "elk.spacing.nodeNode": "28",
     "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
     "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+    // Keep orderForLayout()'s order: ports left → right.
+    "elk.layered.crossingMinimization.forceNodeModelOrder": "true",
   },
   horizontal: {
     "elk.algorithm": "layered",
@@ -169,12 +172,16 @@ const LAYOUT_OPTIONS: Record<LayoutMode, Record<string, string>> = {
     "elk.spacing.nodeNode": "24",
     "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
     "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+    // Keep orderForLayout()'s order: ports top → bottom.
+    "elk.layered.crossingMinimization.forceNodeModelOrder": "true",
   },
   radial: {
     "elk.algorithm": "radial",
     // Wide enough that a link label fits between two linked cards.
     "elk.spacing.nodeNode": "120",
     "elk.radial.compactor": "WEDGE_COMPACTION",
+    // Children placed by orderId = orderForLayout()'s order.
+    "elk.radial.sorter": "ID",
   },
 };
 
@@ -196,7 +203,10 @@ export async function layoutFlowGraph(
   const graph = await elk.layout({
     id: "root",
     layoutOptions: LAYOUT_OPTIONS[mode],
-    children: nodes.map((n) => ({ id: n.id, width: n.width ?? AP_W, height: n.height ?? AP_H })),
+    children: nodes.map((n, i) => ({
+      id: n.id, width: n.width ?? AP_W, height: n.height ?? AP_H,
+      layoutOptions: mode === "radial" ? { "elk.radial.orderId": String(i) } : undefined,
+    })),
     edges: edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
   });
 
