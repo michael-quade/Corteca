@@ -13,9 +13,9 @@ export const AP_W = 232, AP_H = 84;
 export const SW_W = 200, SW_H = 60;
 export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
 export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
-import { clusterNode } from "@/web/lib/clientCluster";
+import { clusterNode, WIRED_H, wiredNodeWidth } from "@/web/lib/clientCluster";
 import { clientBand } from "@/web/lib/clientFields";
-import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredTag, type InferredSwitch } from "@/web/lib/inferredSwitches";
+import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredLinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,8 +26,6 @@ export type Band = "2.4 GHz" | "5 GHz" | "6 GHz" | "Wired" | "Other";
 export interface ClientPill {
   id: string;
   name: string;
-  /** Wired port / link speed, e.g. "LAN 3 · 100M" or "via switch". */
-  tag?: string;
   signal: Quality | null;   // null = wired
   width: number;
   twoLines: boolean;
@@ -51,12 +49,16 @@ export interface BackhaulEdgeData extends Record<string, unknown> { link: McpBac
 export interface RouteEdgeData extends Record<string, unknown> { points?: Point[] }
 
 export interface SwitchNodeData extends Record<string, unknown> { sw: InferredSwitch }
+export interface WiredNodeData extends Record<string, unknown> { member: Member }
+/** `label`: port and speed ("LAN 3 · 100M"); null behind a switch. */
+export interface WiredEdgeData extends Record<string, unknown> { member: Member; label: string | null; points?: Point[] }
 export interface SwitchEdgeData extends Record<string, unknown> { sw: InferredSwitch; points?: Point[] }
 
 export type ApFlowNode = Node<ApNodeData, "ap">;
 export type SwitchFlowNode = Node<SwitchNodeData, "switch">;
+export type WiredFlowNode = Node<WiredNodeData, "wired">;
 export type ClusterFlowNode = Node<ClusterNodeData, "cluster">;
-export type FlowNode = ApFlowNode | ClusterFlowNode | SwitchFlowNode;
+export type FlowNode = ApFlowNode | ClusterFlowNode | SwitchFlowNode | WiredFlowNode;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -123,11 +125,17 @@ export function buildFlowGraph(
   }
 
   const apMacs = new Set(network.aps.map((a) => a.mac));
-  // One client card per AP — or per switch, for the wired clients behind it.
+  // WiFi clients: one card per AP. Wired clients: a node each, linked from their
+  // AP or inferred switch, the line labelled with port and speed.
   const byOwnerBand = new Map<string, Map<Band, Member[]>>();
   for (const m of network.members) {
     if (!m.connected || !m.device_id || !apMacs.has(m.device_id)) continue;
     const owner = clientOwner(network, m)!;
+    if (clientBand(m) === "Wired") {
+      nodes.push({ id: `wc:${m.id}`, type: "wired", position: { x: 0, y: 0 }, data: { member: m }, width: wiredNodeWidth(m), height: WIRED_H });
+      edges.push({ id: `wl:${m.id}`, source: owner, target: `wc:${m.id}`, type: "wiredLink", data: { member: m, label: wiredLinkLabel(network, m) } satisfies WiredEdgeData });
+      continue;
+    }
     const bands = byOwnerBand.get(owner) ?? new Map<Band, Member[]>();
     const band = clientBand(m);
     bands.set(band, [...(bands.get(band) ?? []), m]);
@@ -135,7 +143,7 @@ export function buildFlowGraph(
   }
 
   for (const [owner, bands] of byOwnerBand) {
-    const node = clusterNode(owner, bands, expanded, onToggle, (m) => wiredTag(network, m));
+    const node = clusterNode(owner, bands, expanded, onToggle);
     nodes.push(node);
     edges.push({ id: `ce:${node.id}`, source: owner, target: node.id, type: "route", className: "cluster-edge", data: {} });
   }
@@ -200,7 +208,8 @@ export async function layoutFlowGraph(
     boxes = spreadRadial(boxes, root, edges.map((e) => ({
       id: e.id, source: e.source, target: e.target,
       label: e.type === "backhaul" ? backhaulLabel((e.data as BackhaulEdgeData).link).text
-        : e.type === "switchUplink" ? switchUplinkLabel((e.data as SwitchEdgeData).sw) : undefined,
+        : e.type === "switchUplink" ? switchUplinkLabel((e.data as SwitchEdgeData).sw)
+        : e.type === "wiredLink" ? (e.data as WiredEdgeData).label ?? undefined : undefined,
     })));
     routes = new Map(edges.map((e) => [e.id, straightRoute(boxes.get(e.source)!, boxes.get(e.target)!)]));
   } else {

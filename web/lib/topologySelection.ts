@@ -79,21 +79,27 @@ export function highlightFor(network: McpNetwork, sel: Selection | null): Highli
     const m = network.members.find((x) => x.id === sel.id);
     const owner = m && clientOwner(network, m);
     if (!m?.device_id || !owner) return null;
-    out.nodes.add(`cl:${owner}`);
-    out.edges.add(`ce:cl:${owner}`);
+    // Wired clients are their own node and link; WiFi clients sit in their AP's card.
+    if (clientBand(m) === "Wired") { out.nodes.add(`wc:${m.id}`); out.edges.add(`wl:${m.id}`); }
+    else { out.nodes.add(`cl:${owner}`); out.edges.add(`ce:cl:${owner}`); }
     if (owner !== m.device_id) addSwitch(network, owner, parents, out);
     else chainToGateway(network, owner, parents, out);
   } else if (sel.kind === "ap") {
     out.nodes.add(`cl:${sel.id}`);
     out.edges.add(`ce:cl:${sel.id}`);
+    // Its wired clients plugged straight into it (those behind a switch belong to the switch).
+    for (const m of network.members) {
+      if (m.connected && m.device_id === sel.id && clientBand(m) === "Wired" && clientOwner(network, m) === sel.id) {
+        out.nodes.add(`wc:${m.id}`); out.edges.add(`wl:${m.id}`);
+      }
+    }
     chainToGateway(network, sel.id, parents, out);
   } else if (sel.kind === "switch") {
     const sw = switchById(network, sel.id);
     if (!sw) return null;
     addSwitch(network, sw.id, parents, out);
     // …and everything behind it.
-    out.nodes.add(`cl:${sw.id}`);
-    out.edges.add(`ce:cl:${sw.id}`);
+    for (const id of sw.clientIds) { out.nodes.add(`wc:${id}`); out.edges.add(`wl:${id}`); }
     for (const b of sw.beaconMacs) { out.nodes.add(b); out.edges.add(`bh:${sw.apMac}:${b}`); }
   } else {
     const parent = parents.get(sel.id);
@@ -111,6 +117,7 @@ export function anchorNodeId(network: McpNetwork, sel: Selection): string | null
   if (sel.kind === "client") {
     const m = network.members.find((x) => x.id === sel.id);
     const owner = m && clientOwner(network, m);
+    if (m && clientBand(m) === "Wired") return `wc:${m.id}`;
     return owner ? `cl:${owner}` : null;
   }
   return sel.id;

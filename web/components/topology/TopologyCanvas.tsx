@@ -4,7 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
-  type Edge, type EdgeTypes, type NodeTypes,
+  type Edge,
 } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
 import { buildFlowGraph, clientBand, layoutFlowGraph, type FlowNode, type LayoutMode } from "@/web/lib/topologyFlow";
@@ -13,12 +13,7 @@ import {
   type ClientFilters, type Selection, type Viewport,
 } from "@/web/lib/topologySelection";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
-import { ApNode } from "./ApNode";
-import { ClientClusterNode } from "./ClientClusterNode";
-import { BackhaulEdge } from "./BackhaulEdge";
-import { RouteEdge } from "./RouteEdge";
-import { SwitchNode } from "./SwitchNode";
-import { SwitchUplinkEdge } from "./SwitchUplinkEdge";
+import { edgeTypes, nodeTypes } from "./flowTypes";
 import { clientOwner } from "@/web/lib/inferredSwitches";
 import { TopologyLegend } from "./TopologyLegend";
 import { ZoomControls } from "./ZoomControls";
@@ -26,8 +21,6 @@ import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 
-const nodeTypes: NodeTypes = { ap: ApNode, cluster: ClientClusterNode, switch: SwitchNode };
-const edgeTypes: EdgeTypes = { backhaul: BackhaulEdge, route: RouteEdge, switchUplink: SwitchUplinkEdge };
 const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
@@ -225,11 +218,21 @@ function Canvas(props: TopologyCanvasProps) {
               // Registering click handlers also keeps React Flow from turning off
               // pointer events on non-selectable nodes/edges (pills, "+N", labels).
               onNodeClick={(_, node) => {
+                if (node.type === "wired") {
+                  const id = node.id.slice(3);
+                  onSelect(selection?.kind === "client" && selection.id === id ? null : { kind: "client", id });
+                  return;
+                }
                 if (node.type !== "ap" && node.type !== "switch") return;
                 const kind = node.type === "switch" ? "switch" : "ap";
                 onSelect(selection?.kind === kind && selection.id === node.id ? null : { kind, id: node.id });
               }}
               onEdgeClick={(_, edge) => {
+                if (edge.type === "wiredLink") {
+                  const id = edge.target.slice(3);
+                  onSelect(selection?.kind === "client" && selection.id === id ? null : { kind: "client", id });
+                  return;
+                }
                 if (edge.type === "switchUplink") {
                   onSelect(selection?.kind === "switch" && selection.id === edge.target ? null : { kind: "switch", id: edge.target });
                   return;

@@ -21,19 +21,20 @@ function textWidth(text: string): number {
   return measureCtx ? measureCtx.measureText(text).width : text.length * CHAR_W;
 }
 
-export type PillTag = (m: Member) => { text: string; order: number } | null;
-
-function toPill(m: Member, tagOf?: PillTag): ClientPill {
+function toPill(m: Member): ClientPill {
   const name = clientName(m);
   const signal = clientSignal(m);
-  const tag = tagOf?.(m)?.text;
-  // Wired clients have no signal dot (6px + 6px gap). A tag is text-[10px] tabular digits
-  // plus a gap; measured generously so the name never truncates.
-  const tagW = tag ? Math.ceil(textWidth(tag) * 0.95) + 10 : 0;
-  const natural = Math.ceil(textWidth(name) + PILL_CHROME - (signal ? 0 : 12) + tagW);
-  // Tagged (wired) pills are full-width rows — name left, port/speed right — like a port list.
-  const width = tag ? PILL_MAX : Math.min(PILL_MAX, natural);
-  return { id: m.id, name, signal, tag, width, twoLines: natural > PILL_MAX };
+  // Wired clients have no signal dot (6px + 6px gap).
+  const natural = Math.ceil(textWidth(name) + PILL_CHROME - (signal ? 0 : 12));
+  return { id: m.id, name, signal, width: Math.min(PILL_MAX, natural), twoLines: natural > PILL_MAX };
+}
+
+/** A wired client's own node on the canvas: one line, sized to its name. */
+export const WIRED_H = 32, WIRED_MIN_W = 112, WIRED_MAX_W = 240;
+// 12px icon + 8px gap + 2×12px padding + 2×1px border, plus a few px so the name never truncates.
+const WIRED_CHROME = 52;
+export function wiredNodeWidth(m: Member): number {
+  return Math.max(WIRED_MIN_W, Math.min(WIRED_MAX_W, Math.ceil(textWidth(clientName(m)) + WIRED_CHROME)));
 }
 
 // Greedy row packing — mirrors the section's flex-wrap so ELK gets a true height.
@@ -59,8 +60,6 @@ export function clusterNode(
   bands: Map<Band, Member[]>,
   expanded: Set<string>,
   onToggle: ClusterNodeData["onToggle"],
-  /** Wired port/speed tag; wired pills are ordered by its `order` (port number). */
-  tagOf?: PillTag,
 ): ClusterFlowNode {
   const sections: ClientSection[] = [];
   let height = CLUSTER_PAD * 2;
@@ -70,9 +69,7 @@ export function clusterNode(
     const id = `${owner}:${band}`;
     // Only collapsible sections can be "expanded" (avoids a stray "less" toggle).
     const isOpen = expanded.has(id) && members.length > CLUSTER_COLLAPSE_AT;
-    const order = new Map(members.map((m) => [m.id, band === "Wired" ? tagOf?.(m)?.order ?? 99 : 0]));
-    const all = members.map((m) => toPill(m, band === "Wired" ? tagOf : undefined))
-      .sort((a, b) => order.get(a.id)! - order.get(b.id)! || a.name.localeCompare(b.name));
+    const all = members.map(toPill).sort((a, b) => a.name.localeCompare(b.name));
     const shown = isOpen || all.length <= CLUSTER_COLLAPSE_AT ? all : all.slice(0, CLUSTER_COLLAPSE_AT - 1);
     const showToggle = shown.length < all.length || (isOpen && all.length > CLUSTER_COLLAPSE_AT);
     if (sections.length) height += SECTION_GAP;

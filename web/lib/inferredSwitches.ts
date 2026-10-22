@@ -135,11 +135,12 @@ export function wiredPort(network: McpNetwork, m: Member): WiredPort | null {
 /** "1G", "2.5G", "100M". */
 export const shortSpeed = (mbps: number) => (mbps >= 1000 ? `${+(mbps / 1000).toFixed(1)}G` : `${mbps}M`);
 
-/** Pill tag: "LAN 3 · 100M", or "via switch" (the switch line carries the port and shared speed). */
-export function wiredTag(network: McpNetwork, m: Member): { text: string; order: number } | null {
+/**
+ * Label on the line to a wired client's node: "LAN 3 · 100M". Behind an inferred
+ * switch there is none — the switch's line carries the port and shared speed.
+ */
+export function wiredLinkLabel(network: McpNetwork, m: Member): string | null {
   const wp = wiredPort(network, m);
-  if (!wp) return null;
-  if (wp.viaSwitch) return { text: "via switch", order: wp.order };
-  const text = [wp.port, wp.speedMbps ? shortSpeed(wp.speedMbps) : null].filter(Boolean).join(" · ");
-  return text ? { text, order: wp.order } : null;
+  if (!wp || wp.viaSwitch) return null;
+  return [wp.port, wp.speedMbps ? shortSpeed(wp.speedMbps) : null].filter(Boolean).join(" · ") || null;
 }

@@ -44,7 +44,6 @@ function Section({ section, onToggle }: { section: ClientSection; onToggle: () =
           >
             {p.signal && <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", QUALITY_BG[p.signal])} />}
             <span className={cn("min-w-0 leading-tight", p.twoLines ? "line-clamp-2 break-all" : "truncate")}>{p.name}</span>
-            {p.tag && <span className="ml-auto flex-shrink-0 whitespace-nowrap text-[10px] tabular-nums text-neutral-500">{p.tag}</span>}
           </button>
         ))}
         {(hidden > 0 || expanded) && (
