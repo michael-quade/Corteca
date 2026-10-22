@@ -9,7 +9,7 @@ import { categoryLabel, deviceKindLabel, memberIdentity } from "@/web/lib/device
 import { clientStandard, standardLabel } from "@/web/lib/wifiDetails";
 import { memberAiNotes } from "@/web/lib/aiAnalysis";
 import { AiNotesSection } from "./AiNotesSection";
-import { switchOfClient } from "@/web/lib/inferredSwitches";
+import { switchOfClient, wiredPort } from "@/web/lib/inferredSwitches";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
 
 // Fields the MCP members payload carries beyond the shared Member type.
@@ -38,6 +38,8 @@ export function ClientDetails({ network, member, onSelect }: {
   const path = highlightFor(network, { kind: "client", id: member.id });
   const hops = [...(path?.edges ?? [])].filter((e) => e.startsWith("bh:")).length;
   const sw = switchOfClient(network, member.id);
+  const wp = wiredPort(network, member);
+  const wiredType = ["Wired", wp?.port, wp?.viaSwitch ? "via switch" : wp?.speedMbps ? formatMbps(wp.speedMbps) : null].filter(Boolean).join(" · ");
   const caps = raw.client_capabilities;
   // Rates are kbps from the AP's view: its tx is the client's download.
   const down = formatMbps((raw.tx_statistics?.rate ?? 0) / 1000);
@@ -62,13 +64,14 @@ export function ClientDetails({ network, member, onSelect }: {
           </DetailRow>
         )}
         <DetailRow label="Path to gateway">{hops === 0 ? "Direct" : `${hops} backhaul hop${hops === 1 ? "" : "s"}`}</DetailRow>
-        <DetailRow label="Type">{wired ? `Wired${raw.port_number ? ` · port ${raw.port_number}` : ""}` : `WiFi · ${clientBand(member)}`}</DetailRow>
+        <DetailRow label="Type">{wired ? wiredType : `WiFi · ${clientBand(member)}`}</DetailRow>
         {!wired && <DetailRow label="SSID">{memberSsid(member)}</DetailRow>}
         {!wired && member.channel != null && member.channel > 0 && (
           <DetailRow label="Channel">{`${member.channel}${member.frequency ? ` · ${member.frequency} MHz` : ""}`}</DetailRow>
         )}
         {signal != null && <DetailRow label="Signal">{`${signal} dBm (${signalWord(signal)})`}</DetailRow>}
-        <DetailRow label="PHY rate ↓ / ↑">{down && up ? `${down} / ${up}` : down ?? up}</DetailRow>
+        {/* Wired speed is in Type (and, behind a switch, Corteca's rate is the switch's link, not the device's). */}
+        {!wired && <DetailRow label="PHY rate ↓ / ↑">{down && up ? `${down} / ${up}` : down ?? up}</DetailRow>}
         {raw.connected_time && <DetailRow label="Connected for">{formatDuration(Number(raw.connected_time))}</DetailRow>}
         {traffic && <DetailRow label="Traffic ↓ / ↑">{`${formatBytes(traffic.down)} / ${formatBytes(traffic.up)}`}</DetailRow>}
         <DetailRow label="Last disconnect">{disconnectReason(member)}</DetailRow>

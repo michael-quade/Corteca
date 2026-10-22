@@ -15,7 +15,7 @@ export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
 export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
 import { clusterNode } from "@/web/lib/clientCluster";
 import { clientBand } from "@/web/lib/clientFields";
-import { clientOwner, switchOfBeacon, switchUplinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
+import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredTag, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ export type Band = "2.4 GHz" | "5 GHz" | "6 GHz" | "Wired" | "Other";
 export interface ClientPill {
   id: string;
   name: string;
+  /** Wired port / link speed, e.g. "LAN 3 · 100M" or "via switch". */
+  tag?: string;
   signal: Quality | null;   // null = wired
   width: number;
   twoLines: boolean;
@@ -133,7 +135,7 @@ export function buildFlowGraph(
   }
 
   for (const [owner, bands] of byOwnerBand) {
-    const node = clusterNode(owner, bands, expanded, onToggle);
+    const node = clusterNode(owner, bands, expanded, onToggle, (m) => wiredTag(network, m));
     nodes.push(node);
     edges.push({ id: `ce:${node.id}`, source: owner, target: node.id, type: "route", className: "cluster-edge", data: {} });
   }

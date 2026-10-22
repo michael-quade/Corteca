@@ -104,3 +104,42 @@ export function switchUplinkLabel(sw: InferredSwitch): string {
   const rate = sw.rateMbps;
   return [sw.port, rate ? (rate >= 1000 ? `${(rate / 1000).toFixed(1)} Gbps` : `${rate} Mbps`) : null].filter(Boolean).join(" · ");
 }
+
+// ── Wired clients' port and link speed ───────────────────────────────────────
+
+export interface WiredPort {
+  /** "LAN 2" (Corteca port_number − 1; matches the gateway's live ports), null if not reported. */
+  port: string | null;
+  /** Negotiated link speed of a device plugged straight into the port. */
+  speedMbps: number | null;
+  /** Behind an inferred switch, Corteca's rate is the AP↔switch link, not the device's, so speed is null. */
+  viaSwitch: InferredSwitch | undefined;
+  /** Sort key: port number. */
+  order: number;
+}
+
+export function wiredPort(network: McpNetwork, m: Member): WiredPort | null {
+  if (!wired(m)) return null;
+  const n = portNumber(m);
+  const viaSwitch = switchOfClient(network, m.id);
+  const raw = m as unknown as { rx_statistics?: { rate?: number }; tx_statistics?: { rate?: number } };
+  const kbps = Number(raw.rx_statistics?.rate ?? raw.tx_statistics?.rate) || 0;
+  return {
+    port: n ? portLabel(n) : null,
+    speedMbps: viaSwitch || kbps <= 0 ? null : Math.round(kbps / 1000),
+    viaSwitch,
+    order: n ?? 99,
+  };
+}
+
+/** "1G", "2.5G", "100M". */
+export const shortSpeed = (mbps: number) => (mbps >= 1000 ? `${+(mbps / 1000).toFixed(1)}G` : `${mbps}M`);
+
+/** Pill tag: "LAN 3 · 100M", or "via switch" (the switch line carries the port and shared speed). */
+export function wiredTag(network: McpNetwork, m: Member): { text: string; order: number } | null {
+  const wp = wiredPort(network, m);
+  if (!wp) return null;
+  if (wp.viaSwitch) return { text: "via switch", order: wp.order };
+  const text = [wp.port, wp.speedMbps ? shortSpeed(wp.speedMbps) : null].filter(Boolean).join(" · ");
+  return text ? { text, order: wp.order } : null;
+}
