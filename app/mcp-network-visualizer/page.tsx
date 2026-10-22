@@ -52,14 +52,14 @@ export default function McpNetworkVisualizerPage() {
   useEffect(() => { setRecent(loadRecentNetworks()); }, []);
 
   // Names and WiFi details come from the gateway, after each MCP load.
-  const { names, wifi, ports, setNickname } = useGatewayExtras(response?.homeWifiId ?? null, response);
+  const { names, wifi, ports, wan, setNickname } = useGatewayExtras(response?.homeWifiId ?? null, response);
   // On-demand Corteca AI analysis / troubleshooting; findings land on the devices they mention.
   const ai = useAiAnalysis(response?.homeWifiId ?? null);
   const network = useMemo(() => {
     if (!response) return null;
     const base = applyWifiDetails(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), wifi);
-    return applyAiReport(applySwitches(base, ports), ai.analysis.result);
-  }, [response, names, wifi, ports, ai.analysis.result]);
+    return { ...applyAiReport(applySwitches(base, ports), ai.analysis.result), wan: wan ?? undefined };
+  }, [response, names, wifi, ports, wan, ai.analysis.result]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     const networkId = subscriber.home_wifis?.[0]?.id;

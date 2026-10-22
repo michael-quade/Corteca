@@ -1,7 +1,7 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
   type Edge,
@@ -9,7 +9,7 @@ import {
 import { cn } from "@/web/lib/utils";
 import { buildFlowGraph, clientBand, layoutFlowGraph, type FlowNode, type LayoutMode } from "@/web/lib/topologyFlow";
 import {
-  anchorNodeId, clientMatches, filtersActive, highlightFor, navigationOrder,
+  anchorNodeId, clientMatches, filtersActive, highlightFor,
   type ClientFilters, type Selection, type Viewport,
 } from "@/web/lib/topologySelection";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
@@ -20,6 +20,7 @@ import { ZoomControls } from "./ZoomControls";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
+import { useCanvasKeyboard } from "./useCanvasKeyboard";
 
 const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
 
@@ -157,25 +158,16 @@ function Canvas(props: TopologyCanvasProps) {
     else void wrapperRef.current?.requestFullscreen();
   }
 
-  // Arrow keys step through APs and their clients in tree order; Esc clears.
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === "Escape") { onSelect(null); return; }
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    const order = navigationOrder(network);
-    if (!order.length) return;
-    const i = selection ? order.findIndex((s) => s.kind === selection.kind && s.id === selection.id) : -1;
-    const next = i < 0 ? (step > 0 ? 0 : order.length - 1) : (i + step + order.length) % order.length;
-    onSelect(order.at(next) ?? null);
-  }
+  // Arrow keys step through devices, Esc clears; clicks keep focus on the canvas.
+  const keyboard = useCanvasKeyboard(wrapperRef, network, selection, onSelect);
 
   return (
     <TopologyUiContext.Provider value={ui}>
       <div
         ref={wrapperRef}
         tabIndex={0}
-        onKeyDown={onKeyDown}
+        onKeyDown={keyboard.onKeyDown}
+        onClick={keyboard.onClick}
         aria-label="Network topology. Arrow keys move between devices, Escape clears the selection."
         className={cn(
           "flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",

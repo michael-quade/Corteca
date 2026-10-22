@@ -51,6 +51,8 @@ export function orderForLayout(network: McpNetwork, nodes: FlowNode[], edges: Ed
     for (const { e } of kids) visit(e.target);
   };
   const root = network.aps.find((a) => a.role === "root")?.mac;
+  // The Internet node first: it sits above the gateway.
+  nodes.filter((n) => n.type === "internet").forEach((n) => visit(n.id));
   if (root) visit(root);
   nodes.filter((n) => !hasParent.has(n.id)).forEach((n) => visit(n.id));
   nodes.forEach((n) => visit(n.id));

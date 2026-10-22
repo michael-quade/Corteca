@@ -9,6 +9,7 @@ import { ApEthernetPorts } from "./ApEthernetPorts";
 import { ApRadios } from "./ApRadios";
 import { AiNotesSection } from "./AiNotesSection";
 import { SwitchDetails } from "./SwitchDetails";
+import { WanDetails } from "./WanDetails";
 import { switchById } from "@/web/lib/inferredSwitches";
 import { memberIdentity } from "@/web/lib/deviceNames";
 import { useDeviceRename, type RenameTarget } from "./DeviceRename";
@@ -67,7 +68,9 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
             <DetailRow label="Backhaul"><LinkSummary link={uplink} onSelect={onSelect} /></DetailRow>
           </>
         ) : (
-          <DetailRow label="Uplink">{ap.role === "root" ? "Internet (gateway)" : "Unknown"}</DetailRow>
+          <DetailRow label="Uplink">
+            {ap.role === "root" ? <JumpButton onClick={() => onSelect({ kind: "wan", id: ap.mac })}>Internet (WAN)</JumpButton> : "Unknown"}
+          </DetailRow>
         )}
         {children.map((l) => {
           const child = network.aps.find((a) => a.mac === l.childMac);
@@ -101,6 +104,7 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
       </DetailRow>
       <DetailRow label="Medium">{medium}</DetailRow>
+      {eth && <DetailRow label="Gateway port">{link.port}</DetailRow>}
       {std?.generation === "WiFi 7" && <DetailRow label="Multi-link (MLO)">{std.mlo ? "Yes" : "No"}</DetailRow>}
       {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}
       {!eth && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
@@ -131,10 +135,11 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   const member = selection.kind === "client" ? network.members.find((m) => m.id === selection.id) : undefined;
   const link = selection.kind === "link" ? network.backhaul.find((l) => l.childMac === selection.id) : undefined;
   const sw = selection.kind === "switch" ? switchById(network, selection.id) : undefined;
-  if (!ap && !member && !link && !sw) return null;
+  const wanGateway = selection.kind === "wan" ? network.aps.find((a) => a.mac === selection.id && a.role === "root") : undefined;
+  if (!ap && !member && !link && !sw && !wanGateway) return null;
 
-  const title = ap ? apLabel(ap) : member ? clientName(member) : sw ? `Switch on ${sw.port}` : "Backhaul link";
-  const kicker = ap ? "Access point" : member ? "Client" : sw ? "Switch (inferred)" : "Link";
+  const title = ap ? apLabel(ap) : member ? clientName(member) : sw ? `Switch on ${sw.port}` : wanGateway ? "Internet" : "Backhaul link";
+  const kicker = ap ? "Access point" : member ? "Client" : sw ? "Switch (inferred)" : wanGateway ? "WAN" : "Link";
   const rename = useDeviceRename();
   const renameTarget: RenameTarget | null = ap
     ? { mac: ap.mac, kind: "Beacon", description: `${ap.model} · ${ap.mac}` }
@@ -181,6 +186,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
         {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
         {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}
         {sw && <SwitchDetails network={network} sw={sw} onSelect={onSelect} />}
+        {wanGateway && <WanDetails network={network} gateway={wanGateway} onSelect={onSelect} />}
       </div>
     </aside>
   );

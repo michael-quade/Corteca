@@ -7,6 +7,7 @@ import type { AssociationStandard } from "@/web/lib/wifiAssociation";
 import type { ApRadio } from "@/web/lib/wifiRadios";
 import type { AiNotes } from "@/web/lib/aiAnalysis";
 import type { InferredSwitch } from "@/web/lib/inferredSwitches";
+import type { WanInfo } from "@/web/lib/wanInfo";
 
 export interface McpApiResult { apiId: string; ok: boolean; status: number; data: unknown }
 
@@ -51,6 +52,8 @@ export interface McpBackhaulLink {
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
   phyRateMbps: number | null;
+  /** Gateway port an Ethernet backhaul is plugged straight into ("LAN 1"), from the live host table (applySwitches). */
+  port?: string;
   quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor")
   // Counters from the child AP's end: tx goes up toward the gateway, rx comes down.
   errorsTx: number | null;
@@ -71,6 +74,8 @@ export interface McpNetwork {
   switches?: InferredSwitch[];
   /** Beacons wired straight into a gateway LAN port → its number (applySwitches), for layout order. */
   beaconPorts?: Record<string, number>;
+  /** The gateway's Internet connection (useGatewayExtras): undefined while loading, "error" if the gateway didn't answer. */
+  wan?: WanInfo | "error";
 }
 
 type Obj = Record<string, unknown>;

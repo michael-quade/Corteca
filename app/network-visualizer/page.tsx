@@ -9,6 +9,7 @@ import { NetworkTopologyMap, type NetworkTopologyData } from "@/web/components/N
 import { EthernetPortPanel, type EthernetPort } from "@/web/components/EthernetPortPanel";
 import { NetworkDebugPanel } from "@/web/components/NetworkDebugPanel";
 import { parseEthernetFromConfig, getModelFallbackPorts, resolvePorts, portContextFromTopology, type ApEthData } from "@/web/lib/ethernetPorts";
+import { meshApPorts, restNetwork } from "@/web/lib/meshApPorts";
 import { applyNamesToTopology, nicknameFor, toDeviceNames, type DeviceNames } from "@/web/lib/deviceNames";
 import { PALETTE_SUBSCRIBER_KEY } from "@/web/components/CommandPalette";
 import type { Subscriber } from "@/web/lib/corteca/types";
@@ -36,6 +37,9 @@ const NetworkMap = dynamic(
   }
 );
 
+const MESH_PORTS_NOTICE =
+  "Mesh APs don't report live port status. Ports show the wired devices and Ethernet backhaul Corteca reports; a port with nothing reported may be empty or unknown.";
+
 export default function NetworkVisualizerPage() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -59,6 +63,14 @@ export default function NetworkVisualizerPage() {
   const [apEthData, setApEthData]   = useState<Record<string, ApEthData> | null>(null);
   const [fetching, setFetching]     = useState(false);
   const [error, setError]           = useState<string | null>(null);
+
+  // Mesh APs have no Ethernet object: their ports come from Corteca's members/mesh
+  // reports, with switches inferred and the backhaul placed via the gateway's live ports.
+  const gatewayLivePorts = useMemo(() => {
+    const gw = topoData?.rootDeviceId ? apEthData?.[topoData.rootDeviceId] : undefined;
+    return gw && !gw.notice && gw.ports.length ? gw.ports : null;
+  }, [topoData, apEthData]);
+  const meshNetwork = useMemo(() => (named ? restNetwork(named, gatewayLivePorts) : null), [named, gatewayLivePorts]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     setSelected(subscriber);
@@ -133,6 +145,7 @@ export default function NetworkVisualizerPage() {
   const networkId = selected?.home_wifis?.[0]?.id;
   const online    = selected?.home_wifis?.[0]?.status?.online;
   const portContext = named ? portContextFromTopology(named) : undefined;
+  const rootId = topoData?.rootDeviceId;
   const fullName  = selected
     ? (selected.name || `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || selected.email || selected.customer_id)
     : null;
@@ -188,15 +201,18 @@ export default function NetworkVisualizerPage() {
             <CortecaCard title="Network location"><NetworkMap data={named ?? topoData} /></CortecaCard>
           </div>
           {apEthData && Object.values(apEthData).map((entry) => {
-            const { ports, notice } = resolvePorts(entry, topoData);
+            const resolved = resolvePorts(entry, topoData);
+            const mesh = entry.mac !== rootId && meshNetwork;
+            const ports = mesh ? meshApPorts(meshNetwork, entry.mac, resolved.ports, gatewayLivePorts) : resolved.ports;
+            const notice = mesh ? MESH_PORTS_NOTICE : resolved.notice;
             return (
               <CortecaCard
                 key={entry.mac}
                 title={nicknameFor(names, entry.mac) ? `${nicknameFor(names, entry.mac)} · ${entry.label} — Ethernet ports` : `${entry.label} — Ethernet ports`}
               >
                 <p className="-mt-3 mb-3 font-mono text-xs text-neutral-400">{entry.serial ? `S/N: ${entry.serial} · ` : ""}MAC: {entry.mac}</p>
-                {entry.error && <p className="text-sm text-red-600">{entry.error}</p>}
                 {notice && <p className="mb-2 text-xs italic text-neutral-500">{notice}</p>}
+                {!mesh && entry.error && <p className="text-sm text-red-600">{entry.error}</p>}
                 {!entry.error && ports.length === 0 && <p className="text-sm text-neutral-500">No Ethernet data returned.</p>}
                 {ports.length > 0 && <EthernetPortPanel ports={ports} context={portContext} />}
               </CortecaCard>

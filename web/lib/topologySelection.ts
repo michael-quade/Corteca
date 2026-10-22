@@ -3,13 +3,13 @@
 
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
-import { clientBand, clientName, clientSignalDbm, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
+import { INTERNET_ID, WAN_EDGE_ID, clientBand, clientName, clientSignalDbm, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
 import { bandUpgrade } from "@/web/lib/clientInsights";
 import { isOlderWifi } from "@/web/lib/wifiDetails";
 import { clientOwner, switchById, switchOfBeacon } from "@/web/lib/inferredSwitches";
 
-export type SelectionKind = "ap" | "client" | "link" | "switch";
-/** `link` ids are the child AP's MAC (each AP has at most one backhaul parent); `switch` ids are InferredSwitch ids. */
+export type SelectionKind = "ap" | "client" | "link" | "switch" | "wan";
+/** `link` ids are the child AP's MAC (each AP has at most one backhaul parent); `switch` ids are InferredSwitch ids; `wan` id is the gateway MAC. */
 export interface Selection { kind: SelectionKind; id: string }
 
 /** `slowBand`: on a slower band than the client and its AP both support. `olderWifi`: WiFi 5 or older. */
@@ -54,7 +54,7 @@ function addSwitch(network: McpNetwork, id: string, parents: Map<string, string>
   chainToGateway(network, sw.apMac, parents, out);
 }
 
-// AP → gateway chain: node ids plus the backhaul edge ids between them (through any inferred switch).
+// AP → gateway → Internet chain: node ids plus the edge ids between them (through any inferred switch).
 function chainToGateway(network: McpNetwork, apMac: string, parents: Map<string, string>, out: Highlight) {
   let cur: string | undefined = apMac;
   const seen = new Set<string>();
@@ -66,6 +66,9 @@ function chainToGateway(network: McpNetwork, apMac: string, parents: Map<string,
       out.edges.add(`bh:${parent}:${cur}`);
       const sw = switchOfBeacon(network, cur);
       if (sw?.apMac === parent) { out.nodes.add(sw.id); out.edges.add(`swu:${sw.id}`); }
+    } else if (network.aps.some((a) => a.mac === cur && a.role === "root")) {
+      out.nodes.add(INTERNET_ID);
+      out.edges.add(WAN_EDGE_ID);
     }
     cur = parent;
   }
@@ -94,6 +97,9 @@ export function highlightFor(network: McpNetwork, sel: Selection | null): Highli
       }
     }
     chainToGateway(network, sel.id, parents, out);
+  } else if (sel.kind === "wan") {
+    out.nodes.add(INTERNET_ID).add(sel.id);
+    out.edges.add(WAN_EDGE_ID);
   } else if (sel.kind === "switch") {
     const sw = switchById(network, sel.id);
     if (!sw) return null;
@@ -120,6 +126,7 @@ export function anchorNodeId(network: McpNetwork, sel: Selection): string | null
     if (m && clientBand(m) === "Wired") return `wc:${m.id}`;
     return owner ? `cl:${owner}` : null;
   }
+  if (sel.kind === "wan") return INTERNET_ID;
   return sel.id;
 }
 
@@ -187,7 +194,7 @@ export function parseViewState(search: string): ViewState {
   const layout = p.get("layout") as LayoutMode | null;
   return {
     network: p.get("network"),
-    selection: (kind === "ap" || kind === "client" || kind === "link" || kind === "switch") && selId ? { kind, id: selId } : null,
+    selection: (kind === "ap" || kind === "client" || kind === "link" || kind === "switch" || kind === "wan") && selId ? { kind, id: selId } : null,
     filters: {
       bands: (p.get("band") ?? "").split(",").map((k) => BAND_BY_KEY[k]).filter(Boolean),
       ssids: p.getAll("ssid"),

@@ -87,7 +87,14 @@ export function inferSwitches(network: McpNetwork, gatewayPorts: EthernetPort[] 
 export function applySwitches(network: McpNetwork, gatewayPorts: EthernetPort[] | null): McpNetwork {
   const switches = inferSwitches(network, gatewayPorts);
   const beaconPorts = directBeaconPorts(network, gatewayPorts);
-  return switches.length || Object.keys(beaconPorts).length ? { ...network, switches, beaconPorts } : network;
+  if (!switches.length && !Object.keys(beaconPorts).length) return network;
+  const rootMac = network.aps.find((a) => a.role === "root")?.mac;
+  // Ethernet backhauls wired straight into a gateway port carry that port for their label ("LAN 1").
+  const backhaul = network.backhaul.map((l) => {
+    const n = beaconPorts[l.childMac];
+    return n && l.parentMac === rootMac && l.medium.includes("eth") ? { ...l, port: `LAN ${n}` } : l;
+  });
+  return { ...network, switches, beaconPorts, backhaul };
 }
 
 /** Beacons wired straight into a gateway port (no switch) → that LAN number, from the live host table. */

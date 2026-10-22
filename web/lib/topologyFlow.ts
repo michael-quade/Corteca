@@ -11,12 +11,16 @@ import type { Member } from "@/web/lib/corteca/types";
 
 export const AP_W = 232, AP_H = 84;
 export const SW_W = 200, SW_H = 60;
+export const NET_W = 200, NET_H = 60;
+/** Id of the Internet node above the gateway, and of its WAN edge. */
+export const INTERNET_ID = "internet", WAN_EDGE_ID = "wan";
 export { CLUSTER_W, CLUSTER_COLLAPSE_AT } from "@/web/lib/clientCluster";
 export { clientBand, clientName, clientSignalDbm, isWired } from "@/web/lib/clientFields";
 import { clusterNode, WIRED_H, wiredNodeWidth } from "@/web/lib/clientCluster";
 import { orderForLayout } from "@/web/lib/flowOrder";
 import { formatRate } from "@/web/lib/rateFormat";
 import { clientBand } from "@/web/lib/clientFields";
+import { wanLinkSpeedMbps } from "@/web/lib/wanInfo";
 import { clientOwner, switchOfBeacon, switchUplinkLabel, wiredLinkLabel, type InferredSwitch } from "@/web/lib/inferredSwitches";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -55,12 +59,15 @@ export interface WiredNodeData extends Record<string, unknown> { member: Member 
 /** `label`: port and speed ("LAN 3 · 100M"); null behind a switch. */
 export interface WiredEdgeData extends Record<string, unknown> { member: Member; label: string | null; points?: Point[] }
 export interface SwitchEdgeData extends Record<string, unknown> { sw: InferredSwitch; points?: Point[] }
+export interface InternetNodeData extends Record<string, unknown> { gateway: McpAccessPoint; wan: McpNetwork["wan"] }
+export interface WanEdgeData extends Record<string, unknown> { gatewayMac: string; label: string; points?: Point[] }
 
 export type ApFlowNode = Node<ApNodeData, "ap">;
 export type SwitchFlowNode = Node<SwitchNodeData, "switch">;
 export type WiredFlowNode = Node<WiredNodeData, "wired">;
 export type ClusterFlowNode = Node<ClusterNodeData, "cluster">;
-export type FlowNode = ApFlowNode | ClusterFlowNode | SwitchFlowNode | WiredFlowNode;
+export type InternetFlowNode = Node<InternetNodeData, "internet">;
+export type FlowNode = ApFlowNode | ClusterFlowNode | SwitchFlowNode | WiredFlowNode | InternetFlowNode;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +89,8 @@ export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: b
   const rate = link.rateMbps ?? 0;
   const slowEth = eth && rate > 0 && rate < SLOW_ETHERNET_MBPS;
   const parts = [
-    eth ? "Ethernet" : null,
+    // A gateway port names the line like switch / wired-client lines ("LAN 1 · 10 Gbps"); grey already says Ethernet.
+    eth ? link.port ?? "Ethernet" : null,
     !eth && link.rssiDbm != null ? `${link.rssiDbm} dBm` : null,
     rate > 0 ? formatLinkRate(rate) : null,
   ].filter(Boolean);
@@ -90,6 +98,11 @@ export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: b
   return { text: slowEth ? `⚠ ${text}` : text, slowEth };
 }
 
+/** Text of the WAN link pill: "WAN · 5 Gbps" (just "WAN" until the gateway reports the port). */
+export function wanLabel(wan: McpNetwork["wan"]): string {
+  const mbps = wan && wan !== "error" ? wanLinkSpeedMbps(wan) : null;
+  return mbps ? `WAN · ${formatLinkRate(mbps)}` : "WAN";
+}
 
 // ── Graph ────────────────────────────────────────────────────────────────────
 
@@ -104,6 +117,13 @@ export function buildFlowGraph(
 
   for (const ap of network.aps) {
     nodes.push({ id: ap.mac, type: "ap", position: { x: 0, y: 0 }, data: { ap }, width: AP_W, height: AP_H });
+  }
+
+  // The Internet above the gateway, joined by its WAN link.
+  const gateway = network.aps.find((a) => a.role === "root");
+  if (gateway) {
+    nodes.push({ id: INTERNET_ID, type: "internet", position: { x: 0, y: 0 }, data: { gateway, wan: network.wan }, width: NET_W, height: NET_H });
+    edges.push({ id: WAN_EDGE_ID, source: INTERNET_ID, target: gateway.mac, type: "wan", data: { gatewayMac: gateway.mac, label: wanLabel(network.wan) } satisfies WanEdgeData });
   }
 
   // An inferred switch sits between its AP port and the Beacons / wired clients behind it.
@@ -206,7 +226,10 @@ export async function layoutFlowGraph(
       id: n.id, width: n.width ?? AP_W, height: n.height ?? AP_H,
       layoutOptions: mode === "radial" ? { "elk.radial.orderId": String(i) } : undefined,
     })),
-    edges: edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+    // Radial lays out from the node without a parent: keep that the gateway, with the Internet as its first child.
+    edges: edges.map((e) => (mode === "radial" && e.id === WAN_EDGE_ID
+      ? { id: e.id, sources: [e.target], targets: [e.source] }
+      : { id: e.id, sources: [e.source], targets: [e.target] })),
   });
 
   let boxes = new Map<string, Box>((graph.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 }]));
@@ -218,7 +241,8 @@ export async function layoutFlowGraph(
       id: e.id, source: e.source, target: e.target,
       label: e.type === "backhaul" ? backhaulLabel((e.data as BackhaulEdgeData).link).text
         : e.type === "switchUplink" ? switchUplinkLabel((e.data as SwitchEdgeData).sw)
-        : e.type === "wiredLink" ? (e.data as WiredEdgeData).label ?? undefined : undefined,
+        : e.type === "wiredLink" ? (e.data as WiredEdgeData).label ?? undefined
+        : e.type === "wan" ? (e.data as WanEdgeData).label : undefined,
     })));
     routes = new Map(edges.map((e) => [e.id, straightRoute(boxes.get(e.source)!, boxes.get(e.target)!)]));
   } else {

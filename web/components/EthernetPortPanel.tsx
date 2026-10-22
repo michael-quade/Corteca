@@ -6,6 +6,8 @@ import { cn } from "@/web/lib/utils";
 import { clientName } from "@/web/lib/topologyFlow";
 import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleLabel, staleTitle, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import type { EthernetPort } from "@/app/api/network/[deviceId]/ethernet/route";
+import type { MeshPort } from "@/web/lib/meshApPorts";
+import { ReportedConnectedTo, ReportedStatusCell, ReportedSwitchRow } from "./ReportedPortCells";
 
 export type { EthernetPort };
 
@@ -124,7 +126,8 @@ function SwitchRow({ hosts, context }: { hosts: PortHosts; context: PortContext 
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
-  ports: EthernetPort[];
+  /** Live/config/spec ports, or a mesh AP's ports built from Corteca's reports (`reported`). */
+  ports: MeshPort[];
   /** Mesh APs and clients, so hosts learned on a port can be split into Beacons / devices / switch. */
   context?: PortContext;
 }
@@ -133,7 +136,7 @@ export function EthernetPortPanel({ ports, context }: Props) {
   const [openPort, setOpenPort] = useState<number | null>(null);
   const labeled = useMemo(() => {
     let lanIdx = 0;
-    return ports.map((p) => ({ ...p, label: p.upstream ? "WAN" : `${++lanIdx}` }));
+    return ports.map((p) => ({ ...p, label: p.reported?.portLabel ?? (p.upstream ? "WAN" : `${++lanIdx}`) }));
   }, [ports]);
 
   // Group consecutive ports by max speed for bracket labels
@@ -188,10 +191,10 @@ export function EthernetPortPanel({ ports, context }: Props) {
                 <Fragment key={port.index}>
                 <tr className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/60">
                   <td className="px-4 py-3 font-medium text-neutral-900 whitespace-nowrap">
-                    {port.upstream ? "WAN" : `Port ${port.label}`}
+                    {port.label === "WAN" ? "WAN" : `Port ${port.label}`}
                     {!port.enable && <span className="ml-1.5 text-[10px] text-neutral-400">(disabled)</span>}
                   </td>
-                  <td className="px-4 py-3"><StatusCell port={port} /></td>
+                  <td className="px-4 py-3">{port.reported ? <ReportedStatusCell reported={port.reported} /> : <StatusCell port={port} />}</td>
                   <td className="px-4 py-3">
                     <span className={cn("rounded px-2 py-0.5 text-[11px] font-medium",
                       port.maxBitRate >= 10000 ? "bg-purple-50 text-purple-700"
@@ -199,13 +202,16 @@ export function EthernetPortPanel({ ports, context }: Props) {
                       : "bg-neutral-100 text-neutral-600"
                     )}>{fmtMax(port.maxBitRate)}</span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-700">{fmtNeg(port.currentBitRate, port.status)}</td>
+                  <td className="px-4 py-3 text-neutral-700">{port.reported?.kind === "none" ? "—" : fmtNeg(port.currentBitRate, port.status)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-neutral-500 whitespace-nowrap">{port.macAddress || "—"}</td>
                   <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">
-                    <ConnectedTo port={port} hosts={hosts} open={open} onToggle={() => setOpenPort(open ? null : port.index)} />
+                    {port.reported
+                      ? <ReportedConnectedTo reported={port.reported} open={open} onToggle={() => setOpenPort(open ? null : port.index)} />
+                      : <ConnectedTo port={port} hosts={hosts} open={open} onToggle={() => setOpenPort(open ? null : port.index)} />}
                   </td>
                 </tr>
                 {open && hosts && looksLikeSwitch(hosts) && <SwitchRow hosts={hosts} context={context!} />}
+                {open && port.reported?.kind === "switch" && <ReportedSwitchRow reported={port.reported} />}
                 </Fragment>
               );
             })}
