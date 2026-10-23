@@ -90,11 +90,17 @@ export function highlightFor(network: McpNetwork, sel: Selection | null): Highli
   } else if (sel.kind === "ap") {
     out.nodes.add(`cl:${sel.id}`);
     out.edges.add(`ce:cl:${sel.id}`);
-    // Its wired clients plugged straight into it (those behind a switch belong to the switch).
+    // Its wired clients plugged straight into it…
     for (const m of network.members) {
       if (m.connected && m.device_id === sel.id && clientBand(m) === "Wired" && clientOwner(network, m) === sel.id) {
         out.nodes.add(`wc:${m.id}`); out.edges.add(`wl:${m.id}`);
       }
+    }
+    // …and those behind a switch on its ports (with the switch). Beacons behind it stay dimmed.
+    for (const sw of network.switches ?? []) {
+      if (sw.apMac !== sel.id || !sw.clientIds.length) continue;
+      out.nodes.add(sw.id); out.edges.add(`swu:${sw.id}`);
+      for (const id of sw.clientIds) { out.nodes.add(`wc:${id}`); out.edges.add(`wl:${id}`); }
     }
     chainToGateway(network, sel.id, parents, out);
   } else if (sel.kind === "wan") {
