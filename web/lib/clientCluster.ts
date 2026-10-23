@@ -7,8 +7,11 @@ import { clientName, clientSignal } from "@/web/lib/clientFields";
 
 export const CLUSTER_W = 232;
 export const CLUSTER_COLLAPSE_AT = 6;
-const CLUSTER_PAD = 12, CLUSTER_HEADER = 22, PILL_GAP = 6, SECTION_GAP = 12;
-const PILL_H1 = 24, PILL_H2 = 38, PILL_MAX = CLUSTER_W - 2 * CLUSTER_PAD;
+// The card is border-box: its 1px border and 12px padding both come out of CLUSTER_W.
+// Leaving the border out let a row that fits by 1–2px wrap in the browser, so the
+// card grew taller than ELK had laid it out and covered the line routed below it.
+const CLUSTER_PAD = 12, CLUSTER_BORDER = 1, CLUSTER_HEADER = 22, PILL_GAP = 6, SECTION_GAP = 12;
+const PILL_H1 = 24, PILL_H2 = 38, PILL_MAX = CLUSTER_W - 2 * (CLUSTER_PAD + CLUSTER_BORDER);
 const CHAR_W = 7.2, PILL_CHROME = 40; // text-xs average glyph width; dot + gap + padding + border
 
 // Measure with the page's real text-xs font when in a browser; average glyph width otherwise.
@@ -62,7 +65,7 @@ export function clusterNode(
   onToggle: ClusterNodeData["onToggle"],
 ): ClusterFlowNode {
   const sections: ClientSection[] = [];
-  let height = CLUSTER_PAD * 2;
+  let height = 2 * (CLUSTER_PAD + CLUSTER_BORDER);
   for (const band of BAND_ORDER) {
     const members = bands.get(band);
     if (!members?.length) continue;
