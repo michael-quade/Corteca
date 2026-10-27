@@ -41,3 +41,6 @@ next-env.d.ts
 
 # confidential documents
 /assets/
+
+# MapLibre worker, copied from node_modules on postinstall
+/public/maplibre/

@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Map as MlMap, Marker } from "maplibre-gl";
 import type { NetworkTopologyData } from "./NetworkTopologyMap";
 import { buildTree, flatNodes } from "@/web/lib/networkTopology";
-import type { TreeNode } from "@/web/lib/networkTopology";
 import { filterConnectedDevices } from "@/web/lib/networkMembers";
+import { STYLE_URL, tintBasemap, MAP_FRAME } from "@/web/lib/mapBasemap";
+import { MapZoomButtons } from "@/web/components/map/MapZoomButtons";
+import { ApMapPin, ApMapCard } from "@/web/components/map/ApMapPin";
 
 // ── Location extraction ───────────────────────────────────────────────────────
 
@@ -29,144 +34,118 @@ function extractLatLng(summary: unknown): { lat: number; lng: number } | null {
   return { lat, lng };
 }
 
-// ── Marker HTML ───────────────────────────────────────────────────────────────
-// Each marker: type label pill → router SVG (with LED status) → client count badge overlay
-
-function markerHtml(isRoot: boolean, online: boolean, label: string, clientCount: number): string {
-  const body    = isRoot ? "#3b82f6" : online ? "#6366f1" : "#9ca3af";
-  const led     = online ? "#22c55e" : "#6b7280";
-  const typeBg  = isRoot ? "#1d4ed8" : online ? "#4338ca" : "#6b7280";
-  const typeLabel = isRoot ? "GATEWAY" : "MESH AP";
-
-  const arcs = online
-    ? `<path d="M-18,-46 A18,18 0 0,1 18,-46" fill="none" stroke="${body}" stroke-width="2.2" stroke-linecap="round" opacity="0.35"/>
-       <path d="M-12,-52 A12,12 0 0,1 12,-52" fill="none" stroke="${body}" stroke-width="2.2" stroke-linecap="round" opacity="0.62"/>` : "";
-
-  const rootRing = isRoot
-    ? `<circle cx="0" cy="-13" r="22" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="3,2" opacity="0.4"/>`
-    : "";
-
-  const iconW = isRoot ? 44 : 36;
-  const iconH = isRoot ? 70 : 58;
-
-  const svgIcon = `
-    <svg viewBox="-22 -64 44 70" width="${iconW}" height="${iconH}" xmlns="http://www.w3.org/2000/svg">
-      ${rootRing}${arcs}
-      <line x1="-10" y1="-24" x2="-12" y2="-36" stroke="${body}" stroke-width="2.2" stroke-linecap="round"/>
-      <line x1="10"  y1="-24" x2="12"  y2="-36" stroke="${body}" stroke-width="2.2" stroke-linecap="round"/>
-      <rect x="-18" y="-24" width="36" height="22" rx="5" fill="${body}"/>
-      <circle cx="-7" cy="-13" r="3.5" fill="${led}"/>
-      <circle cx="0"  cy="-13" r="3.5" fill="${led}"/>
-      <circle cx="7"  cy="-13" r="3.5" fill="${led}"/>
-      <rect x="-14" y="-2" width="28" height="5" rx="2.5" fill="${body}" opacity="0.55"/>
-      <polygon points="0,10 -7,0 7,0" fill="${body}"/>
-    </svg>`;
-
-  const badgeBg    = clientCount > 0 ? "#0f172a" : "#d1d5db";
-  const badgeColor = clientCount > 0 ? "white"   : "#6b7280";
-
-  return `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default">
-      <div style="background:${typeBg};color:white;font-size:8px;font-weight:800;font-family:sans-serif;padding:2px 7px;border-radius:4px;white-space:nowrap;letter-spacing:0.08em;box-shadow:0 1px 3px rgba(0,0,0,0.25)">${typeLabel}</div>
-      <div style="position:relative">
-        ${svgIcon}
-        <div style="position:absolute;top:-4px;right:-10px;background:${badgeBg};color:${badgeColor};border-radius:9999px;min-width:17px;height:17px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid white;font-family:sans-serif;padding:0 3px;box-shadow:0 1px 2px rgba(0,0,0,0.2)">${clientCount}</div>
-      </div>
-      <div style="font-size:9px;font-weight:600;font-family:sans-serif;color:#1e293b;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;text-align:center;text-shadow:0 0 3px white,0 0 3px white">${label}</div>
-    </div>`;
+// Only the gateway's location is known, so Beacons are pinned at fixed screen offsets
+// around it (below and to the sides, clear of the gateway's chip) at any zoom.
+function beaconOffset(i: number, n: number): [number, number] {
+  const deg = n === 1 ? 90 : -20 + (220 * i) / (n - 1);
+  const rad = (deg * Math.PI) / 180;
+  return [Math.round(150 * Math.cos(rad)), Math.round(95 * Math.sin(rad))];
 }
 
-// ── AP positions: root at center, beacons offset in a circle ─────────────────
-
-function apMarkerPositions(
-  nodes: TreeNode[],
-  center: { lat: number; lng: number },
-): Array<{ node: TreeNode; lat: number; lng: number }> {
-  const R = 0.00018;
-  return nodes.map((node, i) => {
-    if (node.isRoot || nodes.length === 1) return { node, lat: center.lat, lng: center.lng };
-    const angle = ((i - 1) / Math.max(nodes.length - 1, 1)) * 2 * Math.PI;
-    return { node, lat: center.lat + R * Math.sin(angle), lng: center.lng + R * Math.cos(angle) };
-  });
-}
+const ZOOM = 17;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props { data: NetworkTopologyData }
 
 export function NetworkMap({ data }: Props) {
-  const mapRef   = useRef<ReturnType<typeof import("leaflet")["map"]> | null>(null);
   const mountRef = useRef<HTMLDivElement>(null);
+  const mapRef   = useRef<MlMap | null>(null);
+  const [ready, setReady]       = useState(false);
+  const [pins, setPins]         = useState(new Map<string, HTMLDivElement>());
+  const [selected, setSelected] = useState<string | null>(null);
 
   const location = extractLatLng(data.summary);
-  const tree     = buildTree(data.topology, data.networks, data.mesh, data.configs ?? {}, data.rootDeviceId);
-  const apNodes  = flatNodes(tree);
+  const lat = location?.lat, lng = location?.lng;
 
-  // Count connected clients per AP
-  const devices     = filterConnectedDevices(data.members);
-  const clientsPerAp = new Map<string, number>();
-  for (const apNode of apNodes) clientsPerAp.set(apNode.id, 0);
-  for (const d of devices) clientsPerAp.set(d.apId, (clientsPerAp.get(d.apId) ?? 0) + 1);
+  const apNodes = useMemo(
+    () => flatNodes(buildTree(data.topology, data.networks, data.mesh, data.configs ?? {}, data.rootDeviceId)),
+    [data.topology, data.networks, data.mesh, data.configs, data.rootDeviceId],
+  );
+  const clientsPerAp = useMemo(() => {
+    const m = new Map<string, number>(apNodes.map((n) => [n.id, 0]));
+    for (const d of filterConnectedDevices(data.members)) m.set(d.apId, (m.get(d.apId) ?? 0) + 1);
+    return m;
+  }, [apNodes, data.members]);
+  const apKey = apNodes.map((n) => `${n.id}:${n.isRoot ? 1 : 0}`).join(",");
 
   useEffect(() => {
-    if (!mountRef.current || !location) return;
-
-    let cancelled = false;
-
-    import("leaflet").then((L) => {
-      if (cancelled || !mountRef.current || mapRef.current) return;
-      const map = L.map(mountRef.current).setView([location.lat, location.lng], 16);
-      mapRef.current = map;
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 20,
-      }).addTo(map);
-
-      const positions = apMarkerPositions(apNodes, location);
-      for (const { node, lat, lng } of positions) {
-        const count = clientsPerAp.get(node.id) ?? 0;
-        const iW = node.isRoot ? 54 : 46;
-        const iH = node.isRoot ? 108 : 96;
-        const icon = L.divIcon({
-          html: markerHtml(node.isRoot, node.online, node.label, count),
-          className: "",
-          iconSize:   [iW, iH],
-          iconAnchor: [iW / 2, iH - 10],
-          popupAnchor: [0, -(iH - 10)],
-        });
-        const status = node.online ? "Online" : "Offline";
-        const dot    = node.online ? "#22c55e" : "#9ca3af";
-        L.marker([lat, lng], { icon })
-          .addTo(map)
-          .bindPopup(
-            `<div style="font-family:sans-serif;min-width:130px">
-               <p style="margin:0 0 4px;font-weight:700;font-size:13px">${node.label}</p>
-               <p style="margin:0 0 2px;font-size:11px;color:#555;display:flex;align-items:center;gap:5px">
-                 <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot}"></span>${status}
-               </p>
-               <p style="margin:4px 0 0;font-size:11px;color:#555">${count} connected client${count !== 1 ? "s" : ""}</p>
-             </div>`,
-            { maxWidth: 200 }
-          );
-      }
+    if (!mountRef.current || lat === undefined || lng === undefined) return;
+    const map = new MlMap({
+      container: mountRef.current,
+      style: STYLE_URL,
+      center: [lng, lat],
+      zoom: ZOOM,
+      attributionControl: { compact: true },
+      dragRotate: false,
+      pitchWithRotate: false,
     });
+    map.touchZoomRotate.disableRotation();
+    mapRef.current = map;
+    map.on("load", () => { tintBasemap(map); setReady(true); });
+    // A click on the map (not on a pin) clears the selection.
+    map.on("click", (e) => {
+      if (!(e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-marker")) setSelected(null);
+    });
+    return () => { map.remove(); mapRef.current = null; setReady(false); };
+  }, [lat, lng]);
 
-    return () => { cancelled = true; mapRef.current?.remove(); mapRef.current = null; };
+  // One marker per AP; their content is rendered into the marker elements with portals.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || lat === undefined || lng === undefined) return;
+    const beacons = apNodes.filter((n) => !n.isRoot);
+    const markers: Marker[] = [];
+    const els = new Map<string, HTMLDivElement>();
+    for (const node of apNodes) {
+      const el = document.createElement("div");
+      const offset = node.isRoot || apNodes.length === 1 ? [0, 0] : beaconOffset(beacons.indexOf(node), beacons.length);
+      markers.push(new Marker({ element: el, anchor: "bottom", offset: offset as [number, number] }).setLngLat([lng, lat]).addTo(map));
+      if (node.isRoot) el.style.zIndex = "1";
+      els.set(node.id, el);
+    }
+    setPins(els);
+    return () => { for (const m of markers) m.remove(); setPins(new Map()); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready, apKey, lat, lng]);
 
   if (!location) {
     return (
-      <div className="flex h-full min-h-[480px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-400">
+      <div className="flex h-[480px] xl:h-[800px] items-center justify-center rounded-xl bg-[#f5f7fa] text-sm text-neutral-500 ring-1 ring-neutral-200">
         No location data available for this network.
       </div>
     );
   }
 
+  const selectedNode = apNodes.find((n) => n.id === selected);
+
   return (
-    <div className="overflow-hidden rounded-xl border border-neutral-200" style={{ height: 480 }}>
-      <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+    <div className={`${MAP_FRAME} h-[480px] xl:h-[800px]`}>
+      <div ref={mountRef} className="h-full w-full" />
+      <MapZoomButtons
+        onZoomIn={() => mapRef.current?.zoomIn({ duration: 250 })}
+        onZoomOut={() => mapRef.current?.zoomOut({ duration: 250 })}
+        onFit={() => mapRef.current?.easeTo({ center: [location.lng, location.lat], zoom: ZOOM, duration: 500 })}
+        fitLabel="Back to the network"
+      />
+      {selectedNode && (
+        <div className="absolute left-3 top-3 z-10 rounded-xl bg-white shadow-lg ring-1 ring-black/5">
+          <ApMapCard node={selectedNode} clients={clientsPerAp.get(selectedNode.id) ?? 0} onClose={() => setSelected(null)} />
+        </div>
+      )}
+      {apNodes.map((node) => {
+        const el = pins.get(node.id);
+        return el ? createPortal(
+          <ApMapPin
+            node={node}
+            clients={clientsPerAp.get(node.id) ?? 0}
+            selected={node.id === selected}
+            onSelect={() => setSelected((s) => (s === node.id ? null : node.id))}
+          />,
+          el,
+          node.id,
+        ) : null;
+      })}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { buildTree, buildPositions, buildLinkDataMap, linkTip, collectEdges, flatNodes, buildBoundingBox, CANVAS_W, LEVEL_H, PAD_TOP } from "@/web/lib/networkTopology";
 import { filterConnectedDevices, computeDevicePositions, deviceColor, type DeviceNode } from "@/web/lib/networkMembers";
+import { wheelPixels } from "@/web/lib/wheelZoom";
 
 export interface NetworkTopologyData {
   networks: unknown; topology: unknown; mesh: unknown;
@@ -70,12 +71,13 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
     setTx({ x: nx, y: ny, scale: s });
   }, [apPos, devPos]);
 
-  // Non-passive wheel zoom toward cursor
+  // Non-passive wheel zoom toward cursor, scaled by wheel distance (~14% per 100 px notch) so a
+  // smooth-scrolling mouse that sends one notch as many small events zooms the same amount
   useEffect(() => {
     const svg = svgRef.current; if (!svg) return;
     const h = (e: WheelEvent) => {
       e.preventDefault();
-      const f = e.deltaY < 0 ? 1.12 : 0.89;
+      const f = Math.exp(-wheelPixels(e) * 0.0015);
       const ns = Math.max(0.08, Math.min(6, txRef.current.scale * f));
       const rect = svg.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;

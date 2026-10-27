@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Map as MlMap, Popup, LngLatBounds, type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import type { DeviceMarker } from "@/app/api/network-map/locate/route";
 import type { NetworkDeviceInfo } from "@/app/api/network-map/device-info/[mac]/route";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
-
-type L = typeof import("leaflet");
-
-const CONSOLE_BASE = process.env.NEXT_PUBLIC_CORTECA_CONSOLE_URL ?? 'https://console.demo2.homewifi.nokia.com';
-
-function consoleUrl(mac: string): string {
-  return `${CONSOLE_BASE}/home-troubleshooting/dashboard?mac=${mac.toUpperCase().replace(/:/g, '-')}`;
-}
+import { STYLE_URL, tintBasemap, MAP_FRAME } from "@/web/lib/mapBasemap";
+import { SOURCE, LAYER, addNetworkLayers, toFeatureCollection, setSelected } from "@/web/components/map/fleetMapStyle";
+import { FleetMapPopup } from "@/web/components/map/FleetMapPopup";
+import { FleetMapOverlay } from "@/web/components/map/FleetMapOverlay";
 
 interface Props {
   devices: DeviceMarker[];
@@ -21,210 +20,174 @@ interface Props {
   onPopupClose?: () => void;
 }
 
-function calcRadius(zoom: number): number {
-  if (zoom <= 3)  return 5;
-  if (zoom <= 5)  return 7;
-  if (zoom <= 7)  return 9;
-  if (zoom <= 10) return 12;
-  return 16;
-}
+interface Open { device: DeviceMarker; pinned: boolean }
 
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function basePopupHtml(d: DeviceMarker, detail: string): string {
-  const name   = d.accountName || d.customerId || d.mac;
-  const sub    = d.accountName && d.customerId ? d.customerId : '';
-  const model  = d.model + (d.firmware ? ' · ' + d.firmware : '');
-  const dot    = d.online ? '#22c55e' : '#ef4444';
-  const status = d.online ? 'Online' : 'Offline';
-  const url    = esc(consoleUrl(d.mac));
-  return `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-width:200px;font-size:12px;line-height:1.6">
-    <p style="margin:0 0 1px;font-weight:700;font-size:13px">${esc(name)}</p>
-    ${sub   ? `<p style="margin:0 0 3px;color:#888;font-size:11px">${esc(sub)}</p>` : ''}
-    ${model ? `<p style="margin:0;color:#666;font-size:11px">${esc(model)}</p>` : ''}
-    <hr style="margin:7px 0 5px;border:none;border-top:1px solid #ebebeb">
-    ${detail}
-    <hr style="margin:5px 0;border:none;border-top:1px solid #ebebeb">
-    <p style="margin:0;display:flex;align-items:center;gap:5px;font-size:11px">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot}"></span>
-      ${status}
-    </p>
-    <a href="${url}" target="_blank" rel="noopener noreferrer"
-       style="display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:4px 10px;background:#3b82f6;color:#fff;font-size:11px;font-weight:600;border-radius:5px;text-decoration:none;white-space:nowrap">
-      Launch Corteca
-      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"/><path d="M8 1h3v3M11 1 6 6"/>
-      </svg>
-    </a>
-  </div>`;
-}
-
-function loadingDetail(): string {
-  return `<p style="margin:4px 0;color:#bbb;font-size:11px;text-align:center">Loading details…</p>`;
-}
-
-function richDetail(info: NetworkDeviceInfo): string {
-  const apText = info.aps.length > 0
-    ? info.aps.map((a) => `${a.count > 1 ? a.count + ' ' : ''}${esc(a.model)}`).join('<br>')
-    : '—';
-  return `<table style="border-collapse:collapse;width:100%;font-size:12px">
-    <tr>
-      <td style="color:#888;font-size:11px;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">Access Points</td>
-      <td style="font-weight:600;padding:2px 0">${apText}</td>
-    </tr>
-    <tr>
-      <td style="color:#888;font-size:11px;padding:2px 8px 2px 0">Clients</td>
-      <td style="font-weight:600;padding:2px 0">${info.clientCount}</td>
-    </tr>
-  </table>`;
-}
+const FIT = { padding: 56, maxZoom: 10 };
 
 export function GlobalNetworkMap({ devices, progress, flyToTarget, resetViewTrigger, onPopupClose }: Props) {
-  const mountRef        = useRef<HTMLDivElement>(null);
-  const mapRef          = useRef<ReturnType<L["map"]> | null>(null);
-  const LRef            = useRef<L | null>(null);
-  const onlineGroupRef  = useRef<ReturnType<L["layerGroup"]> | null>(null);
-  const offlineGroupRef = useRef<ReturnType<L["layerGroup"]> | null>(null);
-  const addedRef        = useRef<Set<string>>(new Set());
-  const boundsRef       = useRef<[number, number][]>([]);
-  const markersRef      = useRef(new Map<string, ReturnType<L["circleMarker"]>>());
-  const detailsRef      = useRef(new Map<string, NetworkDeviceInfo>());
+  const mountRef    = useRef<HTMLDivElement>(null);
+  const mapRef      = useRef<MlMap | null>(null);
+  const popupRef    = useRef<Popup | null>(null);
+  const [popupEl]   = useState(() => (typeof document !== "undefined" ? document.createElement("div") : null));
+  const [ready, setReady] = useState(false);
+  const [open, setOpen]   = useState<Open | null>(null);
+  const openRef     = useRef<Open | null>(null);
+  const byMacRef    = useRef(new Map<string, DeviceMarker>());
+  const userMovedRef = useRef(false);   // stop auto-fitting once the user has moved the map
+  const [details, setDetails] = useState(new Map<string, NetworkDeviceInfo | null>());
+  const onPopupCloseRef = useRef(onPopupClose);
+  onPopupCloseRef.current = onPopupClose;
 
-  useEffect(() => {
-    if (!mountRef.current) return;
-    let cancelled = false;
-
-    import("leaflet").then((L) => {
-      if (cancelled || !mountRef.current || mapRef.current) return;
-      LRef.current = L;
-
-      const map = L.map(mountRef.current, { worldCopyJump: true }).setView([20, 10], 2);
-      mapRef.current = map;
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 20,
-      }).addTo(map);
-
-      onlineGroupRef.current  = L.layerGroup().addTo(map);
-      offlineGroupRef.current = L.layerGroup().addTo(map);
-
-      map.on('zoomend', () => {
-        const r = calcRadius(map.getZoom());
-        for (const m of markersRef.current.values()) m.setRadius(r);
-      });
-
-      const legend = new L.Control({ position: "bottomright" });
-      legend.onAdd = () => {
-        const div = L.DomUtil.create("div");
-        div.innerHTML = `<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-family:sans-serif;font-size:11px;line-height:1.8">
-          <div style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e"></span>Online</div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444"></span>Offline</div>
-        </div>`;
-        return div;
-      };
-      legend.addTo(map);
-    });
-
-    return () => {
-      cancelled = true;
-      mapRef.current?.remove();
-      mapRef.current = null; LRef.current = null;
-      onlineGroupRef.current = null; offlineGroupRef.current = null;
-      markersRef.current.clear();
-      addedRef.current.clear(); boundsRef.current = [];
-    };
+  const show = useCallback((next: Open | null) => {
+    const map = mapRef.current, popup = popupRef.current;
+    const prev = openRef.current;
+    openRef.current = next;
+    setOpen(next);
+    if (!map || !popup) return;
+    setSelected(map, next?.pinned ? next.device.mac : null);
+    if (next) {
+      popup.setLngLat([next.device.lng, next.device.lat]);
+      if (!popup.isOpen()) popup.addTo(map);
+    } else {
+      popup.remove();
+    }
+    if (prev?.pinned && (!next || next.device.mac !== prev.device.mac)) onPopupCloseRef.current?.();
   }, []);
 
+  useEffect(() => {
+    if (!mountRef.current || !popupEl) return;
+    const map = new MlMap({
+      container: mountRef.current,
+      style: STYLE_URL,
+      center: [10, 20],
+      zoom: 1.5,
+      attributionControl: { compact: true },
+      dragRotate: false,
+      pitchWithRotate: false,
+    });
+    map.touchZoomRotate.disableRotation();
+    mapRef.current = map;
+    popupRef.current = new Popup({ closeButton: false, closeOnClick: false, offset: 14, maxWidth: "none" }).setDOMContent(popupEl);
+
+    map.on("load", () => {
+      tintBasemap(map);
+      addNetworkLayers(map);
+      setReady(true);
+    });
+
+    const deviceAt = (e: MapLayerMouseEvent) => byMacRef.current.get(String(e.features?.[0]?.properties?.mac ?? ""));
+    map.on("mouseenter", LAYER.points, (e) => {
+      map.getCanvas().style.cursor = "pointer";
+      const d = deviceAt(e);
+      if (d && !openRef.current?.pinned) show({ device: d, pinned: false });
+    });
+    map.on("mouseleave", LAYER.points, () => {
+      map.getCanvas().style.cursor = "";
+      if (openRef.current && !openRef.current.pinned) show(null);
+    });
+    map.on("click", LAYER.points, (e) => {
+      const d = deviceAt(e);
+      if (d) show({ device: d, pinned: true });
+    });
+    map.on("mouseenter", LAYER.clusters, () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", LAYER.clusters, () => { map.getCanvas().style.cursor = ""; });
+    map.on("click", LAYER.clusters, async (e) => {
+      const f = e.features?.[0];
+      if (!f || f.geometry.type !== "Point") return;
+      const zoom = await (map.getSource(SOURCE) as GeoJSONSource).getClusterExpansionZoom(f.properties.cluster_id);
+      map.easeTo({ center: f.geometry.coordinates as [number, number], zoom: zoom + 0.5, duration: 500 });
+    });
+    // A click on empty map closes a pinned card.
+    map.on("click", (e) => {
+      if (map.queryRenderedFeatures(e.point, { layers: [LAYER.points, LAYER.clusters] }).length === 0 && openRef.current) show(null);
+    });
+    map.on("movestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) userMovedRef.current = true; });
+
+    return () => {
+      popupRef.current?.remove();
+      map.remove();
+      mapRef.current = null; popupRef.current = null;
+      setReady(false);
+    };
+  }, [popupEl, show]);
+
+  const fitAll = useCallback((duration = 600) => {
+    const map = mapRef.current;
+    const all = [...byMacRef.current.values()];
+    if (!map || all.length === 0) return;
+    const bounds = all.reduce((b, d) => b.extend([d.lng, d.lat]), new LngLatBounds([all[0].lng, all[0].lat], [all[0].lng, all[0].lat]));
+    map.fitBounds(bounds, { ...FIT, duration });
+  }, []);
+
+  // Plot networks as they're located; keep fitting them in view until the user moves the map.
+  useEffect(() => {
+    byMacRef.current = new Map(devices.map((d) => [d.mac, d]));
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    (map.getSource(SOURCE) as GeoJSONSource).setData(toFeatureCollection(devices));
+    if (devices.length === 0) { userMovedRef.current = false; show(null); return; }
+    if (!userMovedRef.current) fitAll(devices.length === byMacRef.current.size && progress >= 100 ? 600 : 0);
+    // Names arrive after locating: keep the open card's network current.
+    const cur = openRef.current;
+    if (cur) { const d = byMacRef.current.get(cur.device.mac); if (d && d !== cur.device) show({ ...cur, device: d }); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices, ready]);
 
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;
-    mapRef.current.flyTo([flyToTarget.lat, flyToTarget.lng], 13, { animate: true, duration: 1.2 });
+    userMovedRef.current = true;
+    mapRef.current.flyTo({ center: [flyToTarget.lng, flyToTarget.lat], zoom: 13, duration: 1200 });
   }, [flyToTarget]);
 
   useEffect(() => {
-    if (!resetViewTrigger || !mapRef.current || boundsRef.current.length === 0) return;
-    mapRef.current.fitBounds(boundsRef.current as [number, number][], { padding: [40, 40], maxZoom: 10, animate: true });
-  }, [resetViewTrigger]);
+    if (!resetViewTrigger) return;
+    userMovedRef.current = false;
+    fitAll();
+  }, [resetViewTrigger, fitAll]);
 
+  // Load AP / client counts for the open card (cached per network).
+  const openMac = open?.device.mac;
   useEffect(() => {
-    const L   = LRef.current;
-    const map = mapRef.current;
-    if (!L || !map || devices.length === 0) return;
+    if (!openMac || details.has(openMac)) return;
+    let cancelled = false;
+    void fetchWithAuth(`/api/network-map/device-info/${encodeURIComponent(openMac)}`)
+      .then(async (r) => (r.ok ? (await r.json()) as NetworkDeviceInfo : null))
+      .catch(() => null)
+      .then((info) => { if (!cancelled) setDetails((m) => new Map(m).set(openMac, info)); });
+    return () => { cancelled = true; };
+  }, [openMac, details]);
 
-    let added = false;
-    for (const d of devices) {
-      if (addedRef.current.has(d.mac)) continue;
-      addedRef.current.add(d.mac);
-      boundsRef.current.push([d.lat, d.lng]);
-
-      const group = d.online ? onlineGroupRef.current : offlineGroupRef.current;
-      if (!group) continue;
-
-      const marker = L.circleMarker([d.lat, d.lng], {
-        radius:      calcRadius(map.getZoom()),
-        fillColor:   d.online ? '#22c55e' : '#ef4444',
-        color:       'white',
-        weight:      1.5,
-        fillOpacity: 0.88,
-      }).addTo(group);
-
-      markersRef.current.set(d.mac, marker);
-
-      marker.bindPopup(basePopupHtml(d, loadingDetail()), {
-        maxWidth: 280, minWidth: 200, autoPan: true,
-      });
-
-      // Hover opens popup; click keeps it open until manually closed
-      let clickedOpen = false;
-      marker.on('mouseover', () => { if (!clickedOpen) marker.openPopup(); });
-      marker.on('mouseout',  () => { if (!clickedOpen) marker.closePopup(); });
-      marker.on('click',     () => { clickedOpen = true; marker.openPopup(); });
-      marker.on('popupclose', () => {
-        const wasClicked = clickedOpen;
-        clickedOpen = false;
-        if (wasClicked) onPopupClose?.();
-      });
-
-      // Lazy-load device details when popup opens; update content regardless of open state
-      // so subsequent opens (hover or click) immediately show cached data.
-      marker.on('popupopen', () => {
-        const popup = marker.getPopup();
-        if (!popup) return;
-        const cached = detailsRef.current.get(d.mac);
-        if (cached) { popup.setContent(basePopupHtml(d, richDetail(cached))); popup.update(); return; }
-
-        void (async () => {
-          try {
-            const res = await fetchWithAuth(`/api/network-map/device-info/${encodeURIComponent(d.mac)}`);
-            if (res.ok) {
-              const info = await res.json() as NetworkDeviceInfo;
-              detailsRef.current.set(d.mac, info);
-              popup.setContent(basePopupHtml(d, richDetail(info)));
-              if (popup.isOpen()) popup.update();
-            }
-          } catch { /* leave loading state */ }
-        })();
-      });
-
-      added = true;
-    }
-
-    if (added && boundsRef.current.length > 0) {
-      map.fitBounds(boundsRef.current as [number, number][], { padding: [40, 40], maxZoom: 10 });
-    }
-  }, [devices]);
+  // Re-anchor the card once its details have loaded and it has grown.
+  useEffect(() => {
+    const popup = popupRef.current;
+    if (popup?.isOpen()) popup.setLngLat(popup.getLngLat());
+  }, [details]);
 
   return (
-    <div className="relative isolate overflow-hidden rounded-xl border border-neutral-200" style={{ height: 600 }}>
+    <div
+      className={`${MAP_FRAME} h-[600px]`}
+    >
+      <div ref={mountRef} className="h-full w-full" />
+      <FleetMapOverlay
+        count={devices.length}
+        onZoomIn={() => mapRef.current?.zoomIn({ duration: 250 })}
+        onZoomOut={() => mapRef.current?.zoomOut({ duration: 250 })}
+        onFit={() => { userMovedRef.current = false; fitAll(); }}
+      />
       {progress < 100 && (
-        <div className="absolute bottom-0 left-0 right-0 z-[1000] h-1 bg-neutral-100">
-          <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+        <div className="absolute inset-x-0 bottom-0 z-10 h-1 bg-neutral-200/60">
+          <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
       )}
-      <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+      {open && popupEl && createPortal(
+        <FleetMapPopup
+          device={open.device}
+          details={details.has(open.device.mac) ? details.get(open.device.mac) : undefined}
+          pinned={open.pinned}
+          onClose={() => show(null)}
+        />,
+        popupEl,
+      )}
     </div>
   );
 }
