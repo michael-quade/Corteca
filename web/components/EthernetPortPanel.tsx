@@ -8,6 +8,7 @@ import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleLabel, sta
 import type { EthernetPort } from "@/app/api/network/[deviceId]/ethernet/route";
 import type { MeshPort } from "@/web/lib/meshApPorts";
 import { ReportedConnectedTo, ReportedStatusCell, ReportedSwitchRow } from "./ReportedPortCells";
+import { PortFaceplate, portTone } from "./PortFaceplate";
 
 export type { EthernetPort };
 
@@ -21,24 +22,6 @@ function fmtMax(mbps: number): string {
 function fmtNeg(cur: number, status: string): string {
   if (status !== "Up" || cur <= 0) return "N/A";
   return formatRate(cur);
-}
-
-// ── Rear-view port chip ───────────────────────────────────────────────────────
-
-function PortChip({ port }: { port: EthernetPort & { label: string } }) {
-  const active = port.status === "Up";
-  const c = active ? (port.upstream ? "#0ea5e9" : "#10b981") : "#9ca3af";
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width="36" height="32" viewBox="0 0 36 32" fill="none" aria-hidden>
-        <rect x="1" y="1" width="34" height="24" rx="3" stroke={c} strokeWidth="1.5" fill={active ? `${c}1a` : "#f9fafb"}/>
-        <rect x="6" y="4" width="24" height="15" rx="1.5" stroke={c} strokeWidth="1" fill="white"/>
-        {[8.5,11,13.5,16,18.5,21,23.5,26].map((x) => <rect key={x} x={x} y="7" width="1.5" height="7" rx="0.5" fill={c}/>)}
-        <rect x="12" y="25" width="12" height="4" rx="1" stroke={c} strokeWidth="1.2" fill={active ? `${c}1a` : "#f9fafb"}/>
-      </svg>
-      <span className="text-[11px] font-semibold text-neutral-700">{port.label}</span>
-    </div>
-  );
 }
 
 // ── Status cell ───────────────────────────────────────────────────────────────
@@ -139,39 +122,11 @@ export function EthernetPortPanel({ ports, context }: Props) {
     return ports.map((p) => ({ ...p, label: p.reported?.portLabel ?? (p.upstream ? "WAN" : `${++lanIdx}`) }));
   }, [ports]);
 
-  // Group consecutive ports by max speed for bracket labels
-  const speedGroups = useMemo(() => {
-    const groups: { label: string; count: number }[] = [];
-    for (const p of labeled) {
-      const l = fmtMax(p.maxBitRate);
-      if (groups.length && groups[groups.length - 1].label === l) groups[groups.length - 1].count++;
-      else groups.push({ label: l, count: 1 });
-    }
-    return groups;
-  }, [labeled]);
-
   if (labeled.length === 0) return null;
-
-  const cols = labeled.length;
 
   return (
     <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-      {/* Rear-view port diagram */}
-      <div className="flex flex-col items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-8 py-4">
-        <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-neutral-400">Rear view</p>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: "16px" }}>
-          {labeled.map((p) => <PortChip key={p.index} port={p} />)}
-        </div>
-        {/* Speed bracket row */}
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: "16px", width: "100%" }}>
-          {speedGroups.map((g, i) => (
-            <div key={i} style={{ gridColumn: `span ${g.count}` }} className="flex flex-col items-center">
-              <div className="h-px w-full bg-neutral-200" />
-              <span className="mt-0.5 text-[9px] text-neutral-400">{g.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <PortFaceplate ports={labeled.map((p) => ({ key: p.index, label: p.label, maxLabel: fmtMax(p.maxBitRate), ...portTone(p) }))} />
 
       {/* Detail table */}
       <div className="overflow-x-auto">

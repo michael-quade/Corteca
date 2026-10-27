@@ -12,6 +12,7 @@ import { formatRate } from "@/web/lib/rateFormat";
 import { meshApPorts } from "@/web/lib/meshApPorts";
 import { beaconPortLayout } from "@/web/lib/portLayouts";
 import { usePortLayouts } from "@/web/lib/usePortLayouts";
+import { PortFaceplate, portTone, type FaceplatePort } from "@/web/components/PortFaceplate";
 
 const fmtMbps = (mbps: number) => formatRate(mbps);
 
@@ -45,6 +46,20 @@ function Row({ port, status, rate, device, deviceTitle, title, wide }: {
       <span className="whitespace-nowrap tabular-nums text-neutral-700">{rate ?? "—"}</span>
       <span className="min-w-0 truncate text-right" title={deviceTitle}>{device ?? <span className="text-neutral-400">—</span>}</span>
     </div>
+  );
+}
+
+/** Faceplate, column header, port rows and source note. */
+function PortList({ faceplate, note, children }: { faceplate: FaceplatePort[]; note: string; children: React.ReactNode }) {
+  return (
+    <>
+      <PortFaceplate ports={faceplate} compact />
+      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] gap-2 border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+        <span>Port</span><span>Link</span><span>Rate</span><span className="text-right">Device</span>
+      </div>
+      <div className="divide-y divide-neutral-100">{children}</div>
+      <p className="pt-1 text-[11px] text-neutral-400">{note}</p>
+    </>
   );
 }
 
@@ -129,9 +144,16 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
   }
   if (ports === "error") return <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Live port status unavailable — showing wired devices reported by Corteca." />;
 
+  const labelled = labelPorts(ports);
   return (
-    <>
-      {labelPorts(ports).map(({ port: p, label }) => {
+    <PortList
+      note="Live status from the gateway (TR-181)."
+      faceplate={labelled.map(({ port: p, label }) => {
+        const t = portTone(p);
+        return { key: p.index, label, ...t, title: `${label} · ${p.status === "Up" ? t.rate ?? "Up" : "No link"}${p.upstream ? " · Internet" : ""}` };
+      })}
+    >
+      {labelled.map(({ port: p, label }) => {
         const up = p.status === "Up";
         const hosts = classifyPortHosts(p, network);
         const open = openPort === p.index;
@@ -151,8 +173,7 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
           </div>
         );
       })}
-      <p className="pt-1 text-[11px] text-neutral-400">Live status from the gateway (TR-181).</p>
-    </>
+    </PortList>
   );
 }
 
@@ -171,13 +192,21 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
   const layouts = usePortLayouts();
   const layout = beaconPortLayout(ap.model, layouts, gateway && live ? { model: gateway.model, ports: live } : null);
   const ports = meshApPorts(network, ap.mac, layout.ports, live);
+  const portLabel = (p: (typeof ports)[number]) => (p.reported?.portLabel === "WAN" ? "WAN" : `LAN ${p.reported?.portLabel ?? "?"}`);
 
   return (
-    <>
+    <PortList
+      note={`${note}${layout.note ? ` ${layout.note}` : ""}`}
+      faceplate={ports.filter((p) => p.reported).map((p) => {
+        const t = portTone(p);
+        const what = { none: "nothing reported", wireless: "wireless backhaul", uplink: "Ethernet backhaul", device: "wired device", switch: "switch" }[p.reported!.kind];
+        return { key: p.index, label: portLabel(p), ...t, title: `${portLabel(p)} · ${what}${t.rate ? ` · ${t.rate}` : ""}` };
+      })}
+    >
       {ports.map((p) => {
         const r = p.reported;
         if (!r) return null;
-        const label = r.portLabel === "WAN" ? "WAN" : `LAN ${r.portLabel}`;
+        const label = portLabel(p);
         const rate = p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined;
         if (r.kind === "none") {
           return <Row key={p.index} port={label} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
@@ -213,8 +242,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         );
       })}
       {!ports.length && <p className="py-1 text-xs text-neutral-500">No wired devices reported on this AP.</p>}
-      <p className="pt-1 text-[11px] text-neutral-400">{note}{layout.note && ` ${layout.note}`}</p>
-    </>
+    </PortList>
   );
 }
 
@@ -222,14 +250,9 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
 export function ApEthernetPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void }) {
   return (
     <DetailSection title="Ethernet ports">
-      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] gap-2 border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-        <span>Port</span><span>Link</span><span>Rate</span><span className="text-right">Device</span>
-      </div>
-      <div className="divide-y divide-neutral-100">
-        {ap.role === "root"
-          ? <GatewayPorts network={network} ap={ap} onSelect={onSelect} />
-          : <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Mesh APs don't report live port status (not in the TR-181 Data Elements yet). Ports show the wired devices and Ethernet backhaul Corteca reports." />}
-      </div>
+      {ap.role === "root"
+        ? <GatewayPorts network={network} ap={ap} onSelect={onSelect} />
+        : <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Mesh APs don't report live port status (not in the TR-181 Data Elements yet). Ports show the wired devices and Ethernet backhaul Corteca reports." />}
     </DetailSection>
   );
 }

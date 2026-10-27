@@ -5,6 +5,7 @@ import { formatBytes } from "@/web/lib/clientInsights";
 import { wanConnected, wanNatNote } from "@/web/lib/wanInfo";
 import type { Selection } from "@/web/lib/topologySelection";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDuration, formatMbps } from "./DetailParts";
+import { GatewayLocation } from "./GatewayLocation";
 
 const CONNECTION_TYPE: Record<string, string> = { IP_Routed: "Routed", IP_Bridged: "Bridged", PPPoE_Bridged: "PPPoE bridged" };
 
@@ -26,6 +27,7 @@ export function WanDetails({ network, gateway, onSelect }: { network: McpNetwork
 
   return (
     <>
+      <GatewayLocation network={network} gateway={gateway} onSelect={onSelect} />
       <DetailSection title="Internet">
         <DetailRow label="Gateway">
           <JumpButton onClick={() => onSelect({ kind: "ap", id: gateway.mac })}>{apLabel(gateway)}</JumpButton>

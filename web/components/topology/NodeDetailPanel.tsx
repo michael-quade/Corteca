@@ -10,6 +10,7 @@ import { ApRadios } from "./ApRadios";
 import { AiNotesSection } from "./AiNotesSection";
 import { SwitchDetails } from "./SwitchDetails";
 import { WanDetails } from "./WanDetails";
+import { GatewayLocation } from "./GatewayLocation";
 import { switchById } from "@/web/lib/inferredSwitches";
 import { memberIdentity } from "@/web/lib/deviceNames";
 import { useDeviceRename, type RenameTarget } from "./DeviceRename";
@@ -35,6 +36,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
 
   return (
     <>
+      {ap.role === "root" && <GatewayLocation network={network} gateway={ap} selectedId={ap.mac} onSelect={onSelect} />}
       <DetailSection title="Access point">
         <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
         <DetailRow label="Clients">{ap.clientCount}</DetailRow>

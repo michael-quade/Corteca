@@ -1,18 +1,26 @@
 "use client";
 
-import type { TreeNode } from "@/web/lib/networkTopology";
 import { StatusPill } from "@/web/components/corteca/StatusPill";
 import { cn } from "@/web/lib/utils";
 
-/** An access point on the location map: name chip (status dot, client count) on a short stem. */
-export function ApMapPin({ node, clients, selected, onSelect }: {
-  node: TreeNode;
+/** An access point on a location map (the gateway, or a Beacon drawn around it). */
+export interface LocationAp { id: string; label: string; model: string; online: boolean; isRoot: boolean; clients: number }
+type PinNode = Pick<LocationAp, "label" | "model" | "online" | "isRoot">;
+
+/** An access point on the location map: name chip (status dot, client count) on a short stem.
+ *  `folded` > 0 = that many Beacons are folded into this (gateway) chip at the current zoom. */
+export function ApMapPin({ node, clients, selected, folded = 0, onSelect }: {
+  node: PinNode;
   clients: number;
   selected: boolean;
+  folded?: number;
   onSelect: () => void;
 }) {
+  const title = folded > 0
+    ? `${node.label} and ${folded} Beacon${folded === 1 ? "" : "s"} · zoom in to show them`
+    : `${node.label} · ${clients} client${clients === 1 ? "" : "s"}`;
   return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); onSelect(); }} className="flex flex-col items-center focus:outline-none" title={`${node.label} · ${clients} client${clients === 1 ? "" : "s"}`}>
+    <button type="button" onClick={(e) => { e.stopPropagation(); onSelect(); }} className="flex flex-col items-center focus:outline-none" title={title}>
       <span className={cn(
         "flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white py-1 pl-2 pr-1 text-xs font-medium text-neutral-800 shadow-md",
         selected ? "ring-2 ring-blue-600" : "ring-1 ring-neutral-200 hover:ring-neutral-300",
@@ -26,6 +34,9 @@ export function ApMapPin({ node, clients, selected, onSelect }: {
           </svg>
           {clients}
         </span>
+        {folded > 0 && (
+          <span className="rounded-full bg-blue-50 px-1.5 text-[10px] font-semibold text-blue-700">+{folded} Beacon{folded === 1 ? "" : "s"}</span>
+        )}
       </span>
       <span className="h-2.5 w-px bg-neutral-400" />
       <span className={cn("h-2.5 w-2.5 rounded-full border-2 border-white shadow", selected ? "bg-blue-600" : "bg-neutral-700")} />
@@ -34,7 +45,7 @@ export function ApMapPin({ node, clients, selected, onSelect }: {
 }
 
 /** Card for the selected access point. */
-export function ApMapCard({ node, clients, onClose }: { node: TreeNode; clients: number; onClose: () => void }) {
+export function ApMapCard({ node, clients, onClose }: { node: PinNode; clients: number; onClose: () => void }) {
   return (
     <div className="w-56 p-4 font-sans">
       <div className="flex items-start gap-2">
