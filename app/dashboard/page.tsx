@@ -56,8 +56,13 @@ export default function DashboardPage() {
           <h2 id="dashboards-heading" className="mb-5 text-[15px] font-semibold text-neutral-900">Corteca dashboards</h2>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr_minmax(300px,0.72fr)]">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:col-span-2">
-              {CARDS.map((c) => (
-                <LandingCard key={c.href} title={c.title} description={c.description} icon={c.icon} href={c.href} />
+              {CARDS.map((c, i) => (
+                <LandingCard
+                  key={c.href} title={c.title} description={c.description} icon={c.icon} href={c.href}
+                  // With an odd count the last tile spans both columns, so the rows stay even
+                  // and the featured tile keeps its height.
+                  className={CARDS.length % 2 === 1 && i === CARDS.length - 1 ? "md:col-span-2" : undefined}
+                />
               ))}
             </div>
             {FEATURED && <FeaturedCard title={FEATURED.title} description={FEATURED.description} href={FEATURED.href} />}

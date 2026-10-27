@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { cn } from "@/web/lib/utils";
 
 export function OpenBadge() {
   return (
@@ -15,11 +16,11 @@ export function OpenBadge() {
 }
 
 /** Wide landing-page tile in the style of the Corteca console home. */
-export function LandingCard({ title, description, icon, href }: { title: string; description: string; icon: ReactNode; href: string }) {
+export function LandingCard({ title, description, icon, href, className }: { title: string; description: string; icon: ReactNode; href: string; className?: string }) {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-5 rounded-2xl bg-white px-6 py-6 shadow-[0_1px_3px_rgba(16,24,40,0.06),0_1px_2px_rgba(16,24,40,0.04)] ring-1 ring-neutral-200/70 transition-all hover:shadow-md hover:ring-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+      className={cn("group flex items-center gap-5 rounded-2xl bg-white px-6 py-6 shadow-[0_1px_3px_rgba(16,24,40,0.06),0_1px_2px_rgba(16,24,40,0.04)] ring-1 ring-neutral-200/70 transition-all hover:shadow-md hover:ring-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600", className)}
     >
       <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center text-blue-600 [&_svg]:h-8 [&_svg]:w-8">{icon}</span>
       <span className="min-w-0 flex-1">

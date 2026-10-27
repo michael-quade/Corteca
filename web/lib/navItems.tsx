@@ -199,7 +199,6 @@ export const NAV_ITEMS: NavItem[] = [
 
 /** Wide tiles on the dashboard landing page, in display order. */
 export const DASHBOARD_CARD_HREFS = [
-  "/devices",
   "/reports",
   "/network-map",
   "/device-browser",
