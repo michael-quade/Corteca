@@ -10,16 +10,35 @@ import { DetailSection, JumpButton } from "./DetailParts";
 import { useGatewayPorts } from "./useGatewayPorts";
 import { formatRate } from "@/web/lib/rateFormat";
 import { meshApPorts } from "@/web/lib/meshApPorts";
-import { beaconPortLayout } from "@/web/lib/portLayouts";
+import { beaconPortLayout, withSpecMaxRates } from "@/web/lib/portLayouts";
 import { usePortLayouts } from "@/web/lib/usePortLayouts";
-import { PortFaceplate, portTone, type FaceplatePort } from "@/web/components/PortFaceplate";
+import { PortIcon, portTone, type PortTone } from "@/web/components/PortFaceplate";
 
 const fmtMbps = (mbps: number) => formatRate(mbps);
 
-function Row({ port, status, rate, device, deviceTitle, title, wide }: {
+const COLS = "grid grid-cols-[1.75rem_2.75rem_2.5rem_4.75rem_minmax(0,1fr)] items-center gap-2";
+
+/** Negotiated rate, with the port's maximum under it: capability vs what the link runs at. */
+function RateCell({ rate, max }: { rate?: string; max?: string }) {
+  return (
+    <span className="flex flex-col leading-tight tabular-nums">
+      <span className="whitespace-nowrap text-neutral-700">{rate ?? "—"}</span>
+      {max && (
+        <span className="whitespace-nowrap text-[10px] text-neutral-400">
+          {!rate ? `max ${max}` : rate === max ? "full speed" : `of ${max}`}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Row({ port, tone, status, rate, max, device, deviceTitle, title, wide }: {
   port: string;
+  tone: PortTone;
   status?: { up: boolean; label: string };
   rate?: string;
+  /** The port's maximum speed (live MaxBitRate, else the model's spec sheet). */
+  max?: string;
   device?: React.ReactNode;
   /** Full device name, shown on hover when the column truncates it. */
   deviceTitle?: string;
@@ -27,41 +46,43 @@ function Row({ port, status, rate, device, deviceTitle, title, wide }: {
   /** No link/rate: the device cell spans those columns too (long labels like "Wireless backhaul · 6 GHz"). */
   wide?: boolean;
 }) {
-  if (wide) {
-    return (
-      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
-        <span className="font-semibold text-neutral-800">{port}</span>
-        <span className="col-span-3 min-w-0 truncate text-right" title={deviceTitle}>{device}</span>
-      </div>
-    );
-  }
   return (
-    <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] items-center gap-2 py-1.5 text-xs" title={title}>
+    <div className={cn(COLS, "py-1.5 text-xs")} title={title}>
+      <PortIcon tone={tone} size={28} />
       <span className="font-semibold text-neutral-800">{port}</span>
-      {status ? (
-        <span className={cn("w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold", status.up ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-500")}>
-          {status.label}
-        </span>
-      ) : <span />}
-      <span className="whitespace-nowrap tabular-nums text-neutral-700">{rate ?? "—"}</span>
-      <span className="min-w-0 truncate text-right" title={deviceTitle}>{device ?? <span className="text-neutral-400">—</span>}</span>
+      {wide ? (
+        <span className="col-span-3 min-w-0 truncate text-right" title={deviceTitle}>{device}</span>
+      ) : (
+        <>
+          {status ? (
+            <span className={cn("w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold", status.up ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-500")}>
+              {status.label}
+            </span>
+          ) : <span />}
+          <RateCell rate={rate} max={max} />
+          <span className="min-w-0 truncate text-right" title={deviceTitle}>{device ?? <span className="text-neutral-400">—</span>}</span>
+        </>
+      )}
     </div>
   );
 }
 
-/** Faceplate, column header, port rows and source note. */
-function PortList({ faceplate, note, children }: { faceplate: FaceplatePort[]; note: string; children: React.ReactNode }) {
+/** Column header, port rows (each with its RJ-45 jack) and source note. */
+function PortList({ note, children }: { note: string; children: React.ReactNode }) {
   return (
     <>
-      <PortFaceplate ports={faceplate} compact />
-      <div className="grid grid-cols-[2.5rem_2.5rem_3.5rem_1fr] gap-2 border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-        <span>Port</span><span>Link</span><span>Rate</span><span className="text-right">Device</span>
+      <div className={cn(COLS, "border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400")}>
+        <span /><span>Port</span><span>Link</span>
+        <span title="Negotiated rate; under it the port's maximum speed">Rate</span>
+        <span className="text-right">Device</span>
       </div>
       <div className="divide-y divide-neutral-100">{children}</div>
-      <p className="pt-1 text-[11px] text-neutral-400">{note}</p>
+      <p className="pt-1 text-[11px] text-neutral-400">{note} Under each rate: the port&apos;s maximum speed.</p>
     </>
   );
 }
+
+const maxOf = (p: { maxBitRate: number }) => (p.maxBitRate > 0 ? fmtMbps(p.maxBitRate) : undefined);
 
 const apShortName = (a: PortAp) => a.nickname ?? `${a.model} · ${a.mac.slice(-5)}`;
 
@@ -144,15 +165,10 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
   }
   if (ports === "error") return <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Live port status unavailable — showing wired devices reported by Corteca." />;
 
-  const labelled = labelPorts(ports);
+  // TR-181 often leaves LAN max speeds as auto; the model's spec sheet fills them.
+  const labelled = labelPorts(withSpecMaxRates(ap.model, ports));
   return (
-    <PortList
-      note="Live status from the gateway (TR-181)."
-      faceplate={labelled.map(({ port: p, label }) => {
-        const t = portTone(p);
-        return { key: p.index, label, ...t, title: `${label} · ${p.status === "Up" ? t.rate ?? "Up" : "No link"}${p.upstream ? " · Internet" : ""}` };
-      })}
-    >
+    <PortList note="Live status from the gateway (TR-181).">
       {labelled.map(({ port: p, label }) => {
         const up = p.status === "Up";
         const hosts = classifyPortHosts(p, network);
@@ -161,6 +177,8 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
           <div key={p.index}>
             <Row
               port={label}
+              tone={portTone(p).tone}
+              max={maxOf(p)}
               status={{ up, label: up ? "Up" : p.status === "Down" ? "Empty" : p.status }}
               rate={up && p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined}
               deviceTitle={hosts.stale.length && !p.upstream ? staleTitle(hosts) : undefined}
@@ -195,32 +213,26 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
   const portLabel = (p: (typeof ports)[number]) => (p.reported?.portLabel === "WAN" ? "WAN" : `LAN ${p.reported?.portLabel ?? "?"}`);
 
   return (
-    <PortList
-      note={`${note}${layout.note ? ` ${layout.note}` : ""}`}
-      faceplate={ports.filter((p) => p.reported).map((p) => {
-        const t = portTone(p);
-        const what = { none: "nothing reported", wireless: "wireless backhaul", uplink: "Ethernet backhaul", device: "wired device", switch: "switch" }[p.reported!.kind];
-        return { key: p.index, label: portLabel(p), ...t, title: `${portLabel(p)} · ${what}${t.rate ? ` · ${t.rate}` : ""}` };
-      })}
-    >
+    <PortList note={`${note}${layout.note ? ` ${layout.note}` : ""}`}>
       {ports.map((p) => {
         const r = p.reported;
         if (!r) return null;
         const label = portLabel(p);
         const rate = p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined;
+        const common = { port: label, tone: portTone(p).tone, max: maxOf(p) };
         if (r.kind === "none") {
-          return <Row key={p.index} port={label} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
+          return <Row key={p.index} {...common} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
         }
         if (r.kind === "wireless") {
           return (
-            <Row key={p.index} port={label} wide
+            <Row key={p.index} {...common} wide
               device={<JumpButton onClick={() => onSelect({ kind: "link", id: ap.mac })}>Wireless backhaul{r.uplink ? ` · ${r.uplink}` : ""}</JumpButton>}
               title="The backhaul to the parent AP is WiFi; nothing wired is reported on this port" />
           );
         }
         if (r.kind === "uplink") {
           return (
-            <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+            <Row key={p.index} {...common} status={{ up: true, label: "Up" }} rate={rate}
               device={<JumpButton onClick={() => onSelect({ kind: "link", id: ap.mac })}>{r.uplink}</JumpButton>}
               deviceTitle={`Ethernet backhaul to ${r.uplink}`} title="Ethernet backhaul to the parent AP" />
           );
@@ -228,7 +240,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         if (r.kind === "switch" && r.switch) {
           const sw = r.switch;
           return (
-            <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+            <Row key={p.index} {...common} status={{ up: true, label: "Up" }} rate={rate}
               device={<JumpButton onClick={() => onSelect({ kind: "switch", id: sw.id })}>Switch · {r.devices.length} devices</JumpButton>}
               deviceTitle={r.devices.map((d) => d.name).join(", ")}
               title="Inferred: Corteca reports several wired devices on this port; the rate is the port↔switch link" />
@@ -236,7 +248,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         }
         const d = r.devices[0];
         return (
-          <Row key={p.index} port={label} status={{ up: true, label: "Up" }} rate={rate}
+          <Row key={p.index} {...common} status={{ up: true, label: "Up" }} rate={rate}
             device={<JumpButton onClick={() => onSelect({ kind: "client", id: d.mac })}>{d.name}</JumpButton>}
             deviceTitle={d.name} title={`Corteca port ${r.portLabel} · ${d.mac}`} />
         );

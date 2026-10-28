@@ -1,10 +1,11 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createPortal } from "react-dom";
 import { Map as MlMap, Marker } from "maplibre-gl";
 import { STYLE_URL, tintBasemap, MAP_FRAME } from "@/web/lib/mapBasemap";
+import { cn } from "@/web/lib/utils";
 import type { LatLng } from "@/web/lib/networkLocation";
 import { MapZoomButtons } from "./MapZoomButtons";
 import { ApMapPin, ApMapCard, type LocationAp } from "./ApMapPin";
@@ -24,19 +25,25 @@ const ZOOM = 17;
 const offsetScale = (zoom: number) => Math.min(1, 2 ** (zoom - ZOOM));
 const FOLD_SCALE = 0.6;   // below this (about zoom 16.3) Beacons fold into the gateway chip
 
+/** Centre and zoom, shared between two maps of the same place (a small one and its expanded view). */
+export type MapView = { center: [number, number]; zoom: number };
+
 /**
  * The gateway pinned at its location with its Beacons around it, as name chips (status, clients).
  * Without `onPinClick` a click opens the AP's card on the map; with it the page handles selection.
  * `compact` (side panel): no zoom buttons, Ctrl/⌘ + scroll to zoom so the panel still scrolls, and no
  * attribution control: the caller must show the map credit (OpenStreetMap, OpenFreeMap, OpenMapTiles).
+ * `onMapClick`: a click on the map itself (not a pin or a drag). `view`: start from it, and keep it updated.
  */
-export function LocationMap({ location, aps, className, compact = false, selectedId, onPinClick }: {
+export function LocationMap({ location, aps, className, compact = false, selectedId, onPinClick, onMapClick, view }: {
   location: LatLng;
   aps: LocationAp[];
   className: string;
   compact?: boolean;
   selectedId?: string | null;
   onPinClick?: (id: string) => void;
+  onMapClick?: () => void;
+  view?: MutableRefObject<MapView | null>;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const mapRef   = useRef<MlMap | null>(null);
@@ -44,6 +51,8 @@ export function LocationMap({ location, aps, className, compact = false, selecte
   const [pins, setPins]     = useState(new Map<string, HTMLDivElement>());
   const [ownSel, setOwnSel] = useState<string | null>(null);
   const [folded, setFolded] = useState(false);
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
   const { lat, lng } = location;
   const selected = onPinClick ? selectedId ?? null : ownSel;
   const apKey = aps.map((a) => `${a.id}:${a.isRoot ? 1 : 0}`).join(",");
@@ -53,8 +62,8 @@ export function LocationMap({ location, aps, className, compact = false, selecte
     const map = new MlMap({
       container: mountRef.current,
       style: STYLE_URL,
-      center: [lng, lat],
-      zoom: ZOOM,
+      center: view?.current?.center ?? [lng, lat],
+      zoom: view?.current?.zoom ?? ZOOM,
       // Compact maps credit the data in their caption: the control covered the Beacons there.
       attributionControl: compact ? false : { compact: true },
       dragRotate: false,
@@ -66,9 +75,13 @@ export function LocationMap({ location, aps, className, compact = false, selecte
     map.on("load", () => { tintBasemap(map); setReady(true); });
     // A click on the map (not on a pin) clears the map's own selection.
     map.on("click", (e) => {
-      if (!(e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-marker")) setOwnSel(null);
+      if ((e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-marker")) return;
+      setOwnSel(null);
+      onMapClickRef.current?.();
     });
+    if (view) map.on("moveend", () => { const c = map.getCenter(); view.current = { center: [c.lng, c.lat], zoom: map.getZoom() }; });
     return () => { map.remove(); mapRef.current = null; setReady(false); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng, compact]);
 
   // One marker per AP; their content is rendered into the marker elements with portals.
@@ -106,7 +119,7 @@ export function LocationMap({ location, aps, className, compact = false, selecte
   const card = !onPinClick ? aps.find((a) => a.id === ownSel) : undefined;
 
   return (
-    <div className={`${MAP_FRAME} ${className}`}>
+    <div className={cn(MAP_FRAME, className)}>
       <div ref={mountRef} className="h-full w-full" />
       {!compact && (
         <MapZoomButtons

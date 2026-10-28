@@ -29,7 +29,7 @@ export function useCanvasKeyboard(
   }
 
   function onClick(e: MouseEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).closest("input, textarea, select, [role='dialog']")) return;
+    if ((e.target as HTMLElement).closest("input, textarea, select, [role='dialog'], [data-canvas-overlay]")) return;
     wrapperRef.current?.focus({ preventScroll: true });
   }
 

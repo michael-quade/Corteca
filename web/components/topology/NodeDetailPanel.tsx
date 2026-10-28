@@ -153,7 +153,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   return (
     <aside
       aria-label={`${kicker} details`}
-      className="absolute bottom-3 right-3 top-14 z-10 flex w-80 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
+      className="absolute bottom-3 right-3 top-14 z-10 flex w-[25rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
     >
       <header className="flex items-start justify-between gap-2 border-b border-neutral-100 px-4 py-3">
         <div className="min-w-0">

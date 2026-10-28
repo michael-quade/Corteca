@@ -21,8 +21,9 @@ import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
+import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
 
-const PANEL_W = 336; // detail panel width + margin, kept clear when panning to a node
+const PANEL_W = 424; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
   network: McpNetwork;
@@ -160,13 +161,16 @@ function Canvas(props: TopologyCanvasProps) {
 
   // Arrow keys step through devices, Esc clears; clicks keep focus on the canvas.
   const keyboard = useCanvasKeyboard(wrapperRef, network, selection, onSelect);
+  // The gateway's expanded location map, drawn over the diagram; it handles its own keys.
+  const overlay = useCanvasOverlayState();
 
   return (
     <TopologyUiContext.Provider value={ui}>
+      <CanvasOverlayContext.Provider value={overlay.value}>
       <div
         ref={wrapperRef}
         tabIndex={0}
-        onKeyDown={keyboard.onKeyDown}
+        onKeyDown={(e) => { if (!overlay.value.open) keyboard.onKeyDown(e); }}
         onClick={keyboard.onClick}
         aria-label="Network topology. Arrow keys move between devices, Escape clears the selection."
         className={cn(
@@ -273,11 +277,13 @@ function Canvas(props: TopologyCanvasProps) {
               </Panel>
             </ReactFlow>
           )}
+          <div ref={overlay.setTarget} />
           {selection && (
             <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} />
           )}
         </div>
       </div>
+      </CanvasOverlayContext.Provider>
     </TopologyUiContext.Provider>
   );
 }

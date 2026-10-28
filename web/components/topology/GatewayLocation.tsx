@@ -1,12 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
 import { osmUrl, type LatLng } from "@/web/lib/networkLocation";
 import type { Selection } from "@/web/lib/topologySelection";
 import { DetailSection } from "./DetailParts";
+import { CanvasOverlayFrame, useCanvasOverlay } from "./CanvasOverlay";
+import type { MapView } from "@/web/components/map/LocationMap";
 
 // MapLibre is only downloaded when a gateway or WAN panel opens.
 const LocationMap = dynamic(() => import("@/web/components/map/LocationMap").then((m) => m.LocationMap), {
@@ -29,7 +31,11 @@ function readLocation(mac: string): Promise<LatLng | null | "error"> {
   return p;
 }
 
-/** Gateway / WAN panel "Location": mini-map of the gateway with its Beacons; a pin click selects that AP. */
+/**
+ * Gateway / WAN panel "Location": mini-map of the gateway with its Beacons; a pin click selects that AP.
+ * A click on the map (or its expand button) opens it over the diagram area at the same view, where
+ * it zooms and drags freely; × or Esc puts it back.
+ */
 export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
   network: McpNetwork;
   gateway: McpAccessPoint;
@@ -44,6 +50,15 @@ export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
     return () => { cancelled = true; };
   }, [gateway.mac]);
 
+  const overlay = useCanvasOverlay();
+  const view = useRef<MapView | null>(null);
+  const setOpen = overlay?.setOpen;
+  const expand = setOpen ? () => setOpen(true) : undefined;
+  const collapse = useCallback(() => setOpen?.(false), [setOpen]);
+  // A new gateway starts at its own view; leaving the panel closes the expanded map.
+  useEffect(() => { view.current = null; }, [gateway.mac]);
+  useEffect(() => collapse, [collapse]);
+
   const aps = network.aps.map((a) => ({
     id: a.mac, label: a.nickname ?? (a.role === "root" ? a.model : `${a.model} · ${a.mac.slice(-5)}`), model: a.model, online: a.online, isRoot: a.role === "root", clients: a.clientCount,
   }));
@@ -55,13 +70,33 @@ export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
       {loc === null && <p className="text-xs text-neutral-500">Corteca has no location for this gateway.</p>}
       {loc && loc !== "error" && (
         <>
-          <LocationMap
-            location={loc} aps={aps} compact className="h-56"
-            selectedId={selectedId}
-            onPinClick={(id) => onSelect({ kind: "ap", id })}
-          />
+          <div className="relative">
+            <LocationMap
+              location={loc} aps={aps} compact className={expand ? "h-56 cursor-zoom-in" : "h-56"}
+              selectedId={selectedId}
+              onPinClick={(id) => onSelect({ kind: "ap", id })}
+              onMapClick={expand}
+              view={view}
+            />
+            {expand && (
+              <button
+                type="button" onClick={expand} aria-label="Expand map" title="Expand the map over the diagram"
+                className="absolute right-2 top-2 z-10 rounded-lg border border-neutral-200 bg-white p-1.5 text-neutral-600 shadow-sm hover:bg-neutral-100 hover:text-neutral-900"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {overlay?.open && (
+            <CanvasOverlayFrame kicker="Location" title={aps.find((a) => a.isRoot)?.label ?? "Gateway"} onClose={collapse}>
+              {/* Full map: zoom buttons, plain scroll zoom; a pin opens its card on the map. */}
+              <LocationMap location={loc} aps={aps} className="h-full rounded-none ring-0" view={view} />
+            </CanvasOverlayFrame>
+          )}
           <p className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-2 text-[11px] text-neutral-400">
-            <span>Beacons are drawn around the gateway.</span>
+            <span>Beacons are drawn around the gateway.{expand && " Click the map to expand it."}</span>
             <a href={osmUrl(loc)} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap font-medium text-blue-600 hover:underline">
               Open in OpenStreetMap ↗
             </a>
