@@ -67,7 +67,7 @@ export function ClientClusterNode({ data }: NodeProps<ClusterFlowNode>) {
   const handles = handleLayout(useTopologyUi().layout);
 
   return (
-    <div style={{ width: CLUSTER_W }} className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/90 p-3">
+    <div style={{ width: CLUSTER_W }} className="space-y-3 rounded-xl border border-neutral-300 bg-neutral-50 p-3 shadow-sm">
       {sections.map((s) => (
         <Section key={s.id} section={s} onToggle={() => onToggle(s.id)} />
       ))}

@@ -29,7 +29,7 @@ export function TopologyLegend() {
       <p className="mb-1 mt-2 font-semibold text-neutral-700">Clients</p>
       <div className="flex gap-4">
         <span className="flex items-center gap-1.5"><LineSample className="stroke-neutral-500" width={2} />Wired</span>
-        <span className="flex items-center gap-1.5"><LineSample className="stroke-neutral-400" width={1.5} dashed dash="4 4" />WiFi</span>
+        <span className="flex items-center gap-1.5"><LineSample className="stroke-neutral-500" width={1.5} dashed dash="4 4" />WiFi</span>
       </div>
       <p className="mt-1 flex items-center gap-1.5 text-neutral-500">
         <span className="h-3 w-5 flex-shrink-0 rounded border-2 border-dashed border-neutral-300" />Switch (inferred from port data)

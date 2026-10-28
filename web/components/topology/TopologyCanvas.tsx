@@ -195,7 +195,7 @@ function Canvas(props: TopologyCanvasProps) {
             "relative flex-1",
             // Smooth re-layout and dimming.
             "[&_.react-flow__node]:transition-[transform,opacity] [&_.react-flow__node]:duration-500 motion-reduce:[&_.react-flow__node]:transition-none",
-            "[&_.cluster-edge]:transition-opacity [&_.cluster-edge_path]:!stroke-neutral-300"
+            "[&_.cluster-edge]:transition-opacity [&_.cluster-edge_path]:!stroke-neutral-500"
           )}
         >
           {!styledNodes ? (
