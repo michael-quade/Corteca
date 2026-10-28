@@ -20,7 +20,8 @@ export interface InferredSwitch {
   apMac: string;
   /** "LAN 1" */
   port: string;
-  /** Negotiated rate of the AP port the switch is on (live gateway ports only). */
+  /** Negotiated rate of the AP port the switch is on: live for the gateway, else the rate the
+   *  clients behind it report (each reports the port↔switch link, not its own). */
   rateMbps: number | null;
   source: "live" | "reported";
   beaconMacs: string[];
@@ -33,6 +34,10 @@ const wired = (m: Member) => String(m.type ?? "").toLowerCase() === "ethernet";
 const portNumber = (m: Member) => Number((m as unknown as { port_number?: number }).port_number) || null;
 // Corteca numbers ports from 1 = WAN, so port 2 is the first LAN port.
 const portLabel = (n: number) => (n === 1 ? "WAN" : `LAN ${n - 1}`);
+const reportedKbps = (m: Member) => {
+  const raw = m as unknown as { rx_statistics?: { rate?: number }; tx_statistics?: { rate?: number } };
+  return Number(raw.rx_statistics?.rate ?? raw.tx_statistics?.rate) || 0;
+};
 
 function liveGatewaySwitches(network: McpNetwork, rootMac: string, ports: EthernetPort[]): InferredSwitch[] {
   const parentOf = new Map(network.backhaul.map((l) => [l.childMac, l.parentMac]));
@@ -66,7 +71,8 @@ function reportedSwitches(network: McpNetwork, apMac: string): InferredSwitch[] 
     id: `sw:${apMac}:${portLabel(n)}`,
     apMac,
     port: portLabel(n),
-    rateMbps: null,
+    // Same rule as the AP panel's port list (meshApPorts): the highest rate a client behind it reports.
+    rateMbps: Math.round(Math.max(0, ...list.map(reportedKbps)) / 1000) || null,
     source: "reported" as const,
     beaconMacs: [],
     clientIds: list.map((m) => m.id),
@@ -146,8 +152,7 @@ export function wiredPort(network: McpNetwork, m: Member): WiredPort | null {
   if (!wired(m)) return null;
   const n = portNumber(m);
   const viaSwitch = switchOfClient(network, m.id);
-  const raw = m as unknown as { rx_statistics?: { rate?: number }; tx_statistics?: { rate?: number } };
-  const kbps = Number(raw.rx_statistics?.rate ?? raw.tx_statistics?.rate) || 0;
+  const kbps = reportedKbps(m);
   return {
     port: n ? portLabel(n) : null,
     speedMbps: viaSwitch || kbps <= 0 ? null : Math.round(kbps / 1000),
