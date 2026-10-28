@@ -3,59 +3,46 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createPortal } from "react-dom";
-import { Map as MlMap, Marker } from "maplibre-gl";
+import { Map as MlMap, Popup } from "maplibre-gl";
 import { STYLE_URL, tintBasemap, MAP_FRAME } from "@/web/lib/mapBasemap";
 import { cn } from "@/web/lib/utils";
 import type { LatLng } from "@/web/lib/networkLocation";
 import { MapZoomButtons } from "./MapZoomButtons";
-import { ApMapPin, ApMapCard, type LocationAp } from "./ApMapPin";
+import { HomeNetworkCard, type LocationAp } from "./HomeNetworkCard";
+import { HOME_HIT_LAYERS, addHomeLayers, setHome } from "./homeMapStyle";
 
-// Only the gateway's location is known, so Beacons are drawn at screen offsets around it
-// (clear of the gateway's chip). Zooming out shrinks the offsets with the map, as if the
-// Beacons were in the house; once they'd crowd the gateway they fold into its chip ("+3 Beacons").
-function beaconOffset(i: number, n: number, compact: boolean): [number, number] {
-  // Full map: below and to the sides. Compact (side panel): an arc below, so chips fit the width.
-  const [from, span, rx, ry] = compact ? [25, 130, 95, 70] : [-20, 220, 150, 95];
-  const deg = n === 1 ? 90 : from + (span * i) / (n - 1);
-  const rad = (deg * Math.PI) / 180;
-  return [Math.round(rx * Math.cos(rad)), Math.round(ry * Math.sin(rad))];
-}
-
-const ZOOM = 17;
-const offsetScale = (zoom: number) => Math.min(1, 2 ** (zoom - ZOOM));
-const FOLD_SCALE = 0.6;   // below this (about zoom 16.3) Beacons fold into the gateway chip
+const ZOOM = 16;
 
 /** Centre and zoom, shared between two maps of the same place (a small one and its expanded view). */
 export type MapView = { center: [number, number]; zoom: number };
 
 /**
- * The gateway pinned at its location with its Beacons around it, as name chips (status, clients).
- * Without `onPinClick` a click opens the AP's card on the map; with it the page handles selection.
- * `compact` (side panel): no zoom buttons, Ctrl/⌘ + scroll to zoom so the panel still scrolls, and no
- * attribution control: the caller must show the map credit (OpenStreetMap, OpenFreeMap, OpenMapTiles).
- * `onMapClick`: a click on the map itself (not a pin or a drag). `view`: start from it, and keep it updated.
+ * The home network at the gateway's location, drawn like the fleet Network Map: one status dot, or a
+ * count bubble when the home also has Beacons (only the gateway's location is known, so Beacons aren't
+ * spread around it). Hover shows the home's card with every access point; click pins it.
+ * `compact` (side panel): no card, legend or zoom buttons, Ctrl/⌘ + scroll to zoom so the panel still
+ * scrolls, and no attribution control: the caller must show the map credit (OpenStreetMap, OpenFreeMap,
+ * OpenMapTiles). `onMapClick`: any click on the map (not a drag). `view`: start from it, and keep it updated.
  */
-export function LocationMap({ location, aps, className, compact = false, selectedId, onPinClick, onMapClick, view }: {
+export function LocationMap({ location, aps, className, compact = false, onMapClick, view }: {
   location: LatLng;
   aps: LocationAp[];
   className: string;
   compact?: boolean;
-  selectedId?: string | null;
-  onPinClick?: (id: string) => void;
   onMapClick?: () => void;
   view?: MutableRefObject<MapView | null>;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const mapRef   = useRef<MlMap | null>(null);
-  const [ready, setReady]   = useState(false);
-  const [pins, setPins]     = useState(new Map<string, HTMLDivElement>());
-  const [ownSel, setOwnSel] = useState<string | null>(null);
-  const [folded, setFolded] = useState(false);
+  const popupRef = useRef<Popup | null>(null);
+  const [popupEl] = useState(() => (typeof document !== "undefined" ? document.createElement("div") : null));
+  const [ready, setReady] = useState(false);
+  const [card, setCard]   = useState<"hover" | "pinned" | null>(null);
+  const cardRef = useRef(card);
+  cardRef.current = card;
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
   const { lat, lng } = location;
-  const selected = onPinClick ? selectedId ?? null : ownSel;
-  const apKey = aps.map((a) => `${a.id}:${a.isRoot ? 1 : 0}`).join(",");
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -64,7 +51,7 @@ export function LocationMap({ location, aps, className, compact = false, selecte
       style: STYLE_URL,
       center: view?.current?.center ?? [lng, lat],
       zoom: view?.current?.zoom ?? ZOOM,
-      // Compact maps credit the data in their caption: the control covered the Beacons there.
+      // Compact maps credit the data in their caption: the control covered the map there.
       attributionControl: compact ? false : { compact: true },
       dragRotate: false,
       pitchWithRotate: false,
@@ -72,87 +59,81 @@ export function LocationMap({ location, aps, className, compact = false, selecte
     });
     map.touchZoomRotate.disableRotation();
     mapRef.current = map;
-    map.on("load", () => { tintBasemap(map); setReady(true); });
-    // A click on the map (not on a pin) clears the map's own selection.
+    map.on("load", () => { tintBasemap(map); addHomeLayers(map); setReady(true); });
+
+    const onHome = (e: { point: { x: number; y: number } }) =>
+      map.queryRenderedFeatures([e.point.x, e.point.y], { layers: HOME_HIT_LAYERS }).length > 0;
+    for (const layer of HOME_HIT_LAYERS) {
+      map.on("mouseenter", layer, () => {
+        map.getCanvas().style.cursor = "pointer";
+        if (!compact && cardRef.current !== "pinned") setCard("hover");
+      });
+      map.on("mouseleave", layer, () => {
+        map.getCanvas().style.cursor = "";
+        if (cardRef.current === "hover") setCard(null);
+      });
+    }
+    // Full map: a click on the home pins its card, on empty map closes it.
     map.on("click", (e) => {
-      if ((e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-marker")) return;
-      setOwnSel(null);
+      if (!compact) setCard(onHome(e) ? "pinned" : null);
       onMapClickRef.current?.();
     });
     if (view) map.on("moveend", () => { const c = map.getCenter(); view.current = { center: [c.lng, c.lat], zoom: map.getZoom() }; });
-    return () => { map.remove(); mapRef.current = null; setReady(false); };
+    if (!compact && popupEl) {
+      popupRef.current = new Popup({ closeButton: false, closeOnClick: false, offset: 22, maxWidth: "none" }).setDOMContent(popupEl);
+    }
+    return () => { popupRef.current?.remove(); popupRef.current = null; map.remove(); mapRef.current = null; setReady(false); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng, compact]);
 
-  // One marker per AP; their content is rendered into the marker elements with portals.
+  const apCount = aps.length;
+  const offline = aps.filter((a) => !a.online).length;
+  const gatewayOnline = (aps.find((a) => a.isRoot) ?? aps[0])?.online ?? false;
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const beacons = aps.filter((a) => !a.isRoot);
-    const markers: Marker[] = [];
-    const placed: { marker: Marker; el: HTMLDivElement; offset: [number, number] }[] = [];
-    const els = new Map<string, HTMLDivElement>();
-    for (const ap of aps) {
-      const el = document.createElement("div");
-      const marker = new Marker({ element: el, anchor: "bottom" }).setLngLat([lng, lat]).addTo(map);
-      markers.push(marker);
-      if (ap.isRoot || aps.length === 1) el.style.zIndex = "1";
-      else placed.push({ marker, el, offset: beaconOffset(beacons.indexOf(ap), beacons.length, compact) });
-      els.set(ap.id, el);
-    }
-    const place = () => {
-      const f = offsetScale(map.getZoom());
-      for (const { marker, el, offset } of placed) {
-        marker.setOffset([offset[0] * f, offset[1] * f]);
-        el.style.display = f < FOLD_SCALE ? "none" : "";
-      }
-      setFolded(placed.length > 0 && f < FOLD_SCALE);
-    };
-    place();
-    map.on("zoom", place);
-    setPins(els);
-    return () => { map.off("zoom", place); for (const m of markers) m.remove(); setPins(new Map()); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, apKey, lat, lng, compact]);
+    setHome(map, { lat, lng, aps: Math.max(1, apCount), offline, online: gatewayOnline, pinned: card === "pinned" });
+  }, [ready, lat, lng, apCount, offline, gatewayOnline, card]);
+
+  useEffect(() => {
+    const map = mapRef.current, popup = popupRef.current;
+    if (!ready || !map || !popup) return;
+    if (card) { popup.setLngLat([lng, lat]); if (!popup.isOpen()) popup.addTo(map); }
+    else popup.remove();
+  }, [ready, card, lat, lng]);
 
   const recenter = () => mapRef.current?.easeTo({ center: [lng, lat], zoom: ZOOM, duration: 500 });
-  const card = !onPinClick ? aps.find((a) => a.id === ownSel) : undefined;
 
   return (
     <div className={cn(MAP_FRAME, className)}>
       <div ref={mountRef} className="h-full w-full" />
       {!compact && (
-        <MapZoomButtons
-          onZoomIn={() => mapRef.current?.zoomIn({ duration: 250 })}
-          onZoomOut={() => mapRef.current?.zoomOut({ duration: 250 })}
-          onFit={recenter}
-          fitLabel="Back to the network"
-        />
+        <>
+          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 text-[11px] text-neutral-600 shadow-sm">
+            <p className="mb-1 font-semibold text-neutral-700">{apCount} access point{apCount === 1 ? "" : "s"} at the gateway&apos;s address</p>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />Online</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />Offline</span>
+              {apCount > 1 && (
+                <span className="flex items-center gap-1.5">
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-emerald-500 bg-white text-[7px] font-bold text-neutral-800">{apCount}</span>
+                  APs (red ring if any offline)
+                </span>
+              )}
+            </div>
+          </div>
+          <MapZoomButtons
+            onZoomIn={() => mapRef.current?.zoomIn({ duration: 250 })}
+            onZoomOut={() => mapRef.current?.zoomOut({ duration: 250 })}
+            onFit={recenter}
+            fitLabel="Back to the network"
+          />
+        </>
       )}
-      {card && (
-        <div className="absolute left-3 top-3 z-10 rounded-xl bg-white shadow-lg ring-1 ring-black/5">
-          <ApMapCard node={card} clients={card.clients} onClose={() => setOwnSel(null)} />
-        </div>
+      {card && popupEl && createPortal(
+        <HomeNetworkCard aps={aps} pinned={card === "pinned"} onClose={() => setCard(null)} />,
+        popupEl,
       )}
-      {aps.map((ap) => {
-        const el = pins.get(ap.id);
-        return el ? createPortal(
-          <ApMapPin
-            node={ap}
-            clients={ap.clients}
-            selected={ap.id === selected}
-            folded={ap.isRoot && folded ? aps.length - 1 : 0}
-            // A folded gateway chip zooms back in to show its Beacons.
-            onSelect={() => {
-              if (ap.isRoot && folded) recenter();
-              else if (onPinClick) onPinClick(ap.id);
-              else setOwnSel((s) => (s === ap.id ? null : ap.id));
-            }}
-          />,
-          el,
-          ap.id,
-        ) : null;
-      })}
     </div>
   );
 }

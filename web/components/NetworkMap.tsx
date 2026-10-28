@@ -6,7 +6,7 @@ import { buildTree, flatNodes } from "@/web/lib/networkTopology";
 import { filterConnectedDevices } from "@/web/lib/networkMembers";
 import { extractLatLng } from "@/web/lib/networkLocation";
 import { LocationMap } from "@/web/components/map/LocationMap";
-import type { LocationAp } from "@/web/components/map/ApMapPin";
+import type { LocationAp } from "@/web/components/map/HomeNetworkCard";
 
 /** REST visualizer "Network location": the gateway at its location with its Beacons around it. */
 export function NetworkMap({ data }: { data: NetworkTopologyData }) {

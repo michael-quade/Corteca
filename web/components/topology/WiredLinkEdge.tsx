@@ -22,7 +22,7 @@ export function WiredLinkEdge(props: EdgeProps<Edge<WiredEdgeData, "wiredLink">>
   return (
     <g className={cn("transition-opacity", dimmed && "opacity-25")}>
       {selected && <path d={path} fill="none" strokeWidth={10} strokeLinecap="round" className="stroke-violet-400/40" />}
-      <path id={id} d={path} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-neutral-400" />
+      <path id={id} d={path} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-neutral-500" />
       <path d={path} fill="none" strokeWidth={14} className="cursor-pointer stroke-transparent" />
       {lb && (
         <EdgeLabelRenderer>

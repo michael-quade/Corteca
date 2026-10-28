@@ -6,6 +6,8 @@ import type { WanEdgeData } from "@/web/lib/topologyFlow";
 import { labelBox } from "@/web/lib/edgeGeometry";
 import { isSelected, useTopologyUi } from "./TopologyContext";
 import { routePath } from "./RouteEdge";
+import { FlowPath } from "./FlowPath";
+import { BACKHAUL_WIDTH } from "./BackhaulEdge";
 
 /** Internet → gateway: the WAN link, with a "WAN · 5 Gbps" pill that opens the WAN details. */
 export function WanEdge(props: EdgeProps<Edge<WanEdgeData, "wan">>) {
@@ -21,7 +23,8 @@ export function WanEdge(props: EdgeProps<Edge<WanEdgeData, "wan">>) {
   return (
     <g className={cn("transition-opacity", dimmed && "opacity-25")}>
       {selected && <path d={path} fill="none" strokeWidth={13} strokeLinecap="round" className="stroke-violet-400/40" />}
-      <path id={id} d={path} fill="none" strokeWidth={3} strokeLinecap="round" className="stroke-blue-500" />
+      <path id={id} d={path} fill="none" strokeWidth={BACKHAUL_WIDTH} strokeLinecap="round" className="stroke-blue-500" />
+      <FlowPath path={path} width={BACKHAUL_WIDTH} rateMbps={data.rateMbps} />
       <path d={path} fill="none" strokeWidth={16} className="cursor-pointer stroke-transparent" onClick={toggle} />
       <EdgeLabelRenderer>
         <button

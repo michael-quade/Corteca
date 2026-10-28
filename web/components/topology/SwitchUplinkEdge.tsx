@@ -7,6 +7,8 @@ import { switchUplinkLabel } from "@/web/lib/inferredSwitches";
 import { labelBox } from "@/web/lib/edgeGeometry";
 import { isSelected, useTopologyUi } from "./TopologyContext";
 import { routePath } from "./RouteEdge";
+import { FlowPath } from "./FlowPath";
+import { BACKHAUL_WIDTH } from "./BackhaulEdge";
 
 /** AP port → inferred switch: an Ethernet line labelled with the port and its rate. */
 export function SwitchUplinkEdge(props: EdgeProps<Edge<SwitchEdgeData, "switchUplink">>) {
@@ -24,7 +26,8 @@ export function SwitchUplinkEdge(props: EdgeProps<Edge<SwitchEdgeData, "switchUp
   return (
     <g className={cn("transition-opacity", dimmed && "opacity-25")}>
       {selected && <path d={path} fill="none" strokeWidth={13} strokeLinecap="round" className="stroke-violet-400/40" />}
-      <path id={id} d={path} fill="none" strokeWidth={3} strokeLinecap="round" className="stroke-neutral-500" />
+      <path id={id} d={path} fill="none" strokeWidth={BACKHAUL_WIDTH} strokeLinecap="round" className="stroke-neutral-500" />
+      <FlowPath path={path} width={BACKHAUL_WIDTH} rateMbps={sw.rateMbps} />
       <path d={path} fill="none" strokeWidth={16} className="cursor-pointer stroke-transparent" />
       <EdgeLabelRenderer>
         <button

@@ -7,6 +7,11 @@ import { labelBox } from "@/web/lib/edgeGeometry";
 import { QUALITY_BORDER, QUALITY_STROKE } from "./qualityStyles";
 import { isSelected, useTopologyUi } from "./TopologyContext";
 import { routePath } from "./RouteEdge";
+import { FlowPath } from "./FlowPath";
+
+// Backhaul lines are wider than client lines; solid = cable, dashed = WiFi (see TopologyLegend).
+export const BACKHAUL_WIDTH = 3;
+export const WIFI_DASH = "7 5";
 
 export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">>) {
   const { id, data } = props;
@@ -18,16 +23,14 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
   const path = routePath(data.points);
   const { link } = data;
   const { text: label, slowEth } = backhaulLabel(link);
+  const [top, ...rest] = label.split("\n");
   const lb = labelBox(data.points, label, ui.layout === "radial");
   const labelX = lb.x + lb.w / 2, labelY = lb.y + lb.h / 2;
   const eth = isEthernet(link);
-  const rate = link.rateMbps ?? 0;
   const quality: Quality = eth ? (slowEth ? "fair" : "unknown") : linkQuality(link);
   const selected = isSelected(ui, "link", link.childMac);
   const dimmed = !!ui.highlight && !ui.highlight.edges.has(id);
-  // Stroke width encodes throughput; animation speed follows it too.
-  const width = eth ? 3 : 1.5 + Math.min(4, rate / 400);
-  const flowSeconds = rate > 0 ? Math.max(0.4, 2.4 - rate / 1000) : 0;
+  const width = BACKHAUL_WIDTH;
 
   const toggle = () => ui.select(selected ? null : { kind: "link", id: link.childMac });
 
@@ -41,21 +44,12 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
         d={path}
         fill="none"
         strokeWidth={width}
-        strokeLinecap="round"
-        strokeDasharray={quality === "poor" ? "8 6" : undefined}
+        strokeLinecap={eth ? "round" : "butt"}
+        strokeDasharray={eth ? undefined : WIFI_DASH}
         className={eth && !slowEth ? "stroke-neutral-500" : QUALITY_STROKE[quality]}
       />
-      {flowSeconds > 0 && (
-        <path
-          d={path}
-          fill="none"
-          strokeWidth={Math.max(1, width - 1.5)}
-          strokeLinecap="round"
-          strokeDasharray="2 22"
-          style={{ animationDuration: `${flowSeconds}s` }}
-          className="pointer-events-none stroke-white/80 motion-safe:animate-flow-dash motion-reduce:hidden"
-        />
-      )}
+      {/* Moving dots: the link carries traffic, faster on faster links. */}
+      <FlowPath path={path} width={width} rateMbps={link.rateMbps} />
       {/* Wide invisible hit area so thin links are easy to click or tap (handled by onEdgeClick). */}
       <path d={path} fill="none" strokeWidth={16} className="cursor-pointer stroke-transparent" />
       <EdgeLabelRenderer>
@@ -64,14 +58,21 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
           onClick={toggle}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           className={cn(
-            "nodrag nopan pointer-events-auto absolute whitespace-nowrap rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-medium shadow-sm transition-opacity",
+            "nodrag nopan pointer-events-auto absolute whitespace-nowrap border bg-white px-2.5 py-0.5 text-[11px] font-medium shadow-sm transition-opacity",
+            // Stacked WiFi label: band on top, signal · rate below (height = labelSize()).
+            rest.length > 0 ? "flex flex-col items-center rounded-xl" : "rounded-full",
             eth && !slowEth ? "border-neutral-300 text-neutral-700" : QUALITY_BORDER[quality],
             selected && "ring-2 ring-violet-500/50",
             dimmed && "opacity-25"
           )}
           title={slowEth ? "Ethernet below 1 Gbps — check cable/port" : link.quality ? `Backhaul quality: ${link.quality}` : undefined}
         >
-          {label}
+          {rest.length > 0 ? (
+            <>
+              <span className="text-[10px] font-semibold leading-[14px] opacity-80">{top}</span>
+              <span className="leading-4">{rest.join(" ")}</span>
+            </>
+          ) : label}
         </button>
       </EdgeLabelRenderer>
     </g>

@@ -27,7 +27,7 @@ export function WanDetails({ network, gateway, onSelect }: { network: McpNetwork
 
   return (
     <>
-      <GatewayLocation network={network} gateway={gateway} onSelect={onSelect} />
+      <GatewayLocation network={network} gateway={gateway} />
       <DetailSection title="Internet">
         <DetailRow label="Gateway">
           <JumpButton onClick={() => onSelect({ kind: "ap", id: gateway.mac })}>{apLabel(gateway)}</JumpButton>

@@ -36,7 +36,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
 
   return (
     <>
-      {ap.role === "root" && <GatewayLocation network={network} gateway={ap} selectedId={ap.mac} onSelect={onSelect} />}
+      {ap.role === "root" && <GatewayLocation network={network} gateway={ap} />}
       <DetailSection title="Access point">
         <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
         <DetailRow label="Clients">{ap.clientCount}</DetailRow>

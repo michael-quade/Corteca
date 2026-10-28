@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
 import { osmUrl, type LatLng } from "@/web/lib/networkLocation";
-import type { Selection } from "@/web/lib/topologySelection";
 import { DetailSection } from "./DetailParts";
 import { CanvasOverlayFrame, useCanvasOverlay } from "./CanvasOverlay";
 import type { MapView } from "@/web/components/map/LocationMap";
@@ -32,16 +31,11 @@ function readLocation(mac: string): Promise<LatLng | null | "error"> {
 }
 
 /**
- * Gateway / WAN panel "Location": mini-map of the gateway with its Beacons; a pin click selects that AP.
+ * Gateway / WAN panel "Location": mini-map of the home (one marker, as on the fleet Network Map).
  * A click on the map (or its expand button) opens it over the diagram area at the same view, where
- * it zooms and drags freely; × or Esc puts it back.
+ * it zooms and drags freely and the marker's card lists the access points; × or Esc puts it back.
  */
-export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
-  network: McpNetwork;
-  gateway: McpAccessPoint;
-  selectedId?: string;
-  onSelect: (s: Selection) => void;
-}) {
+export function GatewayLocation({ network, gateway }: { network: McpNetwork; gateway: McpAccessPoint }) {
   const [loc, setLoc] = useState<LatLng | null | "error" | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +67,6 @@ export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
           <div className="relative">
             <LocationMap
               location={loc} aps={aps} compact className={expand ? "h-56 cursor-zoom-in" : "h-56"}
-              selectedId={selectedId}
-              onPinClick={(id) => onSelect({ kind: "ap", id })}
               onMapClick={expand}
               view={view}
             />
@@ -91,12 +83,15 @@ export function GatewayLocation({ network, gateway, selectedId, onSelect }: {
           </div>
           {overlay?.open && (
             <CanvasOverlayFrame kicker="Location" title={aps.find((a) => a.isRoot)?.label ?? "Gateway"} onClose={collapse}>
-              {/* Full map: zoom buttons, plain scroll zoom; a pin opens its card on the map. */}
+              {/* Full map: zoom buttons, plain scroll zoom; the marker's card lists the access points. */}
               <LocationMap location={loc} aps={aps} className="h-full rounded-none ring-0" view={view} />
             </CanvasOverlayFrame>
           )}
           <p className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-2 text-[11px] text-neutral-400">
-            <span>Beacons are drawn around the gateway.{expand && " Click the map to expand it."}</span>
+            <span>
+              {aps.length > 1 ? `${aps.length} access points at the gateway's address.` : "The gateway's address."}
+              {expand && " Click the map to expand it."}
+            </span>
             <a href={osmUrl(loc)} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap font-medium text-blue-600 hover:underline">
               Open in OpenStreetMap ↗
             </a>

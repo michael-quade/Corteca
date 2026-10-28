@@ -10,11 +10,11 @@ export const LAYER = {
   points: "net-points",
 } as const;
 
-// Tailwind colours used across the app
-const ONLINE  = "#10b981"; // emerald-500
-const OFFLINE = "#ef4444"; // red-500
-const SELECT  = "#2563eb"; // blue-600
-const TEXT    = "#262626"; // neutral-800
+// Tailwind colours used across the app (shared with the home location map, homeMapStyle.ts)
+export const ONLINE  = "#10b981"; // emerald-500
+export const OFFLINE = "#ef4444"; // red-500
+export const SELECT  = "#2563eb"; // blue-600
+export const TEXT    = "#262626"; // neutral-800
 
 export function toFeatureCollection(devices: DeviceMarker[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
@@ -26,6 +26,9 @@ export function toFeatureCollection(devices: DeviceMarker[]): GeoJSON.FeatureCol
     })),
   };
 }
+
+// Zoom expressions can't be nested, so the selection ring gets its own curve (point + 6 px).
+export const pointRadius = (extra = 0): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 2, 5 + extra, 8, 6.5 + extra, 14, 8 + extra];
 
 /** Network points, grouped into clusters that count their offline networks (red ring if any). */
 export function addNetworkLayers(map: MlMap) {
@@ -70,8 +73,6 @@ export function addNetworkLayers(map: MlMap) {
     paint: { "text-color": TEXT },
   });
 
-  // Zoom expressions can't be nested, so the selection ring gets its own curve (point + 6 px).
-  const pointRadius = (extra = 0): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 2, 5 + extra, 8, 6.5 + extra, 14, 8 + extra];
   map.addLayer({
     id: LAYER.selected, type: "circle", source: SOURCE,
     filter: ["==", ["get", "mac"], ""],

@@ -19,9 +19,9 @@ export function routePath(points: Point[], radius = 10): string {
   return `${d} L${last.x} ${last.y}`;
 }
 
-/** AP → client-card connector, drawn along the route ELK computed. */
+/** AP → WiFi client-card connector, drawn along the route ELK computed: thin and dashed (WiFi). */
 export function RouteEdge({ id, data }: EdgeProps<Edge<RouteEdgeData, "route">>) {
   const points = data?.points ?? [];
   if (points.length < 2) return null;
-  return <path id={id} d={routePath(points)} fill="none" strokeWidth={1} className="react-flow__edge-path" />;
+  return <path id={id} d={routePath(points)} fill="none" strokeWidth={1.5} strokeDasharray="4 4" className="react-flow__edge-path" />;
 }

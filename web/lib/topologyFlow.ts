@@ -60,7 +60,7 @@ export interface WiredNodeData extends Record<string, unknown> { member: Member 
 export interface WiredEdgeData extends Record<string, unknown> { member: Member; label: string | null; points?: Point[] }
 export interface SwitchEdgeData extends Record<string, unknown> { sw: InferredSwitch; points?: Point[] }
 export interface InternetNodeData extends Record<string, unknown> { gateway: McpAccessPoint; wan: McpNetwork["wan"] }
-export interface WanEdgeData extends Record<string, unknown> { gatewayMac: string; label: string; points?: Point[] }
+export interface WanEdgeData extends Record<string, unknown> { gatewayMac: string; label: string; rateMbps: number | null; points?: Point[] }
 
 export type ApFlowNode = Node<ApNodeData, "ap">;
 export type SwitchFlowNode = Node<SwitchNodeData, "switch">;
@@ -94,7 +94,9 @@ export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: b
     !eth && link.rssiDbm != null ? `${link.rssiDbm} dBm` : null,
     rate > 0 ? formatLinkRate(rate) : null,
   ].filter(Boolean);
-  const text = parts.join(" · ") || (eth ? "Ethernet" : "WiFi backhaul");
+  const text = parts.join(" · ") || (eth ? "Ethernet" : link.band ? "" : "WiFi backhaul");
+  // WiFi: the band on top, signal and rate below ("6 GHz" / "-58 dBm · 2.4 Gbps"); dashes already say WiFi.
+  if (!eth && link.band) return { text: text ? `${link.band}\n${text}` : link.band, slowEth };
   return { text: slowEth ? `⚠ ${text}` : text, slowEth };
 }
 
@@ -123,7 +125,7 @@ export function buildFlowGraph(
   const gateway = network.aps.find((a) => a.role === "root");
   if (gateway) {
     nodes.push({ id: INTERNET_ID, type: "internet", position: { x: 0, y: 0 }, data: { gateway, wan: network.wan }, width: NET_W, height: NET_H });
-    edges.push({ id: WAN_EDGE_ID, source: INTERNET_ID, target: gateway.mac, type: "wan", data: { gatewayMac: gateway.mac, label: wanLabel(network.wan) } satisfies WanEdgeData });
+    edges.push({ id: WAN_EDGE_ID, source: INTERNET_ID, target: gateway.mac, type: "wan", data: { gatewayMac: gateway.mac, label: wanLabel(network.wan), rateMbps: network.wan && network.wan !== "error" ? wanLinkSpeedMbps(network.wan) : null } satisfies WanEdgeData });
   }
 
   // An inferred switch sits between its AP port and the Beacons / wired clients behind it.
