@@ -54,7 +54,8 @@ export default function DashboardPage() {
 
         <section aria-labelledby="dashboards-heading">
           <h2 id="dashboards-heading" className="mb-5 text-[15px] font-semibold text-neutral-900">Corteca dashboards</h2>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr_minmax(300px,0.72fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(300px,0.72fr)_1fr_1fr]">
+            {FEATURED && <FeaturedCard title={FEATURED.title} description={FEATURED.description} href={FEATURED.href} />}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:col-span-2">
               {CARDS.map((c, i) => (
                 <LandingCard
@@ -65,7 +66,6 @@ export default function DashboardPage() {
                 />
               ))}
             </div>
-            {FEATURED && <FeaturedCard title={FEATURED.title} description={FEATURED.description} href={FEATURED.href} />}
           </div>
         </section>
 

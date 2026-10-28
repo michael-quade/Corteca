@@ -203,7 +203,6 @@ export const DASHBOARD_CARD_HREFS = [
   "/network-map",
   "/device-browser",
   "/sw-overview",
-  "/alarms",
 ];
 
 /** Tall feature tile on the dashboard landing page. */
