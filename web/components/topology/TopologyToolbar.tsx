@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { cn } from "@/web/lib/utils";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
@@ -14,22 +14,61 @@ const LAYOUTS: { mode: LayoutMode; label: string }[] = [
   { mode: "horizontal", label: "Sideways" },
   { mode: "radial", label: "Radial" },
 ];
+const LAYOUT_HINT: Record<LayoutMode, string> = {
+  tree: "Gateway at the top, Beacons and clients below it.",
+  horizontal: "Gateway on the left, the network spreading to the right.",
+  radial: "Gateway in the middle, the network in rings around it.",
+};
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+const BAND_HINT: Partial<Record<Band, string>> = {
+  "6 GHz": "Show only clients connected on 6 GHz; the rest fade out. Pick several bands to show any of them.",
+  "5 GHz": "Show only clients connected on 5 GHz; the rest fade out. Pick several bands to show any of them.",
+  "2.4 GHz": "Show only clients connected on 2.4 GHz; the rest fade out. Pick several bands to show any of them.",
+  "Wired": "Show only clients plugged in with an Ethernet cable; the rest fade out.",
+};
+
+/** Hover / keyboard-focus explanation under a toolbar control (shows quickly, unlike `title`). */
+function Hint({ text, children }: { text: string; children: (id: string) => React.ReactNode }) {
+  const id = useId();
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-        active ? "border-violet-600 bg-violet-600 text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
-      )}
-    >
-      {children}
-    </button>
+    <span className="group relative inline-flex">
+      {children(id)}
+      <span
+        id={id}
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 w-max max-w-[240px] -translate-x-1/2 rounded-md bg-neutral-900 px-2 py-1 text-[11px] leading-snug text-white opacity-0 shadow-lg transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 group-hover:delay-200"
+      >
+        {text}
+      </span>
+    </span>
   );
 }
+
+function Chip({ active, onClick, hint, children }: { active: boolean; onClick: () => void; hint: string; children: React.ReactNode }) {
+  return (
+    <Hint text={hint}>
+      {(id) => (
+        <button
+          type="button"
+          aria-pressed={active}
+          aria-describedby={id}
+          onClick={onClick}
+          className={cn(
+            "whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+            active ? "border-violet-600 bg-violet-600 text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+          )}
+        >
+          {children}
+        </button>
+      )}
+    </Hint>
+  );
+}
+
+/** Short name for a group of chips. */
+const GroupLabel = ({ children }: { children: React.ReactNode }) => (
+  <span className="ml-1 whitespace-nowrap text-[11px] font-medium text-neutral-400">{children}</span>
+);
 
 function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
@@ -60,7 +99,7 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-3 py-2">
+    <div className="relative z-20 flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-3 py-2">
       <div className="relative">
         <input
           type="search"
@@ -90,23 +129,42 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
         )}
       </div>
 
+      {/* Groups combine: 5 GHz + Weak signal = weak clients on 5 GHz. Within a group, any chip matches. */}
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Client filters">
-        {BANDS.map((b) => (
-          <Chip key={b} active={filters.bands.includes(b)} onClick={() => onFiltersChange({ ...filters, bands: toggle(filters.bands, b) })}>{b}</Chip>
-        ))}
+        <span role="group" aria-label="Band" className="flex flex-wrap items-center gap-1.5">
+          <GroupLabel>Band</GroupLabel>
+          {BANDS.map((b) => (
+            <Chip key={b} hint={BAND_HINT[b] ?? `Show only ${b} clients; the rest fade out.`} active={filters.bands.includes(b)} onClick={() => onFiltersChange({ ...filters, bands: toggle(filters.bands, b) })}>{b}</Chip>
+          ))}
+        </span>
         <span className="mx-0.5 h-4 w-px bg-neutral-200" />
-        {ssids.map((s) => (
-          <Chip key={s} active={filters.ssids.includes(s)} onClick={() => onFiltersChange({ ...filters, ssids: toggle(filters.ssids, s) })}>{s}</Chip>
-        ))}
-        <span className="mx-0.5 h-4 w-px bg-neutral-200" />
-        <Chip active={filters.weak} onClick={() => onFiltersChange({ ...filters, weak: !filters.weak })}>Weak signal &lt; {WEAK_SIGNAL_DBM} dBm</Chip>
-        <Chip active={filters.slowBand} onClick={() => onFiltersChange({ ...filters, slowBand: !filters.slowBand })}>Could use faster band</Chip>
-        <Chip active={filters.olderWifi} onClick={() => onFiltersChange({ ...filters, olderWifi: !filters.olderWifi })}>
-          <span title="WiFi 5 (802.11ac) or older: these clients use more airtime for the same data, slowing the radio for everyone">Older WiFi (4/5)</span>
-        </Chip>
+        {ssids.length > 0 && (
+          <span role="group" aria-label="WiFi network" className="flex flex-wrap items-center gap-1.5">
+            <GroupLabel>WiFi network</GroupLabel>
+            {ssids.map((s) => (
+              <Chip key={s} hint={`Show only clients on the “${s}” WiFi network (SSID); the rest fade out.`} active={filters.ssids.includes(s)} onClick={() => onFiltersChange({ ...filters, ssids: toggle(filters.ssids, s) })}>{s}</Chip>
+            ))}
+            <span className="mx-0.5 h-4 w-px bg-neutral-200" />
+          </span>
+        )}
+        <span role="group" aria-label="Look for" className="flex flex-wrap items-center gap-1.5">
+          <GroupLabel>Look for</GroupLabel>
+          <Chip
+            hint={`Show only WiFi clients with a signal weaker than ${WEAK_SIGNAL_DBM} dBm: often too far from their Beacon.`}
+            active={filters.weak} onClick={() => onFiltersChange({ ...filters, weak: !filters.weak })}
+          >Weak signal &lt; {WEAK_SIGNAL_DBM} dBm</Chip>
+          <Chip
+            hint="Show only clients on a slower band than both they and their Beacon support, e.g. on 2.4 GHz while 5 GHz capable."
+            active={filters.slowBand} onClick={() => onFiltersChange({ ...filters, slowBand: !filters.slowBand })}
+          >Could use faster band</Chip>
+          <Chip
+            hint="Show only clients using WiFi 5 (802.11ac) or older: they use more airtime for the same data, slowing the radio for everyone."
+            active={filters.olderWifi} onClick={() => onFiltersChange({ ...filters, olderWifi: !filters.olderWifi })}
+          >Older WiFi (4/5)</Chip>
+        </span>
         {filtersActive(filters) && (
           <>
-            <span className="text-xs text-neutral-500">{matchCount} of {total}</span>
+            <span className="text-xs text-neutral-500" title="Clients matching every group you picked">{matchCount} of {total} clients</span>
             <button type="button" onClick={() => onFiltersChange(EMPTY_FILTERS)} className="text-xs text-violet-700 hover:underline">Clear</button>
           </>
         )}
@@ -115,18 +173,22 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
       <div className="ml-auto flex items-center gap-2">
         <div className="flex rounded-md border border-neutral-200 p-0.5" role="group" aria-label="Layout">
           {LAYOUTS.map(({ mode, label }) => (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={layout === mode}
-              onClick={() => onLayoutChange(mode)}
-              className={cn(
-                "rounded px-2 py-1 text-xs font-medium",
-                layout === mode ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
+            <Hint key={mode} text={LAYOUT_HINT[mode]}>
+              {(id) => (
+                <button
+                  type="button"
+                  aria-pressed={layout === mode}
+                  aria-describedby={id}
+                  onClick={() => onLayoutChange(mode)}
+                  className={cn(
+                    "rounded px-2 py-1 text-xs font-medium",
+                    layout === mode ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                  )}
+                >
+                  {label}
+                </button>
               )}
-            >
-              {label}
-            </button>
+            </Hint>
           ))}
         </div>
         <button
