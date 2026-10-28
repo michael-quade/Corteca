@@ -5,6 +5,7 @@ import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import { toDeviceNames, withAlias, type DeviceNames } from "@/web/lib/deviceNames";
 import { sanitiseWifiDetails, type WifiDetails } from "@/web/lib/wifiDetails";
 import type { EthernetPort } from "@/web/components/EthernetPortPanel";
+import { readGatewayPorts } from "@/web/components/topology/useGatewayPorts";
 import type { WanInfo } from "@/web/lib/wanInfo";
 
 /**
@@ -49,12 +50,8 @@ export function useGatewayExtras(networkId: string | null, snapshot: unknown): {
       })
       .catch(() => { /* details are optional */ });
 
-    fetchWithAuth(`${base}/ethernet`)
-      .then(async (r) => {
-        const body = (await r.json().catch(() => null)) as { ports?: unknown } | null;
-        if (!cancelled && r.ok && Array.isArray(body?.ports) && body.ports.length) setPorts(body.ports as EthernetPort[]);
-      })
-      .catch(() => { /* ports are optional: switches then come from Corteca's wired clients only */ });
+    // Shared with the AP panels' read; ports are optional: switches then come from Corteca's wired clients only.
+    void readGatewayPorts(networkId, null).then((r) => { if (!cancelled && r !== "error") setPorts(r); });
 
     fetchWithAuth(`${base}/wan`)
       .then(async (r) => {

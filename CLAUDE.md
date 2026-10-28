@@ -450,7 +450,7 @@ web/
       WanDetails.tsx              # WAN panel: Internet connection, WAN interface, WAN port
       flowTypes.ts                # React Flow nodeTypes / edgeTypes for the canvas
       DeviceRename.tsx            # Rename context: panel pencil → RenameDeviceModal → gateway HostAlias
-      useGatewayPorts.ts          # Cached fetch of the gateway's live Ethernet ports (shared by gateway and mesh AP panels)
+      useGatewayPorts.ts          # Gateway's live Ethernet ports: `readGatewayPorts()` shares one in-flight read between the page and the AP panels, retries once, caches successes only (a failed read of several sent at once used to stick as "unavailable")
       TopologyLegend.tsx
       ZoomControls.tsx            # +/−/Fit buttons shown beside the legend
       useCanvasKeyboard.ts        # Arrow keys / Esc for the canvas; clicks keep focus on it
