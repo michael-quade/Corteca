@@ -12,8 +12,10 @@ import { NetworkMapSearch } from "@/web/components/NetworkMapSearch";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
 import { CortecaCard } from "@/web/components/corteca/CortecaCard";
 import { OutlineButton } from "@/web/components/corteca/OutlineButton";
+import { RegionFilterBar } from "@/web/components/map/RegionFilterBar";
+import { useRegionFilter } from "@/web/lib/useRegionFilter";
 import {
-  continentFromLatLng, loadMarkerCache, saveMarkerCache, clearMarkerCache,
+  loadMarkerCache, saveMarkerCache, clearMarkerCache,
   loadNameCache, saveNameCache, clearNameClientCache,
   type CachedMarker,
 } from "@/web/lib/geoUtils";
@@ -86,7 +88,7 @@ export default function NetworkMapPage() {
           mac: loc.mac, lat: loc.lat, lng: loc.lng,
           online: d?.online ?? true, model: d?.model ?? "", firmware: d?.firmware ?? "",
           customerId: d?.customerId ?? "", accountName: loc.accountName ?? "",
-          country: loc.country ?? "", continent: continentFromLatLng(loc.lat, loc.lng),
+          country: loc.country ?? "",
         };
       });
       for (const m of newMarkers) newCache.set(m.mac, m);
@@ -208,10 +210,17 @@ export default function NetworkMapPage() {
     if (!isLoading && isAuthenticated) load();
   }, [isLoading, isAuthenticated, load]);
 
+  const region = useRegionFilter(devices);
+  const regionMacs = region.macs;
+
+  // The deployment report follows the map: region filter, then a pinned network.
   const tableRows = useMemo(() => {
-    if (!macFilter) return rawRows;
-    return rawRows.filter((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter);
-  }, [rawRows, macFilter]);
+    if (!macFilter && !regionMacs) return rawRows;
+    return rawRows.filter((r) => {
+      const mac = (r["Home WiFi ID"] || r["MAC"] || "").trim();
+      return (!regionMacs || regionMacs.has(mac)) && (!macFilter || mac === macFilter);
+    });
+  }, [rawRows, macFilter, regionMacs]);
 
   if (isLoading || !isAuthenticated) return <CortecaLoading />;
 
@@ -246,15 +255,23 @@ export default function NetworkMapPage() {
       {(phase === "locating" || phase === "done") && (
         <CortecaCard title="Map">
           <div className="space-y-4">
-            <NetworkMapSearch
-              rawRows={rawRows} markerCache={markerCache}
-              onFlyTo={(lat, lng) => setFlyToTarget({ lat, lng })}
-              onClearFly={() => setFlyToTarget(null)}
-              onMacSelect={setMacFilter}
-              onResetView={() => setResetViewTrigger((n) => n + 1)}
-            />
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[220px] flex-1">
+                <NetworkMapSearch
+                  rawRows={rawRows} markerCache={markerCache}
+                  onFlyTo={(lat, lng) => setFlyToTarget({ lat, lng })}
+                  onClearFly={() => setFlyToTarget(null)}
+                  onMacSelect={setMacFilter}
+                  onResetView={() => setResetViewTrigger((n) => n + 1)}
+                />
+              </div>
+              <RegionFilterBar
+                filter={region.filter} options={region.options} pending={region.pending}
+                onChange={(f) => { region.setFilter(f); setResetViewTrigger((n) => n + 1); }}
+              />
+            </div>
             <GlobalNetworkMap
-              devices={devices} progress={progress}
+              devices={region.shown} progress={progress}
               flyToTarget={flyToTarget}
               resetViewTrigger={resetViewTrigger}
               onPopupClose={() => setMacFilter(null)}
@@ -266,9 +283,12 @@ export default function NetworkMapPage() {
       {rawRows.length > 0 && (
         <CortecaCard
           title="Deployment report"
-          actions={macFilter && (
+          info={regionMacs ? "With a location filter set, only networks placed on the map are listed (the map locates online networks with a Customer ID)." : undefined}
+          actions={(macFilter || regionMacs) && (
             <span className="text-sm text-blue-600">
-              Filtered to {rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter}
+              Filtered to {macFilter
+                ? rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter
+                : `${region.summary} · ${region.shown.length.toLocaleString()} network${region.shown.length === 1 ? "" : "s"}`}
             </span>
           )}
         >

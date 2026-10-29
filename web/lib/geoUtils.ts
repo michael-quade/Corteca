@@ -1,24 +1,3 @@
-export type Continent = "Africa" | "Antarctica" | "Asia" | "Europe" | "North America" | "Oceania" | "South America";
-
-export function continentFromLatLng(lat: number, lng: number): Continent | null {
-  if (lat <= -60) return "Antarctica";
-  // Africa: lat -35..37, lng -20..55
-  if (lat >= -35 && lat <= 37 && lng >= -20 && lng <= 55) return "Africa";
-  // Europe: lat 35..75, lng -25..50
-  if (lat >= 35 && lat <= 75 && lng >= -25 && lng <= 50) return "Europe";
-  // South America: lat -56..15, lng -85..-34
-  if (lat >= -56 && lat <= 15 && lng >= -85 && lng <= -34) return "South America";
-  // North America: lat 5..85, lng -170..-52
-  if (lat >= 5 && lat <= 85 && lng >= -170 && lng <= -52) return "North America";
-  // Oceania: lat -50..0, lng 110..180
-  if (lat >= -50 && lat <= 0 && lng >= 110 && lng <= 180) return "Oceania";
-  // Oceania Pacific islands: lat -50..25, lng 150..180 or -180..-130
-  if (lat >= -50 && lat <= 25 && lng >= -180 && lng <= -130) return "Oceania";
-  // Asia: everything remaining in Eastern hemisphere + SE Asia
-  if (lat >= -10 && lat <= 80 && lng >= 25 && lng <= 180) return "Asia";
-  return null;
-}
-
 export interface CachedMarker {
   mac: string;
   lat: number;
@@ -29,7 +8,6 @@ export interface CachedMarker {
   customerId: string;
   accountName: string;
   country: string;
-  continent: Continent | null;
 }
 
 const CACHE_KEY  = "corteca:markers:v2";

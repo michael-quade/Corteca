@@ -128,8 +128,12 @@ export function GlobalNetworkMap({ devices, progress, flyToTarget, resetViewTrig
     if (devices.length === 0) { userMovedRef.current = false; show(null); return; }
     if (!userMovedRef.current) fitAll(devices.length === byMacRef.current.size && progress >= 100 ? 600 : 0);
     // Names arrive after locating: keep the open card's network current.
+    // A card for a network the region filter now hides closes.
     const cur = openRef.current;
-    if (cur) { const d = byMacRef.current.get(cur.device.mac); if (d && d !== cur.device) show({ ...cur, device: d }); }
+    if (cur) {
+      const d = byMacRef.current.get(cur.device.mac);
+      if (!d) show(null); else if (d !== cur.device) show({ ...cur, device: d });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devices, ready]);
 
