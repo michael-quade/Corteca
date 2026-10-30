@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { meshApBands } from '@/web/lib/radioBands';
+import { recordApBands } from '@/web/lib/corteca/radioBandStore';
 import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 
 async function safeFetch(url: string, headers: Record<string, string>): Promise<unknown> {
@@ -67,5 +69,7 @@ export async function GET(
   const memberCount = Array.isArray(members) ? members.length : Array.isArray((members as Record<string,unknown>)?.content) ? (members as {content: unknown[]}).content.length : '?';
   console.log(`[network:${deviceId}] APs: ${deviceIds.length} | members: ${memberCount}`);
 
+  // Learn each online AP model's radio bands for when an AP of that model is offline (no added latency).
+  after(() => recordApBands(meshApBands((mesh as { aps?: unknown } | null)?.aps)).catch(() => {}));
   return NextResponse.json({ networks, topology, mesh, configs, members, summary, rootDeviceId: deviceId });
 }

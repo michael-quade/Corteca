@@ -2,6 +2,7 @@
 
 import { cn } from "@/web/lib/utils";
 import type { McpAccessPoint } from "@/web/lib/mcpNetwork";
+import { BandsValue } from "@/web/components/BandsValue";
 
 const QUALITY_STYLE: Record<string, string> = {
   good: "bg-green-50 text-green-700 ring-green-200",
@@ -88,7 +89,7 @@ export function McpAccessPointCards({ aps, selectedMac, onSelect }: {
               <Row label="Firmware" value={ap.firmware || "—"} />
               <Row label="Serial" value={<span className="font-mono">{ap.serial || "—"}</span>} />
               {ap.ipAddress && <Row label="LAN IP" value={<span className="font-mono">{ap.ipAddress}</span>} />}
-              <Row label="Bands" value={ap.bands.join(" · ") || "—"} />
+              <Row label="Bands" value={<BandsValue ap={ap} />} />
               <Row label="SSIDs" value={ap.ssids.join(", ") || "—"} />
               {ap.lastBoot && <Row label="Last boot" value={new Date(ap.lastBoot).toLocaleString()} />}
             </dl>

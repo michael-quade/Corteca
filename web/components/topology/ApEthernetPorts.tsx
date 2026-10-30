@@ -5,7 +5,7 @@ import { cn } from "@/web/lib/utils";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName } from "@/web/lib/topologyFlow";
 import type { Selection } from "@/web/lib/topologySelection";
-import { beaconClientsLabel, classifyPortHosts, labelPorts, looksLikeSwitch, staleLabel, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
+import { beaconClientsLabel, classifyPortHosts, labelPorts, looksLikeSwitch, staleTitle, type PortAp, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import { DetailSection, JumpButton } from "./DetailParts";
 import { useGatewayPorts } from "./useGatewayPorts";
 import { formatRate } from "@/web/lib/rateFormat";
@@ -95,7 +95,8 @@ function PortDevice({ hosts, onSelect, open, onToggle }: {
 }) {
   const { beacons, via, direct, stale } = hosts;
   if (!beacons.length && !direct.length && !via.length) {
-    return stale.length ? <span className="text-neutral-400" title={staleTitle(hosts)}>{staleLabel(hosts)}</span> : null;
+    // Old host-table entries (link down / device now on WiFi) aren't a connection: say so on hover only.
+    return <span className="text-neutral-400" title={stale.length ? staleTitle(hosts) : undefined}>Not Connected</span>;
   }
   if (!looksLikeSwitch(hosts)) {
     if (beacons.length === 1) {
@@ -171,7 +172,7 @@ function GatewayPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpA
     <PortList note="Live status from the gateway (TR-181).">
       {labelled.map(({ port: p, label }) => {
         const up = p.status === "Up";
-        const hosts = classifyPortHosts(p, network);
+        const hosts = classifyPortHosts(p, network, label);
         const open = openPort === p.index;
         return (
           <div key={p.index}>

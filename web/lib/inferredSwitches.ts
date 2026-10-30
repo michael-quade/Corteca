@@ -44,7 +44,7 @@ function liveGatewaySwitches(network: McpNetwork, rootMac: string, ports: Ethern
   const out: InferredSwitch[] = [];
   for (const { port, label } of labelPorts(ports)) {
     if (port.upstream || port.status !== "Up") continue;
-    const hosts = classifyPortHosts(port, network);
+    const hosts = classifyPortHosts(port, network, label);
     if (!looksLikeSwitch(hosts)) continue;
     out.push({
       id: `sw:${rootMac}:${label}`,
@@ -54,6 +54,7 @@ function liveGatewaySwitches(network: McpNetwork, rootMac: string, ports: Ethern
       source: "live",
       // Beacons whose backhaul really comes from the gateway (not via another AP).
       beaconMacs: hosts.beacons.map((b) => b.mac).filter((mac) => parentOf.get(mac) === rootMac),
+      // `direct` includes the gateway's wired clients Corteca reports on this port (classifyPortHosts).
       clientIds: hosts.direct.flatMap((d) => (d.member && d.member.device_id === rootMac ? [d.member.id] : [])),
       otherHosts: hosts.direct.filter((d) => !d.member).map((d) => ({ mac: d.mac, name: d.hostName })),
     });
@@ -84,9 +85,12 @@ function reportedSwitches(network: McpNetwork, apMac: string): InferredSwitch[] 
 export function inferSwitches(network: McpNetwork, gatewayPorts: EthernetPort[] | null): InferredSwitch[] {
   const rootMac = network.aps.find((a) => a.role === "root")?.mac;
   const live = rootMac && gatewayPorts?.length ? liveGatewaySwitches(network, rootMac, gatewayPorts) : null;
+  // With live ports, the gateway's own reported switches still count on ports the host table
+  // doesn't already show as a switch (≥2 wired clients on one port need one either way).
+  const livePorts = new Set((live ?? []).map((sw) => sw.port));
   return [
     ...(live ?? []),
-    ...network.aps.filter((a) => !(live && a.mac === rootMac)).flatMap((a) => reportedSwitches(network, a.mac)),
+    ...network.aps.flatMap((a) => reportedSwitches(network, a.mac).filter((sw) => !(live && a.mac === rootMac && livePorts.has(sw.port)))),
   ].filter((sw) => sw.beaconMacs.length + sw.clientIds.length >= 2);
 }
 
@@ -108,7 +112,7 @@ function directBeaconPorts(network: McpNetwork, gatewayPorts: EthernetPort[] | n
   const out: Record<string, number> = {};
   for (const { port, label } of labelPorts(gatewayPorts ?? [])) {
     if (port.upstream || port.status !== "Up") continue;
-    const hosts = classifyPortHosts(port, network);
+    const hosts = classifyPortHosts(port, network, label);
     if (looksLikeSwitch(hosts)) continue;
     for (const b of hosts.beacons) out[b.mac] = Number(label.replace(/\D/g, ""));
   }

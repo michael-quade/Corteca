@@ -8,6 +8,7 @@ import type { ApRadio } from "@/web/lib/wifiRadios";
 import type { AiNotes } from "@/web/lib/aiAnalysis";
 import type { InferredSwitch } from "@/web/lib/inferredSwitches";
 import type { WanInfo } from "@/web/lib/wanInfo";
+import { radioBandLabels, type BandSource } from "@/web/lib/radioBands";
 
 export interface McpApiResult { apiId: string; ok: boolean; status: number; data: unknown }
 
@@ -29,6 +30,8 @@ export interface McpAccessPoint {
   lastBoot: string | null;
   lastOffline: string | null;
   bands: string[];        // e.g. ["2.4 GHz", "5 GHz", "6 GHz"]
+  /** Set when the AP reported no bands (offline) and `bands` came from its model (applyModelBands). */
+  bandsSource?: BandSource;
   ssids: string[];        // fronthaul SSIDs only
   /** fronthaul SSID → bands it is broadcast on */
   ssidBands: Record<string, string[]>;
@@ -86,20 +89,33 @@ const BAND_LABEL: Record<string, string> = {
   BAND24: "2.4 GHz", BAND50: "5 GHz", BAND50LOW: "5 GHz", BAND50HIGH: "5 GHz", BAND06: "6 GHz",
 };
 
-// Radio-level labels. Tri-band WiFi 6 Beacons (e.g. Beacon 6) have no 6 GHz radio
-// and split 5 GHz into a low and a high radio; clients only ever see "5 GHz", so
-// client-facing band lists (ssidBands, filters) keep BAND_LABEL.
+// Radio-level labels. Some Beacons (Beacon 6, Beacon 24) split 5 GHz into a low and a high
+// radio; others with one 5 GHz radio still tag it BAND50HIGH (Beacon 9), so "low"/"high" is only
+// shown for an AP that reports both. Clients only ever see "5 GHz", so client-facing band lists
+// (ssidBands, filters) keep BAND_LABEL.
 const RADIO_LABEL: Record<string, string> = {
   BAND24: "2.4 GHz", BAND50: "5 GHz", BAND50LOW: "5 GHz low", BAND50HIGH: "5 GHz high", BAND06: "6 GHz",
 };
-const RADIO_ORDER = ["2.4 GHz", "5 GHz", "5 GHz low", "5 GHz high", "6 GHz"];
-const byRadioOrder = (a: string, b: string) => (RADIO_ORDER.indexOf(a) + 1 || 99) - (RADIO_ORDER.indexOf(b) + 1 || 99);
+
+/** Band → label for one AP's radios: low/high only when it has both 5 GHz radios. */
+function radioLabeler(ssids: Obj[]): (band: string) => string | undefined {
+  const bands = new Set(ssids.map((x) => String(x.band)));
+  const split = bands.has("BAND50LOW") && bands.has("BAND50HIGH");
+  return (band) => (split ? RADIO_LABEL : BAND_LABEL)[band];
+}
+const ssidsOf = (a: Obj | undefined) => (Array.isArray(a?.ssids) ? (a!.ssids as Obj[]) : []);
 
 // Fallback when no endpoint BSSID matches a radio. A link's medium names its band:
 // "wifi-6" = 6 GHz (also between WiFi 7 Beacons), "wifi-5high" = 5 GHz high radio.
 const MEDIUM_BAND: Record<string, string> = {
   "wifi-6": "6 GHz", "wifi-5": "5 GHz", "wifi-5low": "5 GHz low", "wifi-5high": "5 GHz high", "wifi-2.4": "2.4 GHz", "wifi-24": "2.4 GHz",
 };
+
+/** Band from a link's medium; "5 GHz high/low" only when the child AP has both 5 GHz radios. */
+function mediumBand(medium: string, child: Obj | undefined): string | undefined {
+  const band = MEDIUM_BAND[medium];
+  return band?.startsWith("5 GHz ") ? radioLabeler(ssidsOf(child))(band.endsWith("low") ? "BAND50LOW" : "BAND50HIGH") : band;
+}
 
 /**
  * A link's data rate in kbps. Newer Beacons report kbps; tri-band WiFi 6 Beacons
@@ -146,8 +162,9 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
   // BSSID → band of the radio it belongs to; a link's endpoint BSSIDs pin its band.
   const bandByBssid = new Map<string, string>();
   for (const a of rawAps) {
-    for (const s of Array.isArray(a.ssids) ? (a.ssids as Obj[]) : []) {
-      const band = RADIO_LABEL[String(s.band)];
+    const label = radioLabeler(ssidsOf(a));
+    for (const s of ssidsOf(a)) {
+      const band = label(String(s.band));
       if (band && s.bssid) bandByBssid.set(String(s.bssid).toLowerCase(), band);
     }
   }
@@ -172,7 +189,7 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
       const medium = String(link?.medium ?? "").toLowerCase();
       const band = medium.includes("eth") ? null
         : eps.flatMap((e) => [e.bssid, e["remote-bssid"]]).map((b) => bandByBssid.get(String(b ?? "").toLowerCase())).find(Boolean)
-          ?? MEDIUM_BAND[medium] ?? null;
+          ?? mediumBand(medium, byMac.get(childMac)) ?? null;
       const num = (v: unknown) => (typeof v === "number" ? v : null);
       out.push({
         parentMac,
@@ -251,7 +268,7 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
       wanIp: String(a.ip_address ?? ""),
       lastBoot: a.last_boot ? String(a.last_boot) : null,
       lastOffline: a.last_offline ? String(a.last_offline) : null,
-      bands: [...new Set(ssids.map((x) => RADIO_LABEL[String(x.band)] ?? String(x.band)))].sort(byRadioOrder),
+      bands: radioBandLabels((ssids as Obj[]).map((x) => String(x.band ?? ""))),
       ssids: Object.keys(ssidBands),
       ssidBands,
       clientCount: clientsByAp.get(mac) ?? 0,

@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { meshApBands } from '@/web/lib/radioBands';
+import { recordApBands } from '@/web/lib/corteca/radioBandStore';
+import { extractResults } from '@/web/lib/mcpNetwork';
 import { callMcpTool, toolPayload, McpError } from '@/web/lib/corteca/mcpClient';
 
 // retrieve-network-data runs an AI sub-agent server-side, so calls can take a while.
@@ -30,12 +33,16 @@ export async function GET(
       return NextResponse.json({ error: msg }, { status: 502 });
     }
     const summary = result.content?.find((c) => c.type === 'text')?.text ?? null;
+    const payload = toolPayload(result);
+    // Learn each online AP model's radio bands for when an AP of that model is offline (no added latency).
+    const mesh = extractResults(payload).find((r) => r.apiId === 'mesh' && r.ok)?.data as { aps?: unknown } | undefined;
+    after(() => recordApBands(meshApBands(mesh?.aps)).catch(() => {}));
     return NextResponse.json({
       homeWifiId: id,
       query,
       durationMs: Date.now() - started,
       summary,
-      payload: toolPayload(result),
+      payload,
     });
   } catch (e) {
     const status = e instanceof McpError ? e.status : 502;

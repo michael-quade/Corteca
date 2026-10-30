@@ -29,11 +29,23 @@ export interface PortHosts {
 
 const isWired = (m: Member) => String(m.type ?? "").toLowerCase() === "ethernet";
 
-export function classifyPortHosts(port: EthernetPort, network: PortContext): PortHosts {
+// Corteca numbers ports from 1 = WAN, so port_number 3 is LAN 2.
+const reportedPortLabel = (m: Member) => {
+  const n = Number((m as unknown as { port_number?: number }).port_number) || 0;
+  return n === 1 ? "WAN" : n > 1 ? `LAN ${n - 1}` : null;
+};
+
+/**
+ * `label` ("LAN 2", the gateway port's position) adds the gateway's wired clients that Corteca
+ * reports on that port but the host table doesn't list: devices behind a switch are sometimes
+ * missing from it (two 100 Mbps clients behind a Beacon 3.1 gateway's LAN 2 switch were).
+ */
+export function classifyPortHosts(port: EthernetPort, network: PortContext, label?: string): PortHosts {
   const apByMac = new Map(network.aps.map((a) => [norm(a.mac), a]));
   const memberByMac = new Map(network.members.map((m) => [norm(m.id), m]));
   const out: PortHosts = { beacons: [], via: [], direct: [], stale: [] };
   const linkUp = port.status === "Up";
+  const rootMac = network.aps.find((a) => a.role === "root")?.mac;
   for (const h of port.connectedHosts ?? []) {
     const mac = norm(h.macAddress);
     if (!linkUp) { out.stale.push({ mac: h.macAddress, hostName: h.hostName }); continue; }
@@ -44,6 +56,13 @@ export function classifyPortHosts(port: EthernetPort, network: PortContext): Por
     if (member && homeAp && homeAp.role !== "root") out.via.push({ member, ap: homeAp });
     else if (member && homeAp && !isWired(member)) out.stale.push({ mac: h.macAddress, hostName: h.hostName });
     else out.direct.push({ mac: h.macAddress, hostName: h.hostName, member });
+  }
+  if (label && linkUp && rootMac && !port.upstream) {
+    const listed = new Set(out.direct.map((d) => norm(d.mac)));
+    for (const m of network.members) {
+      if (m.connected === false || !isWired(m) || !m.device_id || norm(m.device_id) !== norm(rootMac)) continue;
+      if (reportedPortLabel(m) === label && !listed.has(norm(m.id))) out.direct.push({ mac: m.id, hostName: m.alias ?? "", member: m });
+    }
   }
   return out;
 }
@@ -85,7 +104,7 @@ export function gatewayPortOf(apMac: string, ports: EthernetPort[], network: Por
   for (const { port, label } of labelPorts(ports)) {
     if (port.upstream) continue;
     if ((port.connectedHosts ?? []).some((h) => norm(h.macAddress) === norm(apMac))) {
-      return { label, viaSwitch: looksLikeSwitch(classifyPortHosts(port, network)) };
+      return { label, viaSwitch: looksLikeSwitch(classifyPortHosts(port, network, label)) };
     }
   }
   return null;

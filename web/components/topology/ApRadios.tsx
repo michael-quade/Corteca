@@ -1,6 +1,7 @@
 "use client";
 
 import type { McpAccessPoint } from "@/web/lib/mcpNetwork";
+import { BandsValue } from "@/web/components/BandsValue";
 import type { ApRadio } from "@/web/lib/wifiRadios";
 import { DetailRow, DetailSection } from "./DetailParts";
 
@@ -73,7 +74,7 @@ export function ApRadios({ ap }: { ap: McpAccessPoint }) {
           </div>
         </>
       ) : (
-        <DetailRow label="Bands">{ap.bands.join(" · ")}</DetailRow>
+        <DetailRow label="Bands"><BandsValue ap={ap} /></DetailRow>
       )}
       <DetailRow label="SSIDs">{ap.ssids.join(", ")}</DetailRow>
     </DetailSection>

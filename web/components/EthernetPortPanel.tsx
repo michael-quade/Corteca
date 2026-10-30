@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import { formatRate } from "@/web/lib/rateFormat";
 import { cn } from "@/web/lib/utils";
 import { clientName } from "@/web/lib/topologyFlow";
-import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleLabel, staleTitle, type PortContext, type PortHosts } from "@/web/lib/portHosts";
+import { beaconClientsLabel, classifyPortHosts, looksLikeSwitch, staleTitle, type PortContext, type PortHosts } from "@/web/lib/portHosts";
 import type { EthernetPort } from "@/app/api/network/[deviceId]/ethernet/route";
 import type { MeshPort } from "@/web/lib/meshApPorts";
 import { ReportedConnectedTo, ReportedStatusCell, ReportedSwitchRow } from "./ReportedPortCells";
@@ -66,7 +66,8 @@ function ConnectedTo({ port, hosts, open, onToggle }: { port: EthernetPort; host
   }
   const { beacons, direct, via, stale } = hosts;
   if (!beacons.length && !direct.length && !via.length) {
-    return stale.length ? <span className="text-neutral-400" title={staleTitle(hosts)}>{staleLabel(hosts)}</span> : <>—</>;
+    // Old host-table entries (link down / device now on WiFi) aren't a connection: say so on hover only.
+    return <span className="text-neutral-400" title={stale.length ? staleTitle(hosts) : undefined}>Not Connected</span>;
   }
   if (!looksLikeSwitch(hosts)) {
     if (beacons.length === 1) return <>{apName(beacons[0])} <span className="text-neutral-400">(Beacon)</span></>;
@@ -140,7 +141,7 @@ export function EthernetPortPanel({ ports, context }: Props) {
           </thead>
           <tbody>
             {labeled.map((port) => {
-              const hosts = context && port.connectedHosts ? classifyPortHosts(port, context) : null;
+              const hosts = context && port.connectedHosts ? classifyPortHosts(port, context, port.label === "WAN" ? "WAN" : `LAN ${port.label}`) : null;
               const open = openPort === port.index;
               return (
                 <Fragment key={port.index}>

@@ -9,6 +9,8 @@ import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable
 import { memberConnection } from "@/web/lib/memberConnection";
 import { RECENT_DAYS, recentlyDisconnected } from "@/web/lib/recentlyDisconnected";
 import { useMemberHistory } from "@/web/lib/useMemberHistory";
+import { useModelBands } from "@/web/lib/useModelBands";
+import { applyModelBands } from "@/web/lib/radioBands";
 import { McpTopBar } from "@/web/components/McpTopBar";
 import { McpDebugPanel } from "@/web/components/McpDebugPanel";
 import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
@@ -58,11 +60,13 @@ export default function McpNetworkVisualizerPage() {
   const { names, wifi, ports, wan, setNickname } = useGatewayExtras(response?.homeWifiId ?? null, response);
   // On-demand Corteca AI analysis / troubleshooting; findings land on the devices they mention.
   const ai = useAiAnalysis(response?.homeWifiId ?? null);
+  // Bands for offline APs (they report none), by model.
+  const modelBands = useModelBands();
   const network = useMemo(() => {
     if (!response) return null;
-    const base = applyWifiDetails(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), wifi);
+    const base = applyWifiDetails(applyModelBands(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), modelBands), wifi);
     return { ...applyAiReport(applySwitches(base, ports), ai.analysis.result), wan: wan ?? undefined };
-  }, [response, names, wifi, ports, wan, ai.analysis.result]);
+  }, [response, names, wifi, ports, wan, ai.analysis.result, modelBands]);
   // MCP lists only clients online now; Corteca's REST history fills "Recently disconnected" (in the background).
   const history = useMemberHistory(response?.homeWifiId ?? null, response);
   const disconnected = useMemo(() => ({

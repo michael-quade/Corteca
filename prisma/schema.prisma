@@ -54,3 +54,14 @@ model PortLayout {
 
   @@map("port_layouts")
 }
+
+// WiFi radio bands per device model, learned from online APs (an offline AP reports none).
+model RadioBands {
+  model       String   @id
+  displayName String   @map("display_name")
+  bands       Json     @default("[]")
+  sampleMac   String   @default("") @map("sample_mac")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("radio_bands")
+}
