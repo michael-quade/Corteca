@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
+import { memberConnection } from "@/web/lib/memberConnection";
 import { McpTopBar } from "@/web/components/McpTopBar";
 import { McpDebugPanel } from "@/web/components/McpDebugPanel";
 import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
@@ -243,6 +244,7 @@ export default function McpNetworkVisualizerPage() {
                       members={network.members}
                       selectedId={view.selection?.kind === "client" ? view.selection.id : null}
                       onSelect={(id) => selectAndReveal({ kind: "client", id })}
+                      connection={(m) => memberConnection(network, m)}
                     />
                   )
                   : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}

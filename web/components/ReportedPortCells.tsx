@@ -5,7 +5,7 @@ import type { ReportedPort } from "@/web/lib/meshApPorts";
 // Cells for a mesh AP port built from Corteca's reports (meshApPorts.ts) rather
 // than live port status. A port with nothing reported is neutral — it may be empty.
 
-const NOTHING = <span className="text-neutral-400">Nothing reported</span>;
+const NOTHING = <span className="text-neutral-400">Not Connected</span>;
 
 export function ReportedStatusCell({ reported }: { reported: ReportedPort }) {
   if (reported.kind === "none") return <span className="text-xs">{NOTHING}</span>;

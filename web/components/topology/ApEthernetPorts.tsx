@@ -221,7 +221,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
         const rate = p.currentBitRate > 0 ? fmtMbps(p.currentBitRate) : undefined;
         const common = { port: label, tone: portTone(p).tone, max: maxOf(p) };
         if (r.kind === "none") {
-          return <Row key={p.index} {...common} device={<span className="text-neutral-400">Nothing reported</span>} title={`${p.name} · may be empty or unknown`} />;
+          return <Row key={p.index} {...common} device={<span className="text-neutral-400">Not Connected</span>} title={`${p.name} · Corteca reports nothing plugged in here`} />;
         }
         if (r.kind === "wireless") {
           return (
