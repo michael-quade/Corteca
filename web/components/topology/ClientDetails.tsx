@@ -10,6 +10,7 @@ import { clientStandard, standardLabel } from "@/web/lib/wifiDetails";
 import { memberAiNotes } from "@/web/lib/aiAnalysis";
 import { AiNotesSection } from "./AiNotesSection";
 import { switchOfClient, wiredPort } from "@/web/lib/inferredSwitches";
+import { clientLinks, type ClientLink } from "@/web/lib/clientFields";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
 
 // Fields the MCP members payload carries beyond the shared Member type.
@@ -25,6 +26,22 @@ interface RawMember {
 }
 
 const signalWord = (dbm: number) => (dbm >= -65 ? "good" : dbm >= -75 ? "fair" : "poor");
+
+/** An MLO client's links, one row per band: signal and PHY rate ↓ / ↑ (the AP's tx is the client's download). */
+function MloLinks({ links }: { links: ClientLink[] }) {
+  return (
+    <DetailSection title={`Links (MLO · ${links.length} bands)`}>
+      {links.map((l) => {
+        const down = formatMbps(l.txRateKbps / 1000), up = formatMbps(l.rxRateKbps / 1000);
+        return (
+          <DetailRow key={l.mac || l.bssid} label={[l.band, l.channel != null && `Ch ${l.channel}`].filter(Boolean).join(" · ")}>
+            {[l.signalDbm != null && `${l.signalDbm} dBm (${signalWord(l.signalDbm)})`, down && up && `${down} / ${up}`].filter(Boolean).join(" · ") || null}
+          </DetailRow>
+        );
+      })}
+    </DetailSection>
+  );
+}
 
 export function ClientDetails({ network, member, onSelect }: {
   network: McpNetwork;
@@ -49,6 +66,8 @@ export function ClientDetails({ network, member, onSelect }: {
   const traffic = clientTraffic(member);
   const upgrade = bandUpgrade(member, network);
   const bands = supportedBands(member);
+  const links = clientLinks(member);
+  const mlo = links.length > 0;
   const roaming = caps &&[caps.support_802p11k && "k", caps.support_802p11v && "v", caps.support_802p11r && "r"].filter(Boolean).join("/");
 
   return (
@@ -64,14 +83,14 @@ export function ClientDetails({ network, member, onSelect }: {
           </DetailRow>
         )}
         <DetailRow label="Path to gateway">{hops === 0 ? "Direct" : `${hops} backhaul hop${hops === 1 ? "" : "s"}`}</DetailRow>
-        <DetailRow label="Type">{wired ? wiredType : `WiFi · ${clientBand(member)}`}</DetailRow>
+        <DetailRow label="Type">{wired ? wiredType : mlo ? `WiFi · MLO · ${links.map((l) => l.band).join(" + ")}` : `WiFi · ${clientBand(member)}`}</DetailRow>
         {!wired && <DetailRow label="SSID">{memberSsid(member)}</DetailRow>}
-        {!wired && member.channel != null && member.channel > 0 && (
+        {!wired && !mlo && member.channel != null && member.channel > 0 && (
           <DetailRow label="Channel">{`${member.channel}${member.frequency ? ` · ${member.frequency} MHz` : ""}`}</DetailRow>
         )}
-        {signal != null && <DetailRow label="Signal">{`${signal} dBm (${signalWord(signal)})`}</DetailRow>}
+        {!mlo && signal != null && <DetailRow label="Signal">{`${signal} dBm (${signalWord(signal)})`}</DetailRow>}
         {/* Wired speed is in Type (and, behind a switch, Corteca's rate is the switch's link, not the device's). */}
-        {!wired && <DetailRow label="PHY rate ↓ / ↑">{down && up ? `${down} / ${up}` : down ?? up}</DetailRow>}
+        {!wired && !mlo && <DetailRow label="PHY rate ↓ / ↑">{down && up ? `${down} / ${up}` : down ?? up}</DetailRow>}
         {raw.connected_time && <DetailRow label="Connected for">{formatDuration(Number(raw.connected_time))}</DetailRow>}
         {traffic && <DetailRow label="Traffic ↓ / ↑">{`${formatBytes(traffic.down)} / ${formatBytes(traffic.up)}`}</DetailRow>}
         <DetailRow label="Last disconnect">{disconnectReason(member)}</DetailRow>
@@ -81,6 +100,7 @@ export function ClientDetails({ network, member, onSelect }: {
           </p>
         )}
       </DetailSection>
+      {mlo && <MloLinks links={links} />}
 
       <DetailSection title="Device">
         <DetailRow label="Name">{clientName(member)}</DetailRow>

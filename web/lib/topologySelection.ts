@@ -5,6 +5,7 @@ import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
 import { INTERNET_ID, WAN_EDGE_ID, clientBand, clientName, clientSignalDbm, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
 import { bandUpgrade } from "@/web/lib/clientInsights";
+import { clientBands } from "@/web/lib/clientFields";
 import { isOlderWifi } from "@/web/lib/wifiDetails";
 import { clientOwner, switchById, switchOfBeacon } from "@/web/lib/inferredSwitches";
 
@@ -22,7 +23,8 @@ export const filtersActive = (f: ClientFilters) => f.bands.length > 0 || f.ssids
 export const memberSsid = (m: Member) => String((m as unknown as { ssid?: string }).ssid ?? "");
 
 export function clientMatches(m: Member, f: ClientFilters, network: McpNetwork): boolean {
-  if (f.bands.length && !f.bands.includes(clientBand(m))) return false;
+  // An MLO client matches each band it has a link on.
+  if (f.bands.length && !clientBands(m).some((b) => f.bands.includes(b))) return false;
   if (f.ssids.length && !f.ssids.includes(memberSsid(m))) return false;
   if (f.weak) {
     const s = clientSignalDbm(m);

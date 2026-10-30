@@ -6,14 +6,17 @@ export interface Point { x: number; y: number }
 export interface Box { x: number; y: number; w: number; h: number }
 
 const LABEL_H = 22, LABEL_CHAR_W = 6.4, LABEL_PAD = 26; // text-[11px] px-2.5 + border
-const LABEL_LINE_H = 14; // each extra line of a stacked label ("6 GHz" over "-57 dBm · 2.6 Gbps")
+// A stacked label ("6 GHz" over "-57 dBm · 2.6 Gbps"): the small top line adds 14 px, each further line
+// (an MLO backhaul's bands) 16 px.
+const LABEL_TOP_H = 14, LABEL_LINE_H = 16;
 export const LABEL_GAP = 10; // clear space kept between a label and the card it points at
 
 /** Label size; a "\n" in the text stacks it on several lines (width = the longest line). */
 export function labelSize(text: string): { w: number; h: number } {
   const lines = text.split("\n");
   const chars = Math.max(...lines.map((l) => l.length));
-  return { w: Math.ceil(chars * LABEL_CHAR_W + LABEL_PAD), h: LABEL_H + (lines.length - 1) * LABEL_LINE_H };
+  const extra = lines.length > 1 ? LABEL_TOP_H + (lines.length - 2) * LABEL_LINE_H : 0;
+  return { w: Math.ceil(chars * LABEL_CHAR_W + LABEL_PAD), h: LABEL_H + extra };
 }
 
 export const center = (b: Box): Point => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });

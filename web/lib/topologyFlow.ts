@@ -85,6 +85,13 @@ export const formatLinkRate = (mbps: number) => formatRate(mbps);
 
 /** Text of a backhaul edge's label — shared by the edge and the layout checks. */
 export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: boolean } {
+  // MLO: combined rate on top, then one line per band ("MLO · 9.2 Gbps" / "6 GHz · -50 dBm · 5.8 Gbps" / …).
+  if (link.mloBands) {
+    const top = ["MLO", link.rateMbps && formatLinkRate(link.rateMbps)].filter(Boolean).join(" · ");
+    const lines = link.mloBands.map((b) =>
+      [b.band ?? "WiFi", b.rssiDbm != null && `${b.rssiDbm} dBm`, b.rateMbps && formatLinkRate(b.rateMbps)].filter(Boolean).join(" · "));
+    return { text: [top, ...lines].join("\n"), slowEth: false };
+  }
   const eth = isEthernet(link);
   const rate = link.rateMbps ?? 0;
   const slowEth = eth && rate > 0 && rate < SLOW_ETHERNET_MBPS;

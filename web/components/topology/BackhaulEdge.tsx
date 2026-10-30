@@ -59,7 +59,7 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           className={cn(
             "nodrag nopan pointer-events-auto absolute whitespace-nowrap border bg-white px-2.5 py-0.5 text-[11px] font-medium shadow-sm transition-opacity",
-            // Stacked WiFi label: band on top, signal · rate below (height = labelSize()).
+            // Stacked WiFi label: band on top, signal · rate below — one line per MLO band (height = labelSize()).
             rest.length > 0 ? "flex flex-col items-center rounded-xl" : "rounded-full",
             eth && !slowEth ? "border-neutral-300 text-neutral-700" : QUALITY_BORDER[quality],
             selected && "ring-2 ring-violet-500/50",
@@ -70,7 +70,7 @@ export function BackhaulEdge(props: EdgeProps<Edge<BackhaulEdgeData, "backhaul">
           {rest.length > 0 ? (
             <>
               <span className="text-[10px] font-semibold leading-[14px] opacity-80">{top}</span>
-              <span className="leading-4">{rest.join(" ")}</span>
+              {rest.map((line, i) => <span key={i} className="leading-4">{line}</span>)}
             </>
           ) : label}
         </button>

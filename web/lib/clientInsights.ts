@@ -3,7 +3,8 @@
 
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
-import { clientBand, isWired } from "@/web/lib/topologyFlow";
+import { isWired } from "@/web/lib/topologyFlow";
+import { clientBands } from "@/web/lib/clientFields";
 
 interface RawMember {
   ssid?: string;
@@ -37,7 +38,8 @@ const BAND_RANK: Record<string, number> = { "2.4 GHz": 1, "5 GHz": 2, "6 GHz": 3
  */
 export function bandUpgrade(m: Member, network: McpNetwork): string | null {
   if (!m.connected || isWired(m)) return null;
-  const current = clientBand(m);
+  // An MLO client is as fast as its fastest link.
+  const current = clientBands(m).sort((a, b) => (BAND_RANK[b] ?? 0) - (BAND_RANK[a] ?? 0))[0];
   const ap = network.aps.find((a) => a.mac === m.device_id);
   const offered = ap?.ssidBands[raw(m).ssid ?? ""] ?? [];
   const best = supportedBands(m)

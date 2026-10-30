@@ -59,6 +59,11 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
         <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
           {/* With a nickname the title is the nickname, so the kicker carries the model. */}
           {ap.nickname ? (isRoot ? `Gateway · ${ap.model}` : ap.model) : ap.name}{ap.online ? "" : " · Offline"}
+          {ap.mlo && (
+            <span className="ml-1.5 rounded-full bg-neutral-100 px-1.5 py-px text-[10px] font-semibold tracking-normal text-neutral-600" title="Multi-link (MLO) on: WiFi 7 devices can use several bands at once">
+              MLO
+            </span>
+          )}
         </p>
         <p className="truncate text-sm font-semibold text-neutral-900" title={ap.nickname ? `${ap.nickname} (${ap.model})` : ap.model}>{ap.nickname ?? ap.model}</p>
         <p className="truncate font-mono text-[11px] text-neutral-500" title={`MAC ${ap.mac} · firmware ${ap.firmware}`}>

@@ -2,12 +2,12 @@
 
 import type { Member } from "@/web/lib/corteca/types";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
-import { isWired } from "@/web/lib/clientFields";
+import { clientLinks, isWired } from "@/web/lib/clientFields";
 import { switchOfClient, wiredPort } from "@/web/lib/inferredSwitches";
 import { formatRate } from "@/web/lib/rateFormat";
 
 export interface MemberConnection {
-  /** "Wired · LAN 3 · 100 Mbps", "Wired · LAN 1 · via switch (inferred)", "802.11ax · Ch 36 · 5.2 GHz" */
+  /** "Wired · LAN 3 · 100 Mbps", "Wired · LAN 1 · via switch (inferred)", "802.11ax · Ch 36 · 5.2 GHz", "802.11be · MLO · 6 GHz (Ch 133) + 2.4 GHz (Ch 6)" */
   link: string;
   /** The AP it is connected to (for a client behind a switch, the AP the switch hangs off). */
   ap: ConnectedAp | null;
@@ -23,8 +23,13 @@ export interface ConnectedAp {
 
 const formatFrequency = (mhz: number) => (mhz >= 1000 ? `${(mhz / 1000).toFixed(1)} GHz` : `${mhz} MHz`);
 
-/** WiFi standard · channel · frequency (what the table showed before for every client). */
+/** WiFi standard · channel · frequency; an MLO client lists each link ("802.11be · MLO · 6 GHz (Ch 133) + 2.4 GHz (Ch 6)"). */
 export function wifiLabel(m: Member): string {
+  const links = clientLinks(m);
+  if (links.length) {
+    const bands = links.map((l) => `${l.band}${l.channel != null ? ` (Ch ${l.channel})` : ""}`).join(" + ");
+    return [m.wifi_standard, "MLO", bands].filter(Boolean).join(" · ");
+  }
   return [
     m.wifi_standard,
     m.channel != null && `Ch ${m.channel}`,

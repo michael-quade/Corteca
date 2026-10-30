@@ -18,6 +18,12 @@ export interface ApRadio {
   /** Airtime taken by other networks / non-WiFi energy heard on the channel. */
   receiveOther: number | null;
   noiseDbm: number | null;
+  /** BSSIDs this radio broadcasts (lowercase colon form): fronthaul and backhaul BSSs. */
+  bssids?: string[];
+  /** This radio's backhaul station MAC on a Beacon (its uplink to the parent AP). */
+  backhaulStaMac?: string | null;
+  /** Carries a backhaul link (either end), set by applyWifiDetails: fronthaul and backhaul can sit on different radios of one band. */
+  backhaul?: boolean;
 }
 
 // Global operating classes (IEEE 802.11 Annex E): band and channel width.
@@ -68,6 +74,8 @@ export function parseRadio(p: Record<string, string>): ApRadio | null {
     receiveSelf: pct(p.ReceiveSelf),
     receiveOther: pct(p.ReceiveOther),
     noiseDbm: anpiDbm(p.Noise),
+    bssids: Object.entries(p).filter(([k, v]) => /^BSS\.\d+\.BSSID$/.test(k) && v).map(([, v]) => v.toLowerCase()),
+    backhaulStaMac: p["BackhaulSta.MACAddress"]?.toLowerCase() || null,
   };
 }
 

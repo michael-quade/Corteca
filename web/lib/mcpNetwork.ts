@@ -36,6 +36,8 @@ export interface McpAccessPoint {
   /** fronthaul SSID → bands it is broadcast on */
   ssidBands: Record<string, string[]>;
   clientCount: number;
+  /** Broadcasts multi-link (MLO) networks: Corteca's `mlds` lists an AP MLD with two or more links. */
+  mlo: boolean;
   /** Channel / width / airtime per radio, from the gateway (applyWifiDetails). */
   radios?: ApRadio[];
   /** Lines about this AP from the AI analysis report (applyAiReport). */
@@ -50,6 +52,8 @@ export interface McpBackhaulLink {
   band: string | null;
   /** The child AP's backhaul station MAC (its endpoint BSSID, lowercase colon form) — keys the gateway's per-station records. */
   childStaMac: string | null;
+  /** The parent AP's BSSID the child is associated with — pins the parent radio (and channel) the link uses. */
+  parentBssid?: string | null;
   /** Negotiated WiFi standard, from the gateway (applyWifiDetails); absent when unknown. */
   standard?: AssociationStandard;
   /** Primary channel and width of a wireless link, from the parent AP's radio on its band (applyWifiDetails). */
@@ -60,13 +64,40 @@ export interface McpBackhaulLink {
   phyRateMbps: number | null;
   /** Gateway port an Ethernet backhaul is plugged straight into ("LAN 1"), from the live host table (applySwitches). */
   port?: string;
-  quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor")
+  quality: string | null;   // child AP's Corteca backhaulQuality ("good" | "fair" | "poor"; "normal"/"bad" mapped)
   // Counters from the child AP's end: tx goes up toward the gateway, rx comes down.
   errorsTx: number | null;
   errorsRx: number | null;
   bytesUp: number | null;
   bytesDown: number | null;
+  /**
+   * MLO backhaul: Corteca reports one link record per band for the same two APs; one
+   * entry each, fastest first. The link's own fields then hold the totals (rate, PHY,
+   * traffic, errors), the bands joined ("6 GHz + 5 GHz high") and the fastest band's station.
+   */
+  mloBands?: BackhaulBand[];
 }
+
+/** One band of an MLO backhaul (one Corteca link record). */
+export interface BackhaulBand {
+  band: string | null;
+  /** The child AP's station on this band (endpoint BSSID, lowercase colon form). */
+  staMac: string | null;
+  /** The parent AP's BSSID on this band. */
+  parentBssid: string | null;
+  channel?: number;
+  widthMhz?: number | null;
+  rssiDbm: number | null;
+  rateMbps: number | null;
+  phyRateMbps: number | null;
+  errorsTx: number | null;
+  errorsRx: number | null;
+  bytesUp: number | null;
+  bytesDown: number | null;
+}
+
+/** Multi-link (MLO) only exists in WiFi 7, so an MLO backhaul's standard is known without the gateway. */
+export const MLO_STANDARD: AssociationStandard = { generation: "WiFi 7", ieee: "802.11be", mlo: true };
 
 export interface McpNetwork {
   topology: NetworkTopologyData;
@@ -87,6 +118,14 @@ export interface McpNetwork {
 type Obj = Record<string, unknown>;
 
 const toMac = (mac: unknown) => String(mac ?? "").replace(/:/g, "-").toUpperCase();
+
+// Corteca's backhaulQuality wording varies by firmware: Beacon 24 says "normal" / "bad" where
+// others say "fair" / "poor". Map onto the three-step scale the diagram colours by.
+const QUALITY_ALIAS: Record<string, string> = { normal: "fair", bad: "poor" };
+function backhaulQualityOf(v: unknown): string | null {
+  const q = String(v ?? "").trim().toLowerCase();
+  return q ? QUALITY_ALIAS[q] ?? q : null;
+}
 
 const BAND_LABEL: Record<string, string> = {
   BAND24: "2.4 GHz", BAND50: "5 GHz", BAND50LOW: "5 GHz", BAND50HIGH: "5 GHz", BAND06: "6 GHz",
@@ -158,7 +197,8 @@ function synthesiseTopology(aps: Obj[], rootMac: string): Obj {
 }
 
 // One entry per parent→child AP edge of the synthesised tree, joined to the
-// mesh link record whose two endpoints are those APs' serials.
+// mesh link records whose two endpoints are those APs' serials. An MLO backhaul
+// has one record per band (seen on Beacon 19/19.1/24 meshes); they become one link.
 function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBackhaulLink[] {
   if (!tree) return [];
   const byMac = new Map(rawAps.map((a) => [toMac(a.macaddress), a]));
@@ -172,43 +212,84 @@ function buildBackhaul(tree: Obj | null, rawAps: Obj[], mesh: Obj | null): McpBa
     }
   }
   const links = Array.isArray(mesh?.links) ? (mesh!.links as Obj[]) : [];
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
+  const sum = (vals: (number | null)[]) => (vals.some((v) => v != null) ? vals.reduce<number>((t, v) => t + (v ?? 0), 0) : null);
+
+  // One link record → its band and the child AP's end of it.
+  function bandOf(link: Obj, pSerial: string, cSerial: string, child: Obj | undefined): BackhaulBand & { medium: string } {
+    const eps = Array.isArray(link.endpoints) ? (link.endpoints as Obj[]) : [];
+    const ep = eps.find((e) => String(e.id) === cSerial) ?? eps[0];
+    const parentEp = eps.find((e) => String(e.id) === pSerial);
+    const childEp = eps.find((e) => String(e.id) === cSerial);
+    const parentBssid = String(parentEp?.bssid ?? childEp?.["remote-bssid"] ?? "").toLowerCase() || null;
+    const derived = (link.derivedData ?? {}) as Obj;
+    const phy = Number(derived.phyRate ?? 0);
+    const rate = linkRateKbps(Number(derived.dataRate ?? ep?.["data-rate-rx"] ?? 0), phy);
+    const medium = String(link.medium ?? "").toLowerCase();
+    const band = medium.includes("eth") ? null
+      : eps.flatMap((e) => [e.bssid, e["remote-bssid"]]).map((b) => bandByBssid.get(String(b ?? "").toLowerCase())).find(Boolean)
+        ?? mediumBand(medium, child) ?? null;
+    return {
+      medium,
+      band,
+      staMac: ep?.bssid && String(ep.id) === cSerial ? String(ep.bssid).toLowerCase() : null,
+      parentBssid,
+      rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
+      rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
+      phyRateMbps: phy > 0 ? Math.round(phy / 1000) : null,
+      errorsTx: num(ep?.["errors-tx"]),
+      errorsRx: num(ep?.["errors-rx"]),
+      bytesUp: num(ep?.["total-bytes-tx"]),
+      bytesDown: num(ep?.["total-bytes-rx"]),
+    };
+  }
+
   const out: McpBackhaulLink[] = [];
   function walk(node: Obj) {
     const parentMac = String(node.device_id);
     for (const child of (node.children as Obj[]) ?? []) {
       const childMac = String(child.device_id);
+      const childAp = byMac.get(childMac);
       const pSerial = String(byMac.get(parentMac)?.id ?? "");
-      const cSerial = String(byMac.get(childMac)?.id ?? "");
-      const link = links.find((l) => {
-        const ids = (Array.isArray(l.endpoints) ? (l.endpoints as Obj[]) : []).map((e) => String(e.id ?? ""));
-        return ids.includes(pSerial) && ids.includes(cSerial);
-      });
-      const eps = Array.isArray(link?.endpoints) ? (link!.endpoints as Obj[]) : [];
-      const ep = eps.find((e) => String(e.id) === cSerial) ?? eps[0];
-      const derived = (link?.derivedData ?? {}) as Obj;
-      const phy = Number(derived.phyRate ?? 0);
-      const rate = linkRateKbps(Number(derived.dataRate ?? ep?.["data-rate-rx"] ?? 0), phy);
-      const quality = byMac.get(childMac)?.backhaulQuality;
-      const medium = String(link?.medium ?? "").toLowerCase();
-      const band = medium.includes("eth") ? null
-        : eps.flatMap((e) => [e.bssid, e["remote-bssid"]]).map((b) => bandByBssid.get(String(b ?? "").toLowerCase())).find(Boolean)
-          ?? mediumBand(medium, byMac.get(childMac)) ?? null;
-      const num = (v: unknown) => (typeof v === "number" ? v : null);
-      out.push({
-        parentMac,
-        childMac,
-        medium,
-        band,
-        childStaMac: ep?.bssid && String(ep.id) === cSerial ? String(ep.bssid).toLowerCase() : null,
-        rssiDbm: typeof ep?.metric === "number" && ep.metric !== 0 ? ep.metric : null,
-        rateMbps: rate > 0 ? Math.round(rate / 1000) : null,
-        phyRateMbps: phy > 0 ? Math.round(phy / 1000) : null,
-        quality: quality ? String(quality).toLowerCase() : null,
-        errorsTx: num(ep?.["errors-tx"]),
-        errorsRx: num(ep?.["errors-rx"]),
-        bytesUp: num(ep?.["total-bytes-tx"]),
-        bytesDown: num(ep?.["total-bytes-rx"]),
-      });
+      const cSerial = String(childAp?.id ?? "");
+      const records = links
+        .filter((l) => {
+          const ids = (Array.isArray(l.endpoints) ? (l.endpoints as Obj[]) : []).map((e) => String(e.id ?? ""));
+          return ids.includes(pSerial) && ids.includes(cSerial);
+        })
+        .map((l) => bandOf(l, pSerial, cSerial, childAp));
+      // A cable wins; two or more WiFi records for one pair are the bands of an MLO link.
+      const eth = records.find((r) => r.medium.includes("eth"));
+      const wifi = records.filter((r) => !r.medium.includes("eth")).sort((a, b) => (b.rateMbps ?? 0) - (a.rateMbps ?? 0));
+      const quality = backhaulQualityOf(childAp?.backhaulQuality);
+      const base = { parentMac, childMac, quality };
+      if (!eth && wifi.length > 1) {
+        const bands = wifi.map(({ medium: _m, ...b }) => b);
+        const signals = bands.map((b) => b.rssiDbm).filter((v): v is number => v != null);
+        out.push({
+          ...base,
+          medium: wifi[0].medium,
+          band: bands.map((b) => b.band).filter(Boolean).join(" + ") || null,
+          childStaMac: wifi[0].staMac,
+          parentBssid: wifi[0].parentBssid,
+          standard: MLO_STANDARD,
+          rssiDbm: signals.length ? Math.max(...signals) : null,
+          rateMbps: sum(bands.map((b) => b.rateMbps)),
+          phyRateMbps: sum(bands.map((b) => b.phyRateMbps)),
+          errorsTx: sum(bands.map((b) => b.errorsTx)),
+          errorsRx: sum(bands.map((b) => b.errorsRx)),
+          bytesUp: sum(bands.map((b) => b.bytesUp)),
+          bytesDown: sum(bands.map((b) => b.bytesDown)),
+          mloBands: bands,
+        });
+      } else {
+        const r = eth ?? wifi[0];
+        out.push(r
+          ? { ...base, medium: r.medium, band: r.band, childStaMac: r.staMac, parentBssid: r.parentBssid, rssiDbm: r.rssiDbm, rateMbps: r.rateMbps, phyRateMbps: r.phyRateMbps,
+              errorsTx: r.errorsTx, errorsRx: r.errorsRx, bytesUp: r.bytesUp, bytesDown: r.bytesDown }
+          : { ...base, medium: "", band: null, childStaMac: null, rssiDbm: null, rateMbps: null, phyRateMbps: null,
+              errorsTx: null, errorsRx: null, bytesUp: null, bytesDown: null });
+      }
       walk(child);
     }
   }
@@ -266,7 +347,7 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
       firmware: String(a.firmware_version ?? a.SoftwareVersion ?? ""),
       hardwareVersion: String(a.hardware_version ?? ""),
       online: String(a.status ?? "").toLowerCase() === "online" || a.xalu_com_online === true,
-      backhaulQuality: a.backhaulQuality ? String(a.backhaulQuality) : null,
+      backhaulQuality: backhaulQualityOf(a.backhaulQuality),
       ipAddress: String(a.ipaddress ?? ""),
       wanIp: String(a.ip_address ?? ""),
       lastBoot: a.last_boot ? String(a.last_boot) : null,
@@ -275,6 +356,7 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
       ssids: Object.keys(ssidBands),
       ssidBands,
       clientCount: clientsByAp.get(mac) ?? 0,
+      mlo: (Array.isArray(a.mlds) ? (a.mlds as Obj[]) : []).some((m) => m.role === "AP" && Array.isArray(m.links) && m.links.length > 1),
       index,
     };
   })

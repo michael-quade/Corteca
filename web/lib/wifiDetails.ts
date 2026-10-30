@@ -7,6 +7,7 @@ import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import type { Member } from "@/web/lib/corteca/types";
 import type { AssociationStandard } from "@/web/lib/wifiAssociation";
 import type { ApRadio } from "@/web/lib/wifiRadios";
+import { isMloClient } from "@/web/lib/clientFields";
 
 export interface WifiDetails {
   /** AP MAC (lowercase colon form) → radios. */
@@ -40,6 +41,8 @@ function radioOk(v: unknown): ApRadio | null {
     receiveSelf: numOrNull(r.receiveSelf),
     receiveOther: numOrNull(r.receiveOther),
     noiseDbm: numOrNull(r.noiseDbm),
+    bssids: Array.isArray(r.bssids) ? r.bssids.filter((b): b is string => typeof b === "string").map(colon) : [],
+    backhaulStaMac: typeof r.backhaulStaMac === "string" ? colon(r.backhaulStaMac) : null,
   };
 }
 
@@ -60,17 +63,33 @@ export function sanitiseWifiDetails(raw: unknown): WifiDetails | null {
 
 export function applyWifiDetails(network: McpNetwork, details: WifiDetails | null): McpNetwork {
   if (!details) return network;
-  const aps = network.aps.map((ap) => {
-    const radios = details.radios[colon(ap.mac)];
-    return radios ? { ...ap, radios } : ap;
-  });
-  const radiosOf = new Map(aps.map((a) => [a.mac, a.radios]));
+  const radiosOf = new Map(network.aps.map((a) => [a.mac, details.radios[colon(a.mac)]]));
+  const backhaulRadios = new Set<ApRadio>();
+
+  // The radio a backhaul band runs on, and so its channel. An AP can run fronthaul and backhaul on
+  // different radios (channels) of the same band, so match the parent's BSSID, then the child's
+  // backhaul station; the band label only as a fallback.
+  const channelOf = (l: { parentMac: string; childMac: string }, band: string | null, parentBssid?: string | null, staMac?: string | null) => {
+    const parent = radiosOf.get(l.parentMac), child = radiosOf.get(l.childMac);
+    const byBssid = parentBssid ? parent?.find((r) => r.bssids?.includes(parentBssid)) : undefined;
+    const bySta = staMac ? child?.find((r) => r.backhaulStaMac === staMac) : undefined;
+    for (const r of [byBssid, bySta]) if (r) backhaulRadios.add(r);
+    const radio = byBssid ?? bySta ?? (band ? linkRadio(parent, band) ?? linkRadio(child, band) : null);
+    return radio?.channel != null ? { channel: radio.channel, widthMhz: radio.widthMhz } : null;
+  };
   const backhaul = network.backhaul.map((l) => {
     const standard = l.childStaMac ? details.backhaul[l.childStaMac] : undefined;
-    // Both ends of a wireless link share one channel: the parent's radio on the link's band names it.
-    const radio = l.band ? linkRadio(radiosOf.get(l.parentMac), l.band) ?? linkRadio(radiosOf.get(l.childMac), l.band) : null;
-    const channel = radio?.channel != null ? { channel: radio.channel, widthMhz: radio.widthMhz } : null;
+    // MLO: a channel per band; the link itself spans several, so it has none of its own.
+    if (l.mloBands) {
+      const mloBands = l.mloBands.map((b) => ({ ...b, ...channelOf(l, b.band, b.parentBssid, b.staMac) }));
+      return { ...l, ...(standard && { standard }), mloBands };
+    }
+    const channel = channelOf(l, l.band, l.parentBssid, l.childStaMac);
     return standard || channel ? { ...l, ...(standard && { standard }), ...channel } : l;
+  });
+  const aps = network.aps.map((ap) => {
+    const radios = radiosOf.get(ap.mac);
+    return radios ? { ...ap, radios: radios.map((r) => (backhaulRadios.has(r) ? { ...r, backhaul: true } : r)) } : ap;
   });
   const members = network.members.map((m) => {
     const gatewayStandard = details.clients[colon(m.id)];
@@ -82,10 +101,11 @@ export function applyWifiDetails(network: McpNetwork, details: WifiDetails | nul
 /** The AP radio on a backhaul band: same label, else the only radio of that band family ("5 GHz" ↔ "5 GHz high"). */
 function linkRadio(radios: ApRadio[] | undefined, band: string): ApRadio | null {
   if (!radios?.length) return null;
-  const exact = radios.find((r) => r.band === band);
-  if (exact) return exact;
+  const exact = radios.filter((r) => r.band === band);
+  if (exact.length === 1) return exact[0];
   const family = (b: string) => b.replace(/ (low|high)$/, "");
   const same = radios.filter((r) => family(r.band) === family(band));
+  // Several radios on one band (e.g. fronthaul and backhaul on different 6 GHz channels): no guess.
   return same.length === 1 ? same[0] : null;
 }
 
@@ -101,7 +121,7 @@ export interface ClientStandard { generation: string; ieee: string; mlo: boolean
 /**
  * A client's WiFi standard: MCP's `wifi_standard` (matched the gateway's
  * association requests on every client checked), else the gateway's decode.
- * MLO only comes from the gateway.
+ * MLO: the client reports two or more affiliated links (clientLinks), else the gateway says so.
  */
 export function clientStandard(m: Member): ClientStandard | null {
   const raw = m as unknown as {
@@ -113,8 +133,10 @@ export function clientStandard(m: Member): ClientStandard | null {
   const gw = raw.gatewayStandard;
   const ieee = String(raw.client_capabilities?.wifi_standard ?? raw.capabilities?.wifi_standard ?? raw.wifi_standard ?? "").toLowerCase().replace(/\s+/g, "");
   const generation = IEEE_GENERATION[ieee];
-  if (generation) return { generation, ieee, mlo: gw?.mlo ?? false };
-  return gw ? { generation: gw.generation, ieee: gw.ieee, mlo: gw.mlo } : null;
+  const mlo = isMloClient(m) || !!gw?.mlo;
+  if (generation) return { generation, ieee, mlo };
+  if (gw) return { generation: gw.generation, ieee: gw.ieee, mlo };
+  return mlo ? { generation: "WiFi 7", ieee: "802.11be", mlo } : null;
 }
 
 /** WiFi 5 or older: slows the shared airtime for everyone on that radio. */

@@ -1,6 +1,6 @@
 "use client";
 
-import type { McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
+import type { BackhaulBand, McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
 import { SLOW_ETHERNET_MBPS, clientName, isEthernet } from "@/web/lib/topologyFlow";
 import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
 import type { Selection } from "@/web/lib/topologySelection";
@@ -22,7 +22,7 @@ function LinkSummary({ link, onSelect }: { link: McpBackhaulLink; onSelect: Sele
   const eth = isEthernet(link);
   return (
     <JumpButton onClick={() => onSelect({ kind: "link", id: link.childMac })}>
-      {eth ? "Ethernet" : `WiFi${link.quality ? ` · ${link.quality}` : ""}`}
+      {eth ? "Ethernet" : `WiFi${link.mloBands ? " · MLO" : ""}${link.quality ? ` · ${link.quality}` : ""}`}
       {link.rateMbps ? ` · ${formatMbps(link.rateMbps)}` : ""}
     </JumpButton>
   );
@@ -40,6 +40,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
       <DetailSection title="Access point">
         <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
         <DetailRow label="Clients">{ap.clientCount}</DetailRow>
+        {ap.mlo && <DetailRow label="Multi-link (MLO)">On</DetailRow>}
         <DetailRow label="MAC" mono>{ap.mac}</DetailRow>
         <DetailRow label="Serial" mono>{ap.serial}</DetailRow>
         <DetailRow label="Firmware" mono>{ap.firmware}</DetailRow>
@@ -89,6 +90,23 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
   );
 }
 
+/** An MLO backhaul's bands, one row each: channel · width, then signal · data rate (PHY). */
+function MloBands({ bands }: { bands: BackhaulBand[] }) {
+  return (
+    <DetailSection title={`Bands (MLO · ${bands.length})`}>
+      {bands.map((b, i) => (
+        <DetailRow key={b.staMac ?? i} label={[b.band ?? "WiFi", b.channel != null && `Ch ${b.channel}`, b.widthMhz && `${b.widthMhz} MHz`].filter(Boolean).join(" · ")}>
+          {[
+            b.rssiDbm != null && `${b.rssiDbm} dBm`,
+            b.rateMbps != null && formatMbps(b.rateMbps),
+            b.phyRateMbps != null && b.phyRateMbps !== b.rateMbps && `PHY ${formatMbps(b.phyRateMbps)}`,
+          ].filter(Boolean).join(" · ") || null}
+        </DetailRow>
+      ))}
+    </DetailSection>
+  );
+}
+
 function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: McpBackhaulLink; onSelect: Select }) {
   const parent = network.aps.find((a) => a.mac === link.parentMac);
   const child = network.aps.find((a) => a.mac === link.childMac);
@@ -97,7 +115,9 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
   // WiFi standard from the gateway (applyWifiDetails); without it the band-only view stays.
   const std = eth ? undefined : link.standard;
   const medium = eth ? "Ethernet" : [std ? `${std.generation} (${std.ieee})` : "WiFi", link.band].filter(Boolean).join(" · ");
+  const mlo = link.mloBands;
   return (
+    <>
     <DetailSection title="Backhaul link">
       <DetailRow label="From">
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.parentMac })}>{parent ? apLabel(parent) : link.parentMac}</JumpButton>
@@ -112,9 +132,9 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
       {eth && <DetailRow label="Gateway port">{link.port}</DetailRow>}
       {std?.generation === "WiFi 7" && <DetailRow label="Multi-link (MLO)">{std.mlo ? "Yes" : "No"}</DetailRow>}
       {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}
-      {!eth && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
-      <DetailRow label="Data rate">{formatMbps(link.rateMbps)}</DetailRow>
-      {!eth && <DetailRow label="PHY rate">{formatMbps(link.phyRateMbps)}</DetailRow>}
+      {!eth && !mlo && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
+      <DetailRow label={mlo ? "Data rate (all bands)" : "Data rate"}>{formatMbps(link.rateMbps)}</DetailRow>
+      {!eth && <DetailRow label={mlo ? "PHY rate (all bands)" : "PHY rate"}>{formatMbps(link.phyRateMbps)}</DetailRow>}
       <DetailRow label="Traffic ↓ / ↑">
         {link.bytesDown != null || link.bytesUp != null ? `${formatBytes(link.bytesDown ?? 0)} / ${formatBytes(link.bytesUp ?? 0)}` : null}
       </DetailRow>
@@ -127,6 +147,8 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
         </p>
       )}
     </DetailSection>
+    {mlo && <MloBands bands={mlo} />}
+    </>
   );
 }
 

@@ -40,6 +40,11 @@ function RadioRow({ radio }: { radio: ApRadio }) {
             {radio.channel != null && ` · Ch ${radio.channel}`}
             {radio.widthMhz != null && ` · ${radio.widthMhz} MHz`}
           </span>
+          {radio.backhaul && (
+            <span className="ml-1.5 rounded-full bg-neutral-100 px-1.5 py-px text-[10px] font-semibold text-neutral-600" title="Carries the mesh backhaul (to the parent or a child Beacon)">
+              Backhaul
+            </span>
+          )}
         </span>
         <span className="whitespace-nowrap tabular-nums text-neutral-700">
           Busy {radio.utilization ?? "—"}%

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUspEndpointId, uspPost, parseGetResp } from '@/web/lib/corteca/usp';
-import { associationStandard } from '@/web/lib/wifiAssociation';
+import { associationStandard, type AssociationStandard } from '@/web/lib/wifiAssociation';
 import { labelRadios, parseRadio } from '@/web/lib/wifiRadios';
 import type { WifiDetails } from '@/web/lib/wifiDetails';
 
@@ -17,10 +17,16 @@ const R = `${DE}*.Radio.*.`;
 // Only what's needed; the full Data Elements tree is 300–550 KB.
 const NARROW = [
   `${DE}*.ID`,
-  `${R}BSS.*.STA.*.MACAddress`, `${R}BSS.*.STA.*.ClientCapabilities`, `${R}BackhaulSta.MACAddress`,
+  `${R}BSS.*.BSSID`, `${R}BSS.*.STA.*.MACAddress`, `${R}BSS.*.STA.*.ClientCapabilities`, `${R}BackhaulSta.MACAddress`,
   ...['Utilization', 'X_ALU-COM_EWMA_Utilization', 'Transmit', 'ReceiveSelf', 'ReceiveOther', 'Noise'].map((p) => `${R}${p}`),
   `${R}CurrentOperatingClassProfile.*.Class`, `${R}CurrentOperatingClassProfile.*.Channel`, `${R}CurrentOperatingClassProfile.*.TxPower`,
+  // MLO stations (Beacons' backhaul and WiFi 7 clients) are only here, not under BSS.*.STA.
+  `${DE}*.APMLD.*.STAMLD.*.MLDMACAddress`, `${DE}*.APMLD.*.STAMLD.*.AffiliatedSTA.*.MACAddress`,
 ];
+
+// An MLO station is WiFi 7 by definition; it has no association request to decode.
+const MLO: AssociationStandard = { generation: 'WiFi 7', ieee: '802.11be', mlo: true };
+const STAMLD_RE = /^(.*\.APMLD\.\d+\.STAMLD\.\d+\.)(?:MLDMACAddress|AffiliatedSTA\.\d+\.MACAddress)$/;
 
 export async function GET(
   req: NextRequest,
@@ -83,6 +89,18 @@ export async function GET(
     if (!std) continue;
     const target = backhaulStas.has(mac.toLowerCase()) ? details.backhaul : details.clients;
     target[mac.toLowerCase()] = std;
+  }
+
+  // Each MLO station: its MLD MAC and every per-band MAC (MCP keys a backhaul band by the
+  // per-band station, a client by its MLD MAC). A backhaul station is listed in BackhaulSta.
+  const mldMacs = new Map<string, string[]>();
+  for (const [path, mac] of Object.entries(flat)) {
+    const m = path.match(STAMLD_RE);
+    if (m && mac) mldMacs.set(m[1], [...(mldMacs.get(m[1]) ?? []), mac.toLowerCase()]);
+  }
+  for (const macs of mldMacs.values()) {
+    const target = macs.some((m) => backhaulStas.has(m)) ? details.backhaul : details.clients;
+    for (const mac of macs) target[mac] = MLO;
   }
 
   console.log(`[wifi-details:${gatewayMac}] ${Object.keys(details.radios).length} APs with radios, ${Object.keys(details.backhaul).length} backhaul + ${Object.keys(details.clients).length} client standards`);
