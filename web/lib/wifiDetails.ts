@@ -64,15 +64,29 @@ export function applyWifiDetails(network: McpNetwork, details: WifiDetails | nul
     const radios = details.radios[colon(ap.mac)];
     return radios ? { ...ap, radios } : ap;
   });
+  const radiosOf = new Map(aps.map((a) => [a.mac, a.radios]));
   const backhaul = network.backhaul.map((l) => {
     const standard = l.childStaMac ? details.backhaul[l.childStaMac] : undefined;
-    return standard ? { ...l, standard } : l;
+    // Both ends of a wireless link share one channel: the parent's radio on the link's band names it.
+    const radio = l.band ? linkRadio(radiosOf.get(l.parentMac), l.band) ?? linkRadio(radiosOf.get(l.childMac), l.band) : null;
+    const channel = radio?.channel != null ? { channel: radio.channel, widthMhz: radio.widthMhz } : null;
+    return standard || channel ? { ...l, ...(standard && { standard }), ...channel } : l;
   });
   const members = network.members.map((m) => {
     const gatewayStandard = details.clients[colon(m.id)];
     return gatewayStandard ? ({ ...m, gatewayStandard } as Member) : m;
   });
   return { ...network, aps, backhaul, members, topology: { ...network.topology, members } };
+}
+
+/** The AP radio on a backhaul band: same label, else the only radio of that band family ("5 GHz" ↔ "5 GHz high"). */
+function linkRadio(radios: ApRadio[] | undefined, band: string): ApRadio | null {
+  if (!radios?.length) return null;
+  const exact = radios.find((r) => r.band === band);
+  if (exact) return exact;
+  const family = (b: string) => b.replace(/ (low|high)$/, "");
+  const same = radios.filter((r) => family(r.band) === family(band));
+  return same.length === 1 ? same[0] : null;
 }
 
 // ── Client WiFi standard ─────────────────────────────────────────────────────

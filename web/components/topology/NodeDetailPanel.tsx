@@ -106,6 +106,9 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
       </DetailRow>
       <DetailRow label="Medium">{medium}</DetailRow>
+      {!eth && link.channel != null && (
+        <DetailRow label="Channel">{[link.channel, link.widthMhz && `${link.widthMhz} MHz`].filter(Boolean).join(" · ")}</DetailRow>
+      )}
       {eth && <DetailRow label="Gateway port">{link.port}</DetailRow>}
       {std?.generation === "WiFi 7" && <DetailRow label="Multi-link (MLO)">{std.mlo ? "Yes" : "No"}</DetailRow>}
       {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}

@@ -95,8 +95,9 @@ export function backhaulLabel(link: McpBackhaulLink): { text: string; slowEth: b
     rate > 0 ? formatLinkRate(rate) : null,
   ].filter(Boolean);
   const text = parts.join(" · ") || (eth ? "Ethernet" : link.band ? "" : "WiFi backhaul");
-  // WiFi: the band on top, signal and rate below ("6 GHz" / "-58 dBm · 2.4 Gbps"); dashes already say WiFi.
-  if (!eth && link.band) return { text: text ? `${link.band}\n${text}` : link.band, slowEth };
+  // WiFi: band · channel on top, signal and rate below ("6 GHz · Ch 37" / "-58 dBm · 2.4 Gbps"); dashes already say WiFi.
+  const top = [link.band, link.channel != null && `Ch ${link.channel}`].filter(Boolean).join(" · ");
+  if (!eth && top) return { text: text ? `${top}\n${text}` : top, slowEth };
   return { text: slowEth ? `⚠ ${text}` : text, slowEth };
 }
 

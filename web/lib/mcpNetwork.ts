@@ -52,6 +52,9 @@ export interface McpBackhaulLink {
   childStaMac: string | null;
   /** Negotiated WiFi standard, from the gateway (applyWifiDetails); absent when unknown. */
   standard?: AssociationStandard;
+  /** Primary channel and width of a wireless link, from the parent AP's radio on its band (applyWifiDetails). */
+  channel?: number;
+  widthMhz?: number | null;
   rssiDbm: number | null;   // endpoint metric
   rateMbps: number | null;  // derived data rate
   phyRateMbps: number | null;
