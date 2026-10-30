@@ -4,199 +4,60 @@ import { useState, useMemo } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { cn } from "@/web/lib/utils";
 import type { Member } from "@/web/lib/corteca/types";
-import { FilterPopover, StatusBadge } from "./NetworkMembersTableParts";
-import { wifiLabel, type ConnectedAp, type MemberConnection } from "@/web/lib/memberConnection";
+import { EMPTY_FILTERS, MemberDeviceTable, type ConnectionOf, type SortDir, type SortKey } from "./MemberDeviceTable";
 
-type SortKey = "alias" | "status" | "wifi" | "ipv4" | "device_id";
-type SortDir = "asc" | "desc";
 type TabId = "connected" | "not-connected";
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: "alias",     label: "Device" },
-  { key: "status",    label: "Status" },
-  { key: "wifi",      label: "Connection" },
-  { key: "ipv4",      label: "IP" },
-  { key: "device_id", label: "Connected AP" },
-];
-
-type ConnectionOf = (m: Member) => MemberConnection;
-
-/** Without network context (Device Search): WiFi details, or just "Wired". */
-const basicConnection: ConnectionOf = (m) => ({
-  link: wifiLabel(m) || (String(m.type ?? "").toLowerCase() === "ethernet" ? "Wired" : ""),
-  ap: null,
-});
-
-const apText = (ap: ConnectedAp | null) => (ap ? [ap.name, ap.model, ap.gateway && "gateway", ap.mac].filter(Boolean).join(" ") : "");
-
-function statusLabel(m: Member) {
-  if (m.paused) return "paused";
-  return m.connected ? "connected" : "offline";
-}
-
-function statusOrder(m: Member) {
-  if (m.paused) return 1;
-  return m.connected ? 2 : 0;
-}
-
-function getValue(m: Member, key: SortKey, connection: ConnectionOf): string {
-  switch (key) {
-    case "alias":     return (m.alias ?? m.id).toLowerCase();
-    case "status":    return statusLabel(m);
-    case "wifi":      return connection(m).link.toLowerCase();
-    case "ipv4":      return m.ipv4 ?? "";
-    case "device_id": return apText(connection(m).ap).toLowerCase() || (m.device_id ?? "");
-  }
-}
-
-function DeviceTable({ members, filters, setFilters, sortKey, sortDir, onSort, selectedId, onSelect, connection }: {
+/** The second tab's clients when they come from elsewhere than `members` (MCP: Corteca's REST history). */
+export interface DisconnectedTab {
+  label: string;
+  status: "loading" | "error" | "ready";
   members: Member[];
-  /** Given (MCP visualizer): wired port / switch in Connection, AP name + model + MAC in Connected AP. */
-  connection?: ConnectionOf;
-  selectedId?: string | null;
-  onSelect?: (id: string) => void;
-  filters: Record<SortKey, string>;
-  setFilters: (fn: (f: Record<SortKey, string>) => Record<SortKey, string>) => void;
-  sortKey: SortKey;
-  sortDir: SortDir;
-  onSort: (key: SortKey) => void;
-}) {
-  const connectionOf = connection ?? basicConnection;
-  const columns = COLUMNS;
-  const rows = useMemo(() => {
-    let result = [...members];
-    for (const col of columns) {
-      const term = filters[col.key].trim().toLowerCase();
-      if (term) result = result.filter((m) => getValue(m, col.key, connectionOf).includes(term));
-    }
-    result.sort((a, b) => {
-      const av = sortKey === "status" ? statusOrder(a) : getValue(a, sortKey, connectionOf);
-      const bv = sortKey === "status" ? statusOrder(b) : getValue(b, sortKey, connectionOf);
-      const cmp =
-        typeof av === "number" && typeof bv === "number"
-          ? av - bv
-          : String(av).localeCompare(String(bv));
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return result;
-  }, [members, filters, sortKey, sortDir, columns, connectionOf]);
-
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="bg-neutral-100 shadow-[0_1px_0_0_#e5e7eb]">
-          {columns.map((col) => (
-            <th key={col.key} className="px-4 py-3 text-left">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => onSort(col.key)}
-                  className="flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:text-neutral-800"
-                >
-                  {col.label}
-                  <span className={cn("text-xs", sortKey === col.key ? "text-neutral-700" : "text-neutral-300")}>
-                    {sortKey === col.key ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                  </span>
-                </button>
-                <FilterPopover
-                  value={filters[col.key]}
-                  onChange={(v) => setFilters((f) => ({ ...f, [col.key]: v }))}
-                  active={!!filters[col.key]}
-                />
-              </div>
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-neutral-100">
-        {rows.length === 0 ? (
-          <tr>
-            <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-neutral-400">
-              No devices match the current filters.
-            </td>
-          </tr>
-        ) : (
-          rows.map((m) => (
-            <tr
-              key={m.id}
-              onClick={onSelect ? () => onSelect(m.id) : undefined}
-              data-selected={selectedId === m.id || undefined}
-              className={cn(
-                "transition-colors",
-                selectedId === m.id ? "bg-violet-50 hover:bg-violet-100" : "bg-white hover:bg-neutral-50",
-                onSelect && "cursor-pointer"
-              )}
-            >
-              <td className="px-4 py-3">
-                <p className="font-medium text-neutral-900">{m.alias ?? "—"}</p>
-                <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge connected={m.connected} paused={m.paused} />
-              </td>
-              <td className="px-4 py-3 text-neutral-700">{connectionOf(m).link || "—"}</td>
-              <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.ipv4 ?? "—"}</td>
-              {connection
-                ? <ConnectedApCell ap={connectionOf(m).ap} />
-                : <td className="px-4 py-3 font-mono text-xs text-neutral-500">{m.device_id ?? "—"}</td>}
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  );
-}
-
-/** Nickname (or model) on top; model, gateway tag and MAC below. */
-function ConnectedApCell({ ap }: { ap: ConnectedAp | null }) {
-  if (!ap) return <td className="px-4 py-3 text-neutral-400">—</td>;
-  return (
-    <td className="px-4 py-3">
-      <p className="font-medium text-neutral-900">{ap.name ?? (ap.model || "Unknown AP")}</p>
-      <p className="mt-0.5 text-xs text-neutral-500">
-        {[ap.name && ap.model, ap.gateway && "Gateway"].filter(Boolean).join(" · ")}
-        {(ap.name && ap.model) || ap.gateway ? " · " : ""}
-        <span className="font-mono">{ap.mac}</span>
-      </p>
-    </td>
-  );
+  /** Shown under the tab bar, e.g. what "recently" means. */
+  note?: string;
+  empty?: string;
 }
 
 interface NetworkMembersTableProps {
   members: Member[];
   /** How / where each client is connected (MCP visualizer): port / switch and the AP's name, model, MAC. */
   connection?: ConnectionOf;
-  /** Optional row selection, used by the MCP visualizer to sync with its graph. */
+  disconnected?: DisconnectedTab;
+  /** Optional row selection, used by the MCP visualizer to sync with its graph (connected tab only). */
   selectedId?: string | null;
   onSelect?: (id: string) => void;
 }
 
-export function NetworkMembersTable({ members, selectedId, onSelect, connection }: NetworkMembersTableProps) {
+const DEFAULT_SORT: Record<TabId, [SortKey, SortDir]> = { connected: ["alias", "asc"], "not-connected": ["last_seen", "desc"] };
+
+export function NetworkMembersTable({ members, selectedId, onSelect, connection, disconnected }: NetworkMembersTableProps) {
   const [activeTab, setActiveTab] = useState<TabId>("connected");
   const [sortKey, setSortKey] = useState<SortKey>("alias");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filters, setFilters] = useState<Record<SortKey, string>>({
-    alias: "", status: "", wifi: "", ipv4: "", device_id: "",
-  });
+  const [filters, setFilters] = useState<Record<SortKey, string>>(EMPTY_FILTERS);
 
-  const connectedMembers    = useMemo(() => members.filter((m) => m.connected),  [members]);
-  const notConnectedMembers = useMemo(() => members.filter((m) => !m.connected), [members]);
+  const connectedMembers = useMemo(() => members.filter((m) => m.connected), [members]);
+  const ownDisconnected = useMemo(() => members.filter((m) => !m.connected), [members]);
+  const tab2 = disconnected ?? { label: "Not Connected", status: "ready" as const, members: ownDisconnected };
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(key === "last_seen" ? "desc" : "asc");
     }
   }
 
   function handleTabChange(tab: string) {
-    setActiveTab(tab as TabId);
-    setFilters({ alias: "", status: "", wifi: "", ipv4: "", device_id: "" });
+    const t = tab as TabId;
+    setActiveTab(t);
+    setFilters(EMPTY_FILTERS);
+    setSortKey(DEFAULT_SORT[t][0]);
+    setSortDir(DEFAULT_SORT[t][1]);
   }
 
-  if (members.length === 0) {
+  if (members.length === 0 && !disconnected) {
     return <p className="text-sm text-neutral-500">No devices found in this network.</p>;
   }
 
@@ -208,6 +69,7 @@ export function NetworkMembersTable({ members, selectedId, onSelect, connection 
         ? "text-blue-700 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-blue-600"
         : "text-neutral-500 hover:text-neutral-800"
     );
+  const table = { filters, setFilters, sortKey, sortDir, onSort: handleSort, connection };
 
   return (
     <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
@@ -223,42 +85,31 @@ export function NetworkMembersTable({ members, selectedId, onSelect, connection 
             </span>
           </Tabs.Trigger>
           <Tabs.Trigger value="not-connected" className={tabTriggerClass(activeTab === "not-connected")}>
-            Not Connected
-            <span className={cn(
-              "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
-              activeTab === "not-connected" ? "bg-red-100 text-red-700" : "bg-neutral-100 text-neutral-500"
-            )}>
-              {notConnectedMembers.length}
-            </span>
+            {tab2.label}
+            {tab2.status === "loading"
+              ? <span className="ml-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600 align-[-2px]" aria-label="Loading" />
+              : tab2.status === "ready" && (
+                <span className={cn(
+                  "ml-2 rounded-full px-2 py-0.5 text-xs font-semibold",
+                  activeTab === "not-connected" ? "bg-red-100 text-red-700" : "bg-neutral-100 text-neutral-500"
+                )}>
+                  {tab2.members.length}
+                </span>
+              )}
           </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="connected">
-          <DeviceTable
-            members={connectedMembers}
-            filters={filters}
-            setFilters={setFilters}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={handleSort}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            connection={connection}
-          />
+          <MemberDeviceTable {...table} members={connectedMembers} selectedId={selectedId} onSelect={onSelect} empty="No connected devices." />
         </Tabs.Content>
 
         <Tabs.Content value="not-connected">
-          <DeviceTable
-            members={notConnectedMembers}
-            filters={filters}
-            setFilters={setFilters}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={handleSort}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            connection={connection}
-          />
+          {tab2.note && <p className="border-b border-neutral-100 bg-white px-4 py-2 text-xs text-neutral-500">{tab2.note}</p>}
+          {tab2.status === "loading" && <p className="bg-white px-4 py-6 text-center text-sm text-neutral-500">Loading client history from Corteca…</p>}
+          {tab2.status === "error" && <p className="bg-white px-4 py-6 text-center text-sm text-neutral-500">Corteca's client history couldn't be read. Refresh to try again.</p>}
+          {tab2.status === "ready" && (
+            <MemberDeviceTable {...table} history members={tab2.members} empty={disconnected?.empty ?? "No disconnected devices."} />
+          )}
         </Tabs.Content>
       </div>
     </Tabs.Root>

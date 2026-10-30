@@ -7,6 +7,8 @@ import { useAuth } from "@/web/contexts/AuthContext";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
 import { memberConnection } from "@/web/lib/memberConnection";
+import { RECENT_DAYS, recentlyDisconnected } from "@/web/lib/recentlyDisconnected";
+import { useMemberHistory } from "@/web/lib/useMemberHistory";
 import { McpTopBar } from "@/web/components/McpTopBar";
 import { McpDebugPanel } from "@/web/components/McpDebugPanel";
 import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
@@ -61,6 +63,15 @@ export default function McpNetworkVisualizerPage() {
     const base = applyWifiDetails(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), wifi);
     return { ...applyAiReport(applySwitches(base, ports), ai.analysis.result), wan: wan ?? undefined };
   }, [response, names, wifi, ports, wan, ai.analysis.result]);
+  // MCP lists only clients online now; Corteca's REST history fills "Recently disconnected" (in the background).
+  const history = useMemberHistory(response?.homeWifiId ?? null, response);
+  const disconnected = useMemo(() => ({
+    label: "Recently disconnected",
+    status: history.status,
+    members: history.status === "ready" && network ? recentlyDisconnected(history.members, network, names) : [],
+    note: `Clients seen in the last ${RECENT_DAYS} days, newest first, from Corteca's client history. The Beacons' own radios are left out, and one device seen under several randomized MACs is listed once.`,
+    empty: `No clients disconnected in the last ${RECENT_DAYS} days.`,
+  }), [history, network, names]);
 
   async function handleSubscriberSelect(subscriber: Subscriber) {
     const networkId = subscriber.home_wifis?.[0]?.id;
@@ -245,6 +256,7 @@ export default function McpNetworkVisualizerPage() {
                       selectedId={view.selection?.kind === "client" ? view.selection.id : null}
                       onSelect={(id) => selectAndReveal({ kind: "client", id })}
                       connection={(m) => memberConnection(network, m)}
+                      disconnected={disconnected}
                     />
                   )
                   : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}

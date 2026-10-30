@@ -2,33 +2,60 @@
 
 import * as Popover from "@radix-ui/react-popover";
 import { cn } from "@/web/lib/utils";
+import type { Member } from "@/web/lib/corteca/types";
+import type { ConnectedAp } from "@/web/lib/memberConnection";
+import type { DisconnectedMember } from "@/web/lib/recentlyDisconnected";
+import { timeAgo } from "@/web/lib/recentlyDisconnected";
+import { disconnectReason } from "@/web/lib/clientInsights";
+import { StatusPill } from "@/web/components/corteca/StatusPill";
 
-// Pieces of NetworkMembersTable: the status badge and the per-column filter popover.
+// Pieces of NetworkMembersTable: cells and the per-column filter popover.
 
-export function StatusBadge({ connected, paused }: { connected: boolean; paused?: boolean }) {
-  if (paused) {
-    return (
-      <span className="flex items-center gap-1.5 text-orange-600">
-        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-orange-400" />
-        Paused
-      </span>
-    );
-  }
-  if (connected) {
-    return (
-      <span className="flex items-center gap-1.5 text-green-700">
-        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />
-        Connected
-      </span>
-    );
-  }
+/** Name + MAC, a Paused pill when parental controls paused it, other MACs it was seen under. */
+export function DeviceCell({ m }: { m: DisconnectedMember }) {
+  const others = m.otherMacs?.length ?? 0;
   return (
-    <span className="flex items-center gap-1.5 text-red-600">
-      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-400" />
-      Offline
-    </span>
+    <td className="px-4 py-3">
+      <p className="flex items-center gap-2 font-medium text-neutral-900">
+        {m.alias ?? "—"}
+        {m.paused && <StatusPill tone="fair">Paused</StatusPill>}
+      </p>
+      <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
+      {others > 0 && (
+        <p className="mt-0.5 text-xs text-neutral-500" title={m.otherMacs!.join(", ")}>
+          +{others} older randomized MAC{others === 1 ? "" : "s"}
+        </p>
+      )}
+    </td>
   );
 }
+
+/** Nickname (or model) on top; model, gateway tag and MAC below. */
+export function ConnectedApCell({ ap }: { ap: ConnectedAp | null }) {
+  if (!ap) return <td className="px-4 py-3 text-neutral-400">—</td>;
+  const sub = [ap.name && ap.model, ap.gateway && "Gateway"].filter(Boolean).join(" · ");
+  return (
+    <td className="px-4 py-3">
+      <p className="font-medium text-neutral-900">{ap.name ?? (ap.model || "Unknown AP")}</p>
+      <p className="mt-0.5 text-xs text-neutral-500">
+        {sub && `${sub} · `}<span className="font-mono">{ap.mac}</span>
+      </p>
+    </td>
+  );
+}
+
+/** "3 h ago" with the date on hover, and why it last disconnected. */
+export function LastSeenCell({ m }: { m: Member }) {
+  const reason = disconnectReason(m);
+  const t = Date.parse(m.last_seen ?? "");
+  return (
+    <td className="px-4 py-3">
+      <p className="text-neutral-700" title={Number.isFinite(t) ? new Date(t).toLocaleString() : undefined}>{timeAgo(m.last_seen)}</p>
+      {reason && <p className="mt-0.5 text-xs text-neutral-500">{reason}</p>}
+    </td>
+  );
+}
+
 
 interface FilterPopoverProps {
   value: string;

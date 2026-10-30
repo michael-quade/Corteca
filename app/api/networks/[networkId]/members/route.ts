@@ -25,7 +25,7 @@ export async function GET(
     cortecaRes = await cortecaFetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
     });
   } catch {
