@@ -52,7 +52,6 @@ export function AiAnalysisCard({ analysis, diagnosis, onAnalyze, onTroubleshoot 
   const report = analysis.result;
   return (
     <CortecaCard
-      id="ai-analysis"
       title="AI analysis"
       info="Runs Corteca's AI network analyzer and troubleshooter through MCP. Read-only: nothing on the network changes. Results are AI-generated; verify before acting."
       actions={

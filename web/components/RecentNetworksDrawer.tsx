@@ -15,6 +15,8 @@ function ago(iso: string): string {
 export interface RecentNetworksDrawerProps {
   entries: RecentNetwork[];
   currentId: string | null;
+  /** Networks open in a tab: picking one switches to it. */
+  openIds: string[];
   onPick: (entry: RecentNetwork) => void;
   onRemove: (networkId: string) => void;
   onClear: () => void;
@@ -24,7 +26,7 @@ export interface RecentNetworksDrawerProps {
  * Thin rail on the left edge; opens an overlay panel (so the diagram keeps its
  * full width) listing networks viewed in this browser.
  */
-export function RecentNetworksDrawer({ entries, currentId, onPick, onRemove, onClear }: RecentNetworksDrawerProps) {
+export function RecentNetworksDrawer({ entries, currentId, openIds, onPick, onRemove, onClear }: RecentNetworksDrawerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -90,7 +92,7 @@ export function RecentNetworksDrawer({ entries, currentId, onPick, onRemove, onC
                           {r.gatewayModel && <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-px font-medium text-blue-700">{r.gatewayModel}</span>}
                         </span>
                       </span>
-                      <span className="flex-shrink-0 text-[11px] text-neutral-400">{r.networkId === currentId ? "current" : ago(r.viewedAt)}</span>
+                      <span className="flex-shrink-0 text-[11px] text-neutral-400">{r.networkId === currentId ? "current" : openIds.includes(r.networkId) ? <span className="font-medium text-blue-600">open</span> : ago(r.viewedAt)}</span>
                     </button>
                     <button
                       type="button"

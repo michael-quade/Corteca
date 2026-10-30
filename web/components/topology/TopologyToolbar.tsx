@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/web/lib/utils";
+import { Hint } from "@/web/components/ui/Hint";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 import { clientName, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
 import {
@@ -26,23 +27,6 @@ const BAND_HINT: Partial<Record<Band, string>> = {
   "2.4 GHz": "Show only clients connected on 2.4 GHz; the rest fade out. Pick several bands to show any of them.",
   "Wired": "Show only clients plugged in with an Ethernet cable; the rest fade out.",
 };
-
-/** Hover / keyboard-focus explanation under a toolbar control (shows quickly, unlike `title`). */
-function Hint({ text, children }: { text: string; children: (id: string) => React.ReactNode }) {
-  const id = useId();
-  return (
-    <span className="group relative inline-flex">
-      {children(id)}
-      <span
-        id={id}
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 w-max max-w-[240px] -translate-x-1/2 rounded-md bg-neutral-900 px-2 py-1 text-[11px] leading-snug text-white opacity-0 shadow-lg transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 group-hover:delay-200"
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
 
 function Chip({ active, onClick, hint, children }: { active: boolean; onClick: () => void; hint: string; children: React.ReactNode }) {
   return (

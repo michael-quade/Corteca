@@ -175,7 +175,7 @@ function Canvas(props: TopologyCanvasProps) {
         aria-label="Network topology. Arrow keys move between devices, Escape clears the selection."
         className={cn(
           "flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
-          fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-8.5rem)] min-h-[520px]"
+          fullscreen ? "h-screen w-screen rounded-none" : "h-[calc(100vh-11.5rem)] min-h-[520px]"
         )}
       >
         <TopologyToolbar
