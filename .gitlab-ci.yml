@@ -6,9 +6,13 @@
 #   VERCEL_TOKEN       — Vercel account token
 #   VERCEL_ORG_ID      — Vercel team/user ID
 #   VERCEL_PROJECT_ID  — Vercel project ID
+#   GITHUB_TOKEN       — optional; GitHub fine-grained token with Contents: read & write on
+#                        michael-quade/Corteca. When set, main is also pushed to GitHub (the
+#                        corporate proxy blocks pushes from laptops; project mirroring is admin-only).
 
 stages:
   - deploy
+  - mirror
 
 deploy_production:
   stage: deploy
@@ -47,3 +51,22 @@ deploy_production:
       --meta "gitlabProjectName=$CI_PROJECT_NAME"
       --meta "gitlabProjectNamespace=$CI_PROJECT_NAMESPACE"
       --meta "gitlabProjectPath=$CI_PROJECT_PATH"
+
+mirror_github:
+  stage: mirror
+  image: alpine:3.20
+  tags:
+    - docker
+  needs: []
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $GITHUB_TOKEN
+  # A mirror failure must not mark the pipeline (or the deploy) as failed.
+  allow_failure: true
+  variables:
+    # Full history: GitHub rejects a push from a shallow clone it doesn't have the base of.
+    GIT_DEPTH: 0
+  script:
+    - apk add --no-cache git
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    # Fast-forward only (no --force): if GitHub has commits GitLab doesn't, the job fails instead of dropping them.
+    - git push "https://x-access-token:${GITHUB_TOKEN}@github.com/michael-quade/Corteca.git" "$CI_COMMIT_SHA:refs/heads/main"

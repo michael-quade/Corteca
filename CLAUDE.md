@@ -672,6 +672,7 @@ Source lives on Nokia GitLab (`gitlabe1.ext.net.nokia.com/mquade/corteca-dashboa
 - **GitLab CI/CD variables:** `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (masked, not protected).
 - **Commit details in Vercel:** the job installs git, marks the checkout as a safe directory, and checks out the branch by name so the CLI can read commit metadata; it also passes GitLab-style `--meta gitlab*` fields, which is what makes the Vercel dashboard show the commit message/SHA/branch.
 - **Deploy history:** GitLab → Operate → Environments → `production`.
+- **GitHub mirror:** project mirroring is admin-only on Nokia GitLab, so the `mirror_github` job pushes `main` to `origin` (fast-forward only, `allow_failure`) when the masked CI variable `GITHUB_TOKEN` (fine-grained, Contents read & write on `michael-quade/Corteca`) is set.
 - Vercel Cron (`vercel.json`) keeps working — crons are registered from the deployed `vercel.json`.
 
 ---
