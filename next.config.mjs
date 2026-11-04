@@ -7,6 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: __dirname,
+  // Bundled, ws breaks at runtime ("b.mask is not a function") — the Neon driver needs it as-is.
+  serverExternalPackages: ['ws', '@neondatabase/serverless', '@prisma/adapter-neon'],
 };
 
 export default nextConfig;
