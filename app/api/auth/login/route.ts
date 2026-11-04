@@ -24,9 +24,8 @@ export async function POST(req: NextRequest) {
   };
   const requestBody = { email, grant_type: 'password', password };
 
-  console.log('[corteca auth] POST', requestUrl);
-  console.log('[corteca auth] headers:', JSON.stringify(requestHeaders, null, 2));
-  console.log('[corteca auth] body:', JSON.stringify(requestBody, null, 2));
+  // Never log the headers or body: they carry the client secret and the user's password.
+  console.log('[corteca auth] POST', requestUrl, 'for', email);
 
   let cortecaRes: Response;
   try {
