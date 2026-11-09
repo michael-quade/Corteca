@@ -143,21 +143,15 @@ export async function getNeighborScan(
 
 // ─── RSSI & Steering History ──────────────────────────────────────────────
 
-export interface RssiEvent {
-  operation: 'ASSOCIATION' | 'DISASSOCIATION' | 'RSSI_THRESHOLD_CHANGE';
-  device_id: DeviceId;
-  channel: number;
-  rssi?: number;
-  timestamp: string;
-  links?: { band: string; rssi: number }[];
-}
+// Real response shape (checked on demo2): see web/lib/roamingHistory.ts.
+export type { RssiEvent } from '../roamingHistory';
 
 export async function getRssiHistory(
   networkId: NetworkId,
   memberId: MemberId,
   from: string,
   to: string
-): Promise<RssiEvent[]> {
+): Promise<{ init_date: string; end_date: string; events: import('../roamingHistory').RssiEvent[] }> {
   return cortecaFetch(
     `/dashboard-bff/networks/${networkId}/members/${memberId}/rssi?from=${from}&to=${to}`
   );

@@ -65,7 +65,11 @@ const REASONS: Record<number, string> = {
 };
 
 export function disconnectReason(m: Member): string | null {
-  const code = raw(m).last_disconnected_reason_code;
+  return reasonText(raw(m).last_disconnected_reason_code);
+}
+
+/** IEEE 802.11 reason code → "Client left (deauthenticated) (code 3)"; null for none (0). */
+export function reasonText(code: number | null | undefined): string | null {
   if (code == null || code === 0) return null;
   return `${REASONS[code] ?? "Reason"} (code ${code})`;
 }
