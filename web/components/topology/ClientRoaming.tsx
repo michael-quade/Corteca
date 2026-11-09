@@ -146,6 +146,12 @@ export function ClientRoaming({ network, member, onSelect }: {
               <dt className="text-neutral-500">Disconnects</dt>
               <dd className="font-medium text-neutral-800">{summary.disconnects}</dd>
             </div>
+          </dl>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3 border-t border-neutral-100 pt-2 text-[11px]">
+            <span className="font-semibold text-neutral-700">Time on each AP</span>
+            <span className="text-neutral-400">share of connected time · total</span>
+          </div>
+          <dl className="mb-3 space-y-1.5 text-xs">
             {summary.timePerAp.map((t) => (
               <div key={t.ap} className="flex items-center justify-between gap-3">
                 <dt className="flex min-w-0 items-center gap-1.5 text-neutral-500">
