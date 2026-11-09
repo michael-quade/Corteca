@@ -1,5 +1,5 @@
 // Server-side module — do NOT add "use client".
-// Reads the SW Release Matrix from Supabase (production) or the local XLSX file (dev fallback).
+// Reads the SW Release Matrix from the database (production) or the local XLSX file (dev fallback).
 
 
 import * as fs from 'fs';

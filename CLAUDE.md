@@ -144,7 +144,6 @@ const token = req.cookies.get('corteca_token')?.value;
 | `/api/sw-overview` | GET | SW fleet overview (wraps deployment report) |
 | `/api/stats` | GET | In-memory API call stats for current process |
 | `/api/sessions` | GET / PUT | List or update API session records in DB |
-| `/api/cron/keepalive` | GET | Pings Supabase via Prisma to prevent auto-pause; called by Vercel Cron |
 
 ### Subscriber search
 
@@ -235,14 +234,14 @@ The reboot report MAC column is found heuristically — checks `home_wifi_id`, `
 
 ## Data Layer (Prisma + PostgreSQL)
 
-Uses Prisma with a Supabase PostgreSQL database. Five models:
+Uses Prisma with a Neon PostgreSQL database (moved from Supabase on 2026-11-04). Five models:
 
 | Model | Purpose |
 |---|---|
 | `SwMatrix` | Singleton (id=1). Stores the Beacon firmware release matrix: `beaconModels` (JSON array — entries are a model name string, or `{ name, wifi }` when a WiFi generation is set) and `releases` (JSON array). Seeded via `prisma/seed.js`. |
 | `DeploymentReport` | Singleton (id=1). Cached deployment report: device list, column headers, raw rows, stats, USP map. Updated when SW Overview fetches fresh data. Shared across serverless instances via DB. |
 | `PortLayout` | One row per device model (`modelKey()`: "beacon 10"): RJ-45 ports (name, WAN or not, max Mbps), hardware version, source (`live`/`documentation`/`manual`), sample MAC. Written by `/api/network/[deviceId]/ethernet` (in `after()`, so no latency) whenever a gateway's live ports differ from what's stored. |
-| `RadioBands` | One row per device model (`modelKey()`): the WiFi radio bands its online APs have reported (`["2.4 GHz", "5 GHz"]`; union over APs, a split 5 GHz low/high wins over plain 5 GHz), sample MAC. Written by `/api/mcp/network/[id]` and `/api/network/[deviceId]` in `after()` (no latency) when a model's list grows. Table must be created with `npm run db:push` from a network that reaches the DB; until then learning stays in memory and the built-in `RADIO_SPECS` table covers. |
+| `RadioBands` | One row per device model (`modelKey()`): the WiFi radio bands its online APs have reported (`["2.4 GHz", "5 GHz"]`; union over APs, a split 5 GHz low/high wins over plain 5 GHz), sample MAC. Written by `/api/mcp/network/[id]` and `/api/network/[deviceId]` in `after()` (no latency) when a model's list grows. If the DB is unreachable, learning stays in memory and the built-in `RADIO_SPECS` table covers. |
 | `ApiSession` | One row per login session. Tracks call count, bytes sent/received, rate limit hits. Persisted via `PUT /api/sessions` with debounce; final flush on logout using `keepalive`. |
 
 ### Database Commands
@@ -253,19 +252,14 @@ npm run db:studio     # open Prisma Studio
 npm run seed-matrix   # seed initial SW matrix data
 ```
 
-### Supabase Keepalive Cron
+### Neon connection
 
-Supabase free-tier projects auto-pause after 7 days with no database activity. `vercel.json` defines a daily Vercel Cron job (`0 8 * * *`) that hits `GET /api/cron/keepalive`.
-
-**Important:** Supabase's pause detection only counts requests through its REST API (PostgREST) or dashboard access — a direct Postgres connection (Prisma/PgBouncer) does **not** reset the inactivity timer, confirmed by Supabase staff. The route therefore does two things:
-1. `prisma.$queryRaw\`SELECT 1\`` — harmless, but does not affect pause detection on its own.
-2. `fetch` to `${SUPABASE_URL}/rest/v1/sw_matrix?select=id&limit=1` using `SUPABASE_SERVICE_ROLE_KEY` — this is the part that actually registers as activity with Supabase. If `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` are unset, this step is skipped (`restPing: "skipped"` in the response) and the pause countdown will **not** be reset.
-
-`SUPABASE_SERVICE_ROLE_KEY` accepts either key style: legacy `service_role` JWTs (start with `eyJ`, sent on both `apikey` and `Authorization: Bearer`) or newer `sb_secret_...` keys (not JWTs — sent on `apikey` only, since PostgREST fails to verify them as a Bearer JWT). The route detects which style it got.
-
-- Authenticated via `CRON_SECRET` — Vercel automatically sends `Authorization: Bearer $CRON_SECRET` on cron-triggered requests; the route checks it if the env var is set (skipped in local dev).
-- `middleware.ts` allows `/api/cron/*` through the site gate unconditionally, since cron requests carry no `site_auth` cookie.
-- Cron jobs only fire on deployed Vercel environments (Hobby plan: once/day max, logs retained 1 hour), not in local dev.
+- **Driver:** `web/lib/prisma.ts` gives Prisma the Neon serverless driver (`@prisma/adapter-neon` + `@neondatabase/serverless` over `ws`, `driverAdapters` preview feature) whenever `DATABASE_URL` is a `neon.tech` URL — a WebSocket on port 443. Prisma's own Postgres connection to Neon's pooler failed from Vercel ("Can't reach database server"), and the corporate network blocks the Postgres protocol (TCP to 5432 opens, the TLS handshake hangs) while 443 works, so the adapter also makes `npm run dev` reach the DB from the office. Other URLs connect the normal way.
+- `next.config.mjs` lists `ws`, `@neondatabase/serverless` and `@prisma/adapter-neon` in `serverExternalPackages`: bundled, `ws` fails at runtime with `b.mask is not a function`.
+- **Connection strings:** pooled host (`-pooler`) for `DATABASE_URL` with `sslmode=require&pgbouncer=true&connection_limit=1&connect_timeout=15`, direct host for `DIRECT_URL`; drop Neon's `channel_binding=require`. `Authentication failed for user (not available)` in the Vercel logs = wrong password in the Vercel value (Vercel hides sensitive values — overwrite, then redeploy).
+- **Free plan:** compute suspends after ~5 min idle; the first query afterwards wakes it (~0.5 s). There is no inactivity pause of the project, so no keepalive cron.
+- **Schema changes from the corporate network:** `prisma db push` needs port 5432. Generate the SQL offline (`npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, or `--from-url` off-network for a diff) and run it in the Neon SQL editor, or push from another network.
+- Timestamps are `timestamp(3)` (UTC) as Prisma defines them; the old Supabase tables had `timestamptz`.
 
 ---
 
@@ -320,7 +314,7 @@ Supabase free-tier projects auto-pause after 7 days with no database activity. `
 | `wheelZoom.ts` | `wheelPixels()`: wheel distance in CSS pixels whatever the unit; the REST topology graph zooms by distance so a smooth-scrolling mouse (one notch = a burst of small events) zooms one step per notch |
 | `networkLocation.ts` | `extractLatLng()` (lat/lng from a device summary, any key names), `osmUrl()` |
 | `mapBasemap.ts` | MapLibre setup shared by both maps: `setWorkerUrl()` to the worker copied into `public/maplibre/`, `STYLE_URL` (OpenFreeMap Positron), `tintBasemap()` (Corteca palette), `MAP_FRAME` (frame + popup card classes) |
-| `prisma.ts` | Prisma client singleton (avoids too-many-connections in serverless) |
+| `prisma.ts` | Prisma client singleton (avoids too-many-connections in serverless); Neon serverless driver adapter for `neon.tech` URLs |
 | `utils.ts` | `cn()` — clsx + tailwind-merge for conditional Tailwind classes |
 
 ---
@@ -335,14 +329,11 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | `CORTECA_CLIENT_ID` | Corteca OAuth client ID (sent as `clientId` header, not query param) |
 | `CORTECA_CLIENT_SECRET` | Corteca OAuth client secret (sent as `clientSecret` header) |
 | `NEXT_PUBLIC_CORTECA_CONSOLE_URL` | Nokia Console base URL — public, safe for browser (e.g. `https://console.demo2.homewifi.nokia.com`) |
-| `DATABASE_URL` | Pooled PostgreSQL URI (PgBouncer port 6543) — used by the app at runtime |
-| `DIRECT_URL` | Direct PostgreSQL URI (port 5432) — used only by `prisma db push` and seed scripts |
+| `DATABASE_URL` | Neon pooled URI (`-pooler` host) — used by the app at runtime, through the Neon serverless driver |
+| `DIRECT_URL` | Neon direct URI (port 5432) — used only by `prisma db push` and seed scripts |
 | `CORTECA_MCP_URL` | Optional. Corteca AI MCP endpoint; defaults to `${CORTECA_API_BASE_URL}/ai/mcp` |
 | `SITE_USERNAME` | Gate username protecting the entire app |
 | `SITE_PASSWORD` | Gate password |
-| `CRON_SECRET` | Bearer token Vercel Cron sends to `/api/cron/*` routes; optional, skips auth check if unset (local dev) |
-| `SUPABASE_URL` | Supabase project REST URL (e.g. `https://<ref>.supabase.co`) — required for the keepalive cron to actually prevent auto-pause |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase secret/service_role key, used by the keepalive cron to hit the REST API (the only kind of request Supabase's pause detection counts) |
 
 ---
 
@@ -358,7 +349,7 @@ All required. Copy `.env.example` to `.env.local` to get started.
 | Graph diagrams | React Flow (`@xyflow/react`) + ELK (`elkjs`) for layout — MCP visualizer only; loaded via `next/dynamic` with `ssr: false` |
 | Maps | MapLibre GL JS 6 + OpenFreeMap vector tiles (fleet Network Map, REST visualizer location map; loaded via `next/dynamic` with `ssr: false`) |
 | ORM | Prisma 5 |
-| Database | PostgreSQL (Supabase) |
+| Database | PostgreSQL (Neon), via the Neon serverless driver |
 | Auth | Custom cookie-based (no NextAuth) |
 | Deployment | Vercel (serverless) |
 
@@ -673,7 +664,6 @@ Source lives on Nokia GitLab (`gitlabe1.ext.net.nokia.com/mquade/corteca-dashboa
 - **Commit details in Vercel:** the job installs git, marks the checkout as a safe directory, and checks out the branch by name so the CLI can read commit metadata; it also passes GitLab-style `--meta gitlab*` fields, which is what makes the Vercel dashboard show the commit message/SHA/branch.
 - **Deploy history:** GitLab → Operate → Environments → `production`.
 - **GitHub mirror:** project mirroring is admin-only on Nokia GitLab, so the `mirror_github` job pushes `main` to `origin` (fast-forward only, `allow_failure`) when the masked CI variable `GITHUB_TOKEN` (fine-grained, Contents read & write on `michael-quade/Corteca`) is set.
-- Vercel Cron (`vercel.json`) keeps working — crons are registered from the deployed `vercel.json`.
 
 ---
 
@@ -699,4 +689,4 @@ npm run build
 npm run start
 ```
 
-**Prerequisites:** Node 18+, PostgreSQL (Supabase recommended), Nokia Corteca API credentials (base URL, client ID, client secret).
+**Prerequisites:** Node 18+, PostgreSQL (Neon recommended), Nokia Corteca API credentials (base URL, client ID, client secret).

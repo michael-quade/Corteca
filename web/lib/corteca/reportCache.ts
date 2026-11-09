@@ -2,7 +2,7 @@
 // Next.js server process. Populated by the network-map route; queried by the
 // ethernet and USP routes without extra API calls.
 //
-// When DATABASE_URL is set, the cache is also persisted to Supabase so it
+// When DATABASE_URL is set, the cache is also persisted to the database so it
 // survives serverless cold-starts and is shared across all instances/users.
 
 export interface ReportDevice {
@@ -80,7 +80,7 @@ export async function hydrateFromDb(maxAgeMs: number): Promise<void> {
   }
 }
 
-/** Writes the current in-memory cache to Supabase after a fresh fetch. */
+/** Writes the current in-memory cache to the database after a fresh fetch. */
 export async function persistToDb(): Promise<void> {
   if (!process.env.DATABASE_URL || !cache) return;
   try {
