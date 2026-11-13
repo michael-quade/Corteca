@@ -17,7 +17,7 @@ import { edgeTypes, nodeTypes } from "./flowTypes";
 import { clientOwner } from "@/web/lib/inferredSwitches";
 import { TopologyLegend } from "./TopologyLegend";
 import { ZoomControls } from "./ZoomControls";
-import { useDrawerFit } from "./useDrawerFit";
+import { useCanvasFit } from "./useDrawerFit";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
@@ -59,11 +59,12 @@ function Canvas(props: TopologyCanvasProps) {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
   const lastLayoutMode = useRef(layout);
-  // Fits keep clear of an open events drawer (at a comfortable width) and refit when it opens / closes.
+  // Fits keep clear of an open events drawer; a view the user moved survives later data.
   const forgetRestore = useCallback(() => { restoreView.current = null; }, []);
-  const drawerFit = useDrawerFit(flowRef, nodes != null, forgetRestore);
-  const fitRef = useRef(drawerFit.fit);
-  fitRef.current = drawerFit.fit;
+  const { options: fitOptions, fitRef, userMoved } = useCanvasFit(flowRef, nodes != null, forgetRestore);
+  const lastNetwork = useRef<McpNetwork | null>(null);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
 
   const toggleCluster = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -94,16 +95,19 @@ function Canvas(props: TopologyCanvasProps) {
       if (cancelled) return;
       setNodes(laidOut.nodes);
       setEdges(laidOut.edges);
-      // The first view comes from ReactFlow's fitView/defaultViewport props;
-      // switching layout refits.
-      if (lastLayoutMode.current !== layout) {
-        restoreView.current = null;
-        requestAnimationFrame(() => fitRef.current(400));
+      // First view: ReactFlow's fitView/defaultViewport props. Refit on a layout switch, and on new
+      // network data (e.g. a switch with 13 wired clients once gateway ports arrive) unless the
+      // user moved the view or something is selected; expanding a "+N" section doesn't refit.
+      const layoutChanged = lastLayoutMode.current !== layout;
+      const dataChanged = lastNetwork.current != null && lastNetwork.current !== network;
+      if (layoutChanged || (dataChanged && !userMoved.current && !selectionRef.current)) {
+        requestAnimationFrame(() => fitRef.current(layoutChanged ? 400 : 300));
       }
       lastLayoutMode.current = layout;
+      lastNetwork.current = network;
     });
     return () => { cancelled = true; };
-  }, [graph, layout]);
+  }, [graph, layout, network]);
 
   const highlight = useMemo(() => highlightFor(network, selection), [network, selection]);
 
@@ -232,7 +236,7 @@ function Canvas(props: TopologyCanvasProps) {
                 onSelect(null);
               }}
               fitView={!initialViewport}
-              fitViewOptions={drawerFit.options}
+              fitViewOptions={fitOptions}
               defaultViewport={initialViewport ?? undefined}
               // A user pan/zoom (event present; programmatic moves have none) keeps their view.
               onMoveStart={(event, v) => {
@@ -242,7 +246,7 @@ function Canvas(props: TopologyCanvasProps) {
               onMoveEnd={(event, v) => {
                 // Only a gesture that actually moved the view keeps the user's position.
                 const s0 = gestureStart.current;
-                if (event && s0 && (s0.x !== v.x || s0.y !== v.y || s0.zoom !== v.zoom)) restoreView.current = null;
+                if (event && s0 && (s0.x !== v.x || s0.y !== v.y || s0.zoom !== v.zoom)) { restoreView.current = null; userMoved.current = true; }
                 onViewportChange(v);
               }}
               minZoom={0.15}
@@ -263,7 +267,7 @@ function Canvas(props: TopologyCanvasProps) {
               <Panel position="top-left" className="!bottom-0 !pointer-events-none flex flex-col items-start gap-2">
                 <div className="pointer-events-auto flex items-start gap-2">
                   <TopologyLegend />
-                  <ZoomControls onFit={() => drawerFit.fit(300)} />
+                  <ZoomControls onFit={() => fitRef.current(300)} />
                 </div>
                 <EventsDrawer />
                 <TdsEventsDrawer />

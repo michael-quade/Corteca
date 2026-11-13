@@ -62,3 +62,19 @@ export function useDrawerFit(flowRef: RefObject<HTMLDivElement | null>, ready: b
 
   return { options, fit };
 }
+
+/**
+ * The canvas's fitting: useDrawerFit plus whether the user has panned / zoomed since the last
+ * fit, so data arriving later can refit only an untouched view. A view restored from the URL
+ * doesn't count: it is saved after every move, automatic fits included (a tab restored after
+ * a reload would otherwise keep a view fitted before the gateway's data widened the diagram).
+ * `fitRef.current(duration)` fits (drawer-aware) and marks the view untouched again.
+ */
+export function useCanvasFit(flowRef: RefObject<HTMLDivElement | null>, ready: boolean, forgetRestore: () => void) {
+  const userMoved = useRef(false);
+  const onAutoFit = useCallback(() => { forgetRestore(); userMoved.current = false; }, [forgetRestore]);
+  const { options, fit } = useDrawerFit(flowRef, ready, onAutoFit);
+  const fitRef = useRef<(duration?: number) => void>(() => {});
+  fitRef.current = (duration) => { onAutoFit(); fit(duration); };
+  return { options, fitRef, userMoved };
+}
