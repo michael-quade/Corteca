@@ -76,6 +76,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
       </DetailSection>
       <AiNotesSection notes={ap.ai} />
+      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
       {talkers.length > 0 && (
         <DetailSection title="Top clients by traffic" summary={`Most data: ${clientName(talkers[0].member)} · ${formatBytes(talkers[0].total)}`}>
           {talkers.map(({ member, total }) => (
@@ -85,7 +86,6 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
           ))}
         </DetailSection>
       )}
-      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
       <ApEvents ap={ap} />
       <ApRadios ap={ap} />
     </>
@@ -184,7 +184,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   return (
     <aside
       aria-label={`${kicker} details`}
-      className="absolute bottom-3 right-3 top-14 z-10 flex w-[25rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
+      className="absolute bottom-3 right-3 top-14 z-10 flex w-[30rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
     >
       <header className="flex items-start justify-between gap-2 border-b border-neutral-100 px-4 py-3">
         <div className="min-w-0">

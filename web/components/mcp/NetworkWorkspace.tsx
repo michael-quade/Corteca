@@ -76,12 +76,15 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
     const base = applyWifiDetails(applyModelBands(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), modelBands), wifi);
     return { ...applyAiReport(applySwitches(base, ports), ai.analysis.result), wan: wan ?? undefined };
   }, [response, names, wifi, ports, wan, ai.analysis.result, modelBands]);
-  // Corteca's activity log (events drawer, AP / client panels, diagram badges), read in the background.
-  const events = useEventsController(networkId, response?.homeWifiId ?? null, network);
-  // TDS Network Events RCR: the same log with P1–P4 severity, its own popout.
-  const tdsEvents = useTdsEventsController(events);
   // MCP lists only clients online now; Corteca's REST history fills "Recently disconnected" (in the background).
   const history = useMemberHistory(response?.homeWifiId ?? null, response);
+  // Corteca's activity log (events drawer, AP / client panels, diagram badges), read in the background.
+  // Clients in it that aren't online now are named from the gateway's device map and the history.
+  const historyMembers = history.status === "ready" ? history.members : null;
+  const offlineNames = useMemo(() => ({ deviceNames: names, history: historyMembers }), [names, historyMembers]);
+  const events = useEventsController(networkId, response?.homeWifiId ?? null, network, offlineNames);
+  // TDS Network Events RCR: the same log with P1–P4 severity, its own popout.
+  const tdsEvents = useTdsEventsController(events);
   const disconnected = useMemo(() => ({
     label: "Recently disconnected",
     status: history.status,

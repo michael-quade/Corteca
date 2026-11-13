@@ -29,7 +29,7 @@ import { EventsExpanded } from "@/web/components/events/EventsExpanded";
 import { TdsEventsDrawer } from "@/web/components/tds-events/TdsEventsDrawer";
 import { TdsEventsExpanded } from "@/web/components/tds-events/TdsEventsExpanded";
 
-const PANEL_W = 424; // detail panel width + margin, kept clear when panning to a node
+const PANEL_W = 504; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
   network: McpNetwork;

@@ -25,14 +25,14 @@ const SPY_SLACK = 8;
  * A fixed row of chips under a detail panel's title, one per `DetailSection` in `scrollRef`
  * (found by `data-section`, so every panel gets it without listing its sections). The chip
  * of the section at the top of the scroll area is highlighted and follows scrolling; a click
- * scrolls to that section and unfolds it. Folded sections end in "›". `resetKey` (the
+ * scrolls to that section and unfolds it. Folded sections end in "›". The panel is wide
+ * enough for the gateway's six chips; more (AI analysis) wrap to a second row. `resetKey` (the
  * selection) re-scans when the panel shows another device.
  */
 export function SectionChips({ scrollRef, resetKey }: { scrollRef: RefObject<HTMLDivElement | null>; resetKey: string }) {
   const [ids, setIds] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
   const folded = useCollapsedSections();
-  const rowRef = useRef<HTMLDivElement>(null);
   // After a chip click the clicked chip stays current until the user scrolls themselves —
   // a short last section can't reach the top, so the spy alone would pick another one.
   const locked = useRef<number | null>(null);
@@ -88,17 +88,6 @@ export function SectionChips({ scrollRef, resetKey }: { scrollRef: RefObject<HTM
     };
   }, [scrollRef, sections, spy, resetKey]);
 
-  // Keep the current chip visible in the row.
-  useEffect(() => {
-    const row = rowRef.current;
-    const chip = row?.children[current] as HTMLElement | undefined;
-    if (!row || !chip) return;
-    const left = chip.offsetLeft - row.offsetLeft;
-    if (left < row.scrollLeft || left + chip.offsetWidth > row.scrollLeft + row.clientWidth) {
-      row.scrollTo({ left: Math.max(0, left - 12), behavior: "smooth" });
-    }
-  }, [current, ids]);
-
   const jump = (i: number) => {
     const id = ids[i];
     if (folded.has(id)) setSectionCollapsed(id, false);
@@ -115,9 +104,8 @@ export function SectionChips({ scrollRef, resetKey }: { scrollRef: RefObject<HTM
   if (ids.length < 2) return null;
   return (
     <nav
-      ref={rowRef}
       aria-label="Sections"
-      className="flex flex-shrink-0 gap-1 overflow-x-auto border-b border-neutral-100 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex flex-shrink-0 flex-wrap gap-1 border-b border-neutral-100 px-3 py-2"
     >
       {ids.map((id, i) => (
         <button

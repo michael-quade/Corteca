@@ -5,7 +5,7 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/web/lib/networkEvents";
 import { buildEventItems, type EventItem } from "@/web/lib/eventItems";
 import { eventsToday, type EventPeriod } from "@/web/lib/eventStats";
 import { useEventAcks, type EventAcksApi } from "@/web/lib/eventAcks";
-import { useEventNames, useNetworkEvents, type EventDeviceNames, type EventsLoad } from "@/web/lib/useNetworkEvents";
+import { useEventNames, useNetworkEvents, type EventDeviceNames, type EventsLoad, type OfflineNameSources } from "@/web/lib/useNetworkEvents";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
 
 export type DrawerMode = "closed" | "open" | "expanded";
@@ -61,9 +61,9 @@ function store(v: { open: boolean; width: number }) {
 }
 
 /** Owned by a network's workspace: loads its activity log and holds the drawer / filter state. */
-export function useEventsController(networkId: string, homeWifiId: string | null, network: McpNetwork | null): EventsUi {
+export function useEventsController(networkId: string, homeWifiId: string | null, network: McpNetwork | null, offline?: OfflineNameSources): EventsUi {
   const { state, retry } = useNetworkEvents(homeWifiId, network?.capturedAt ?? null);
-  const names = useEventNames(network);
+  const names = useEventNames(network, offline);
   const acks = useEventAcks();
   const [drawer, setDrawerState] = useState<DrawerMode>(() => (stored().open ? "open" : "closed"));
   const [width, setWidthState] = useState(() => stored().width);

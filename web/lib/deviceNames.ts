@@ -38,7 +38,7 @@ export function memberIdentity(m: Member): MemberIdentity {
 const PLACEHOLDER = /^(unknown[_\s-]|[0-9a-f]{2}([:-]?[0-9a-f]{2}){5}$)/i;
 export const isPlaceholderName = (name: string | undefined) => !name?.trim() || PLACEHOLDER.test(name.trim());
 
-function detectedName(e: DeviceNameEntry): string | null {
+export function detectedName(e: DeviceNameEntry): string | null {
   if (e.model) return e.model;
   const cat = categoryLabel(e.category)?.toLowerCase();
   return e.manufacturer ? [e.manufacturer, cat].filter(Boolean).join(" ") : null;

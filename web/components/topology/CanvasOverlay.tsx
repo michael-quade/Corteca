@@ -47,7 +47,7 @@ export function CanvasOverlayFrame({ title, kicker, onClose, children }: {
   return createPortal(
     // The ground covers the whole diagram, so nothing shows between the map and the panel.
     <div data-canvas-overlay role="dialog" aria-label={`${kicker}: ${title}`} className="absolute inset-0 z-[9] bg-neutral-50">
-    <div className="absolute bottom-3 left-3 right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg lg:right-[calc(25rem+1.5rem)]">
+    <div className="absolute bottom-3 left-3 right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg lg:right-[calc(30rem+1.5rem)]">
       <header className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600">{kicker}</p>
