@@ -7,7 +7,7 @@ import { DetailSection } from "./DetailParts";
 export function AiNotesSection({ notes }: { notes: AiNotes | undefined }) {
   if (!notes) return null;
   return (
-    <DetailSection title="AI analysis">
+    <DetailSection title="AI analysis" summary={notes.issues.length ? `${notes.issues.length} issue${notes.issues.length === 1 ? "" : "s"} found for this device` : `${notes.other.length} note${notes.other.length === 1 ? "" : "s"}, no issues`}>
       <ul className="space-y-1.5 py-1 text-xs leading-relaxed">
         {notes.issues.map((l, i) => (
           <li key={`i${i}`} className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">{l}</li>

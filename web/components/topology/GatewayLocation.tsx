@@ -58,7 +58,7 @@ export function GatewayLocation({ network, gateway }: { network: McpNetwork; gat
   }));
 
   return (
-    <DetailSection title="Location">
+    <DetailSection title="Location" summary={loc && loc !== "error" ? "Map of the home, from the gateway's Corteca summary" : "No location from Corteca"}>
       {loc === undefined && <div className="h-56 animate-pulse rounded-xl bg-neutral-100" />}
       {loc === "error" && <p className="text-xs text-neutral-500">Location unavailable: Corteca didn&apos;t return the device summary.</p>}
       {loc === null && <p className="text-xs text-neutral-500">Corteca has no location for this gateway.</p>}

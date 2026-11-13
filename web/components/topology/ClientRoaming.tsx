@@ -11,7 +11,7 @@ import { clientBand, clientLinks, clientSignalDbm } from "@/web/lib/clientFields
 import { useRoamingHistory } from "@/web/lib/useRoamingHistory";
 import { reasonText } from "@/web/lib/clientInsights";
 import { cn } from "@/web/lib/utils";
-import { JumpButton, apLabel } from "./DetailParts";
+import { DetailSection, JumpButton, apLabel } from "./DetailParts";
 import { RoamingTimeline, shortDuration, shortTime } from "./RoamingTimeline";
 
 const RANGES = [1, 7, ROAMING_DAYS];
@@ -93,9 +93,9 @@ export function ClientRoaming({ network, member, onSelect }: {
   };
 
   return (
-    <section className="border-t border-neutral-100 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Roaming history</h4>
+    <DetailSection
+      title="Roaming history" plain
+      actions={
         <div className="flex gap-1" role="group" aria-label="Period">
           {RANGES.map((d) => (
             <button
@@ -112,8 +112,10 @@ export function ClientRoaming({ network, member, onSelect }: {
             </button>
           ))}
         </div>
-      </div>
-
+      }
+      summary={state.status !== "ready" ? "Access points and bands this client was on, from Corteca's history"
+        : `${sessions.length} connection${sessions.length === 1 ? "" : "s"} · ${summary.apMoves} AP move${summary.apMoves === 1 ? "" : "s"} · ${summary.disconnects} disconnect${summary.disconnects === 1 ? "" : "s"} · ${days === 1 ? "24 h" : `${days} days`}`}
+    >
       {state.status === "loading" && (
         <p className="flex items-center gap-2 text-xs text-neutral-500">
           <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-200 border-t-blue-600" />
@@ -193,6 +195,6 @@ export function ClientRoaming({ network, member, onSelect }: {
           <p className="mt-2 text-[10px] text-neutral-400">From Corteca&apos;s connection history (signal sampled about hourly).</p>
         </>
       )}
-    </section>
+    </DetailSection>
   );
 }

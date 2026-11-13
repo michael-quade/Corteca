@@ -22,7 +22,7 @@ export function SwitchDetails({ network, sw, onSelect }: { network: McpNetwork; 
 
   return (
     <>
-      <DetailSection title="Inferred switch">
+      <DetailSection title="Inferred switch" summary="Why a switch is assumed and its uplink port">
         <DetailRow label="Connected to">
           {ap ? <JumpButton onClick={() => onSelect({ kind: "ap", id: ap.mac })}>{apLabel(ap)}</JumpButton> : sw.apMac}
         </DetailRow>
@@ -35,7 +35,7 @@ export function SwitchDetails({ network, sw, onSelect }: { network: McpNetwork; 
         </p>
       </DetailSection>
       {beacons.length > 0 && (
-        <DetailSection title={`Beacons (${beacons.length})`}>
+        <DetailSection title={`Beacons (${beacons.length})`} summary={`${beacons.length} Beacon${beacons.length === 1 ? "" : "s"} behind the switch`}>
           {beacons.map((b) => (
             <DetailRow key={b.mac} label={backhaulRate(network, b.mac)}>
               <JumpButton onClick={() => onSelect({ kind: "ap", id: b.mac })}>{apLabel(b)}</JumpButton>
@@ -44,7 +44,7 @@ export function SwitchDetails({ network, sw, onSelect }: { network: McpNetwork; 
         </DetailSection>
       )}
       {clients.length > 0 && (
-        <DetailSection title={`Wired clients (${clients.length})`}>
+        <DetailSection title={`Wired clients (${clients.length})`} summary={`${clients.length} wired client${clients.length === 1 ? "" : "s"} behind the switch`}>
           {clients.map((m) => (
             <DetailRow key={m.id} label={m.ipv4 ?? "Wired"}>
               <JumpButton onClick={() => onSelect({ kind: "client", id: m.id })}>{clientName(m)}</JumpButton>
@@ -53,7 +53,7 @@ export function SwitchDetails({ network, sw, onSelect }: { network: McpNetwork; 
         </DetailSection>
       )}
       {sw.otherHosts.length > 0 && (
-        <DetailSection title="Other hosts on the port">
+        <DetailSection title="Other hosts on the port" summary="Hosts the gateway lists that Corteca does not">
           {sw.otherHosts.map((h) => <DetailRow key={h.mac} label={h.mac.toUpperCase()} mono>{h.name || "Unknown"}</DetailRow>)}
           <p className="pt-1 text-[11px] text-neutral-400">Listed by the gateway but not by Corteca; possibly leftover entries.</p>
         </DetailSection>

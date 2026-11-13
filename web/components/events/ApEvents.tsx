@@ -6,7 +6,8 @@ import type { McpAccessPoint } from "@/web/lib/mcpNetwork";
 import { mediumLabel, normaliseMac } from "@/web/lib/networkEvents";
 import { apBadge, apStats, inPeriod, isSilenced, timelineSegments, type EventPeriod } from "@/web/lib/eventStats";
 import { DAY, dateOnly, duration, shortDay } from "@/web/lib/eventFormat";
-import { DetailRow } from "@/web/components/topology/DetailParts";
+import { DetailRow, DetailSection } from "@/web/components/topology/DetailParts";
+import { useSectionCollapse } from "@/web/components/topology/useSectionCollapse";
 import { useEvents } from "./EventsContext";
 import { EventPeriodSwitch } from "./EventFilters";
 import { EventRow } from "./EventRow";
@@ -28,13 +29,15 @@ export function ApEvents({ ap }: { ap: McpAccessPoint }) {
   const mine = useMemo(() => own.filter((it) => inPeriod(it, now, period)), [own, now, period]);
   const stats = useMemo(() => apStats(mine, now), [mine, now]);
 
-  // The diagram badge's "Events" button scrolls here.
+  // The diagram badge's "Events" button opens this section and scrolls here.
   const focus = ev?.focusAp === mac;
+  const [, setCollapsed] = useSectionCollapse("Events");
   useEffect(() => {
     if (!focus) return;
-    ref.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    setCollapsed(false);
+    requestAnimationFrame(() => ref.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
     ev?.setFocusAp(null);
-  }, [focus, ev]);
+  }, [focus, ev, setCollapsed]);
 
   if (!ev) return null;
   const from = now - period * DAY;
@@ -45,11 +48,12 @@ export function ApEvents({ ap }: { ap: McpAccessPoint }) {
   const shown = all ? mine : mine.slice(0, LIST);
 
   return (
-    <section ref={ref} className="scroll-mt-2 border-t border-neutral-100 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Events</h4>
-        <EventPeriodSwitch value={period} onChange={setPeriod} small />
-      </div>
+    <DetailSection
+      title="Events" plain sectionRef={ref}
+      actions={<EventPeriodSwitch value={period} onChange={setPeriod} small />}
+      summary={ev.load !== "ready" ? "Reboots, outages and backhaul changes from Corteca's activity log"
+        : [`${stats.outages}× offline`, `${stats.reboots} reboot${stats.reboots === 1 ? "" : "s"}`, stats.degraded > 0 && `backhaul bad ${stats.degraded}×`, period === 1 ? "24 h" : `${period} days`].filter(Boolean).join(" · ")}
+    >
 
       {(ev.load === "loading" || ev.load === "idle") && (
         <p className="flex items-center gap-2 text-xs text-neutral-500">
@@ -109,6 +113,6 @@ export function ApEvents({ ap }: { ap: McpAccessPoint }) {
           </div>
         </>
       )}
-    </section>
+    </DetailSection>
   );
 }

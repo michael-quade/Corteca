@@ -28,7 +28,7 @@ export function WanDetails({ network, gateway, onSelect }: { network: McpNetwork
   return (
     <>
       <GatewayLocation network={network} gateway={gateway} />
-      <DetailSection title="Internet">
+      <DetailSection title="Internet" summary={"Connection status, public IP, uptime and traffic"}>
         <DetailRow label="Gateway">
           <JumpButton onClick={() => onSelect({ kind: "ap", id: gateway.mac })}>{apLabel(gateway)}</JumpButton>
         </DetailRow>
@@ -43,7 +43,7 @@ export function WanDetails({ network, gateway, onSelect }: { network: McpNetwork
         <p className="px-4 py-3 text-xs text-neutral-500">WAN details unavailable: the gateway didn&apos;t answer (it may be offline).</p>
       ) : (
         <>
-          <DetailSection title="WAN interface">
+          <DetailSection title="WAN interface" summary={"Interface, services, addressing, DNS"}>
             <DetailRow label="WAN interface" mono>{info.interfaceName}</DetailRow>
             <DetailRow label="Services">{info.services.join(", ")}</DetailRow>
             <DetailRow label="Connection">{info.connectionType ? CONNECTION_TYPE[info.connectionType] ?? info.connectionType : null}</DetailRow>
@@ -56,7 +56,7 @@ export function WanDetails({ network, gateway, onSelect }: { network: McpNetwork
             <DetailRow label="LAN IP address" mono>{info.lanIpv4}</DetailRow>
             {nat && <p className="mt-2 rounded-md bg-blue-50 px-2 py-1.5 text-[11px] text-blue-800">{nat}</p>}
           </DetailSection>
-          <DetailSection title="WAN port">
+          <DetailSection title="WAN port" summary={"Port rate and duplex"}>
             <DetailRow label="Medium">{info.medium}</DetailRow>
             {port && (
               <>

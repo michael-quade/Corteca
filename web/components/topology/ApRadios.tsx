@@ -66,7 +66,7 @@ function RadioRow({ radio }: { radio: ApRadio }) {
 /** "Radios" section of the AP panel: live channel/airtime from the gateway, else the bands MCP reports. */
 export function ApRadios({ ap }: { ap: McpAccessPoint }) {
   return (
-    <DetailSection title="Radios">
+    <DetailSection title="Radios" summary={ap.radios?.length ? ap.radios.map((r) => `${r.band}${r.channel != null ? ` Ch ${r.channel}` : ""}`).join(" · ") : `${ap.ssids.length} SSID${ap.ssids.length === 1 ? "" : "s"} · channel and airtime per radio`}>
       {ap.radios?.length ? (
         <>
           <div className="divide-y divide-neutral-100">

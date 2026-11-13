@@ -38,7 +38,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
   return (
     <>
       {ap.role === "root" && <GatewayLocation network={network} gateway={ap} />}
-      <DetailSection title="Access point">
+      <DetailSection title="Access point" summary={[ap.online ? "Online" : "Offline", `${ap.clientCount} client${ap.clientCount === 1 ? "" : "s"}`, parent ? `uplink to ${apLabel(parent)}` : ap.role === "root" ? "gateway" : null, ap.firmware].filter(Boolean).join(" · ")}>
         <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
         <DetailRow label="Clients">{ap.clientCount}</DetailRow>
         {parent && uplink ? (
@@ -75,7 +75,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
       </DetailSection>
       <AiNotesSection notes={ap.ai} />
       {talkers.length > 0 && (
-        <DetailSection title="Top clients by traffic">
+        <DetailSection title="Top clients by traffic" summary={`Most data: ${clientName(talkers[0].member)} · ${formatBytes(talkers[0].total)}`}>
           {talkers.map(({ member, total }) => (
             <DetailRow key={member.id} label={formatBytes(total)}>
               <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{clientName(member)}</JumpButton>
@@ -93,7 +93,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
 /** An MLO backhaul's bands, one row each: channel · width, then signal · data rate (PHY). */
 function MloBands({ bands }: { bands: BackhaulBand[] }) {
   return (
-    <DetailSection title={`Bands (MLO · ${bands.length})`}>
+    <DetailSection title={`Bands (MLO · ${bands.length})`} summary={bands.map((b) => b.band ?? "WiFi").join(" + ")}>
       {bands.map((b, i) => (
         <DetailRow key={b.staMac ?? i} label={[b.band ?? "WiFi", b.channel != null && `Ch ${b.channel}`, b.widthMhz && `${b.widthMhz} MHz`].filter(Boolean).join(" · ")}>
           {[
@@ -118,7 +118,7 @@ function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: M
   const mlo = link.mloBands;
   return (
     <>
-    <DetailSection title="Backhaul link">
+    <DetailSection title="Backhaul link" summary={[medium, link.rateMbps ? formatMbps(link.rateMbps) : null, link.quality].filter(Boolean).join(" · ")}>
       <DetailRow label="From">
         <JumpButton onClick={() => onSelect({ kind: "ap", id: link.parentMac })}>{parent ? apLabel(parent) : link.parentMac}</JumpButton>
       </DetailRow>

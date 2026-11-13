@@ -32,7 +32,7 @@ const signalWord = (dbm: number) => (dbm >= -65 ? "good" : dbm >= -75 ? "fair" :
 /** An MLO client's links, one row per band: signal and PHY rate ↓ / ↑ (the AP's tx is the client's download). */
 function MloLinks({ links }: { links: ClientLink[] }) {
   return (
-    <DetailSection title={`Links (MLO · ${links.length} bands)`}>
+    <DetailSection title={`Links (MLO · ${links.length} bands)`} summary={links.map((l) => [l.band, l.signalDbm != null && `${l.signalDbm} dBm`].filter(Boolean).join(" ")).join(" + ")}>
       {links.map((l) => {
         const down = formatMbps(l.txRateKbps / 1000), up = formatMbps(l.rxRateKbps / 1000);
         return (
@@ -75,7 +75,7 @@ export function ClientDetails({ network, member, onSelect }: {
   return (
     <>
       <AiNotesSection notes={memberAiNotes(member)} />
-      <DetailSection title="Connection">
+      <DetailSection title="Connection" summary={[ap ? apLabel(ap) : null, wired ? wiredType : mlo ? "WiFi · MLO" : `WiFi · ${clientBand(member)}`, !mlo && signal != null ? `${signal} dBm` : null].filter(Boolean).join(" · ")}>
         <DetailRow label="Access point">
           {ap ? <JumpButton onClick={() => onSelect({ kind: "ap", id: ap.mac })}>{apLabel(ap)}</JumpButton> : member.device_id}
         </DetailRow>
@@ -105,7 +105,7 @@ export function ClientDetails({ network, member, onSelect }: {
       {mlo && <MloLinks links={links} />}
       {!wired && <ClientRoaming network={network} member={member} onSelect={onSelect} />}
 
-      <DetailSection title="Device">
+      <DetailSection title="Device" summary={[deviceKindLabel(member), member.ipv4, member.id].filter(Boolean).join(" · ")}>
         <DetailRow label="Name">{clientName(member)}</DetailRow>
         {identity.autoAlias && identity.autoAlias !== member.alias && <DetailRow label="Detected name">{identity.autoAlias}</DetailRow>}
         {raw.hostname && raw.hostname !== member.alias && raw.hostname !== identity.autoAlias && <DetailRow label="Hostname">{raw.hostname}</DetailRow>}

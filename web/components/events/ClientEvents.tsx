@@ -1,5 +1,6 @@
 "use client";
 
+import { DetailSection } from "@/web/components/topology/DetailParts";
 import { useMemo } from "react";
 import type { Member } from "@/web/lib/corteca/types";
 import { normaliseMac } from "@/web/lib/networkEvents";
@@ -14,11 +15,11 @@ export function ClientEvents({ member }: { member: Member }) {
   if (!ev) return null;
 
   return (
-    <section className="border-t border-neutral-100 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Device events</h4>
-        <span className="text-[11px] text-neutral-500">last 30 days</span>
-      </div>
+    <DetailSection
+      title="Device events" plain
+      actions={<span className="text-[11px] text-neutral-500">last 30 days</span>}
+      summary={ev.load === "ready" ? `${mine.length || "No"} join${mine.length === 1 ? "" : "s"}, renames or type changes · 30 days` : "Joins, renames and type changes from Corteca's activity log"}
+    >
       {(ev.load === "loading" || ev.load === "idle") && <p className="text-xs text-neutral-500">Reading Corteca&apos;s activity log…</p>}
       {ev.load === "error" && <p className="text-xs text-neutral-500">Couldn&apos;t read the activity log.</p>}
       {ev.load === "ready" && (mine.length === 0
@@ -27,6 +28,6 @@ export function ClientEvents({ member }: { member: Member }) {
       <p className="mt-2 text-[10px] text-neutral-400">
         From Corteca&apos;s activity log. Connects, disconnects and roams are in the connection history above.
       </p>
-    </section>
+    </DetailSection>
   );
 }

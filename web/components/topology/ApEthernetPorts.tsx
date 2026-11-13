@@ -262,7 +262,7 @@ function ReportedPorts({ network, ap, onSelect, note }: { network: McpNetwork; a
 /** "Ethernet ports" section of the AP detail panel. */
 export function ApEthernetPorts({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: (s: Selection) => void }) {
   return (
-    <DetailSection title="Ethernet ports">
+    <DetailSection title="Ethernet ports" summary={ap.role === "root" ? "Live port status, link rates and what is plugged in" : "Wired devices and Ethernet backhaul Corteca reports, per port"}>
       {ap.role === "root"
         ? <GatewayPorts network={network} ap={ap} onSelect={onSelect} />
         : <ReportedPorts network={network} ap={ap} onSelect={onSelect} note="Mesh APs don't report live port status (not in the TR-181 Data Elements yet). Ports show the wired devices and Ethernet backhaul Corteca reports." />}
