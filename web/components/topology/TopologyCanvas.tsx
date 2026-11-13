@@ -266,8 +266,7 @@ function Canvas(props: TopologyCanvasProps) {
               {/* Full height, so the events drawer under the legend can fill the rest of the left side. */}
               <Panel position="top-left" className="!bottom-0 !pointer-events-none flex flex-col items-start gap-2">
                 <div className="pointer-events-auto flex items-start gap-2">
-                  <TopologyLegend />
-                  <ZoomControls onFit={() => fitRef.current(300)} />
+                  <TopologyLegend onFit={() => fitRef.current(300)} />
                 </div>
                 <EventsDrawer />
                 <TdsEventsDrawer />

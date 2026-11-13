@@ -4,10 +4,11 @@ import type { ReactNode, Ref } from "react";
 import { formatRate } from "@/web/lib/rateFormat";
 import { cn } from "@/web/lib/utils";
 import { useSectionCollapse } from "./useSectionCollapse";
+import { SectionIcon } from "./SectionIcon";
 
 /**
  * A detail-panel section that folds to its title and a one-line summary (arrow or title
- * click). Collapsed sections are remembered by `id` (default: the title without a
+ * click), under a grey header strip with an icon that stays pinned while the section scrolls. Collapsed sections are remembered by `id` (default: the title without a
  * "(…)" count) across panels and reloads. `actions` sit right of the title while open;
  * `plain` = free layout instead of a definition list.
  */
@@ -23,29 +24,40 @@ export function DetailSection({ title, id, summary, actions, plain, sectionRef, 
 }) {
   const key = id ?? title.replace(/\s*\(.*\)$/, "");
   const [collapsed, setCollapsed] = useSectionCollapse(key);
+  const toggle = () => setCollapsed(!collapsed);
   return (
-    <section ref={sectionRef} className="scroll-mt-2 border-t border-neutral-100 px-4 py-3 first:border-t-0">
-      <div className={cn("flex items-center justify-between gap-2", !collapsed && "mb-2")}>
+    <section ref={sectionRef} className="scroll-mt-0 border-t border-neutral-200 first:border-t-0">
+      {/* Grey header strip, pinned to the top of the panel while its section scrolls. */}
+      <div className="sticky top-0 z-[5] flex min-h-[2.5rem] items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-1.5">
         <button
           type="button"
           aria-expanded={!collapsed}
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggle}
           title={collapsed ? `Show ${title}` : `Minimise ${title}`}
-          className="group -ml-1 flex min-w-0 items-center gap-1 rounded px-1 text-left hover:bg-neutral-50"
+          className="group flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <SectionIcon id={key} />
+          <h4 className="truncate text-[13px] font-semibold text-neutral-900 group-hover:text-blue-700">{title}</h4>
+        </button>
+        {!collapsed && actions}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? `Show ${title}` : `Minimise ${title}`}
+          tabIndex={-1}
+          className="-mr-1.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800"
         >
           <svg
-            className={cn("flex-shrink-0 text-neutral-400 transition-transform group-hover:text-blue-600", collapsed && "-rotate-90")}
-            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+            className={cn("transition-transform", collapsed && "-rotate-90")}
+            width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden
           >
             <path d="M6 9l6 6 6-6" />
           </svg>
-          <h4 className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-400 group-hover:text-neutral-600">{title}</h4>
         </button>
-        {!collapsed && actions}
       </div>
       {collapsed
-        ? summary != null && summary !== "" && <p className="mt-0.5 truncate pl-4 text-[11px] text-neutral-500">{summary}</p>
-        : plain ? children : <dl className="space-y-1.5 text-xs">{children}</dl>}
+        ? summary != null && summary !== "" && <p className="truncate py-2 pl-[2.4375rem] pr-4 text-[11px] text-neutral-500">{summary}</p>
+        : <div className="px-4 pb-3.5 pt-2.5">{plain ? children : <dl className="space-y-1.5 text-xs">{children}</dl>}</div>}
     </section>
   );
 }
