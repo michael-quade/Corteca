@@ -24,5 +24,8 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Static images in public/ skip the gate: the image optimizer (_next/image) fetches
+  // them server-side without the visitor's cookie, so gating them broke the login
+  // page's background (400 "isn't a valid image").
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|png|gif|svg|webp|avif|ico)$).*)'],
 };
