@@ -58,7 +58,7 @@ export function EventsExpanded() {
           <path d="M15 6l-6 6 6 6" />
         </IconButton>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1">
         <EventsBody wide />
       </div>
     </section>
