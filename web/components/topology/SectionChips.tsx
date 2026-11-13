@@ -18,7 +18,7 @@ const SHORT: Record<string, string> = {
   "WAN port": "WAN port",
 };
 
-/** How far below the top of the scroll area a section may start and still count as current. */
+/** How far below the top of the scroll area a section may start and still count as current (before the last screenful). */
 const SPY_SLACK = 8;
 
 /**
@@ -46,11 +46,17 @@ export function SectionChips({ scrollRef, resetKey }: { scrollRef: RefObject<HTM
     const el = scrollRef.current;
     if (!el) return;
     if (locked.current != null) { setCurrent(locked.current); return; }
+    // The current section is the last one starting above a reading line. Short sections at
+    // the end never reach the top, so over the last screenful of scrolling (or the whole
+    // range, when there's less) the line slides from the top down to the bottom: every
+    // section gets its turn, in order, and the bottom of the scroll lands on the last one.
+    const max = el.scrollHeight - el.clientHeight;
+    const stretch = Math.min(max, el.clientHeight);
+    const progress = stretch > 0 ? Math.min(1, Math.max(0, (el.scrollTop - (max - stretch)) / stretch)) : 0;
+    const line = SPY_SLACK + progress * (el.clientHeight - SPY_SLACK);
     const top = el.getBoundingClientRect().top;
-    const list = sections();
     let cur = 0;
-    list.forEach((s, i) => { if (s.getBoundingClientRect().top - top <= SPY_SLACK) cur = i; });
-    if (el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) cur = list.length - 1;
+    sections().forEach((s, i) => { if (s.getBoundingClientRect().top - top <= line) cur = i; });
     setCurrent(cur);
   }, [scrollRef, sections]);
 
