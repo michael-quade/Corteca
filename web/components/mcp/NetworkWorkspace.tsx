@@ -24,6 +24,7 @@ import { applySwitches } from "@/web/lib/inferredSwitches";
 import { rememberNetwork } from "@/web/lib/recentNetworks";
 import type { Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
+import { EventsContext, useEventsController } from "@/web/components/events/EventsContext";
 import { cn } from "@/web/lib/utils";
 import type { NetworkWorkspaceProps } from "./NetworkWorkspace.types";
 
@@ -74,6 +75,8 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
     const base = applyWifiDetails(applyModelBands(applyDeviceNames(normaliseMcpNetwork(response.payload, response.homeWifiId), names), modelBands), wifi);
     return { ...applyAiReport(applySwitches(base, ports), ai.analysis.result), wan: wan ?? undefined };
   }, [response, names, wifi, ports, wan, ai.analysis.result, modelBands]);
+  // Corteca's activity log (events drawer, AP / client panels, diagram badges), read in the background.
+  const events = useEventsController(networkId, response?.homeWifiId ?? null, network);
   // MCP lists only clients online now; Corteca's REST history fills "Recently disconnected" (in the background).
   const history = useMemberHistory(response?.homeWifiId ?? null, response);
   const disconnected = useMemo(() => ({
@@ -119,9 +122,15 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
     if (!ai.analysis.result && !ai.analysis.running) void ai.analyze();
   }, [ai]);
 
+  const { setDrawer } = events;
+  const openEvents = useCallback(() => {
+    setDrawer("open");
+    topologyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [setDrawer]);
+
   useEffect(() => {
-    actions.current[networkId] = { refresh: () => void refresh(), aiAnalysis };
-  }, [actions, networkId, refresh, aiAnalysis]);
+    actions.current[networkId] = { refresh: () => void refresh(), aiAnalysis, events: openEvents };
+  }, [actions, networkId, refresh, aiAnalysis, openEvents]);
   useEffect(() => () => { delete actions.current[networkId]; }, [actions, networkId]);
 
   // Remember every network that loads, with its subscriber when we know it.
@@ -135,9 +144,9 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
   useEffect(() => {
     onStatus(networkId, {
       loaded: !!response, loading: fetching, refreshing, aiRunning, error: !!error,
-      capturedAt: network?.capturedAt ?? null, gatewayModel, layout: view.layout,
+      capturedAt: network?.capturedAt ?? null, gatewayModel, layout: view.layout, eventsToday: events.today,
     });
-  }, [networkId, onStatus, response, fetching, refreshing, aiRunning, error, network?.capturedAt, gatewayModel, view.layout]);
+  }, [networkId, onStatus, response, fetching, refreshing, aiRunning, error, network?.capturedAt, gatewayModel, view.layout, events.today]);
 
   const select = useCallback((selection: Selection | null) => update({ selection }), [update]);
   // Picks from the AP cards or clients table bring the graph back into view.
@@ -180,6 +189,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
           {network.aps.length > 0 ? (
             <section ref={topologyRef} className="scroll-mt-16">
               <h2 className="sr-only">Network topology</h2>
+              <EventsContext.Provider value={events}>
               <TopologyCanvas
                 network={network}
                 selection={view.selection}
@@ -191,6 +201,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
                 initialViewport={view.viewport}
                 onViewportChange={(viewport) => update({ viewport })}
               />
+              </EventsContext.Provider>
             </section>
           ) : (
             <p className="text-sm text-neutral-400">MCP returned no mesh data for this network.</p>

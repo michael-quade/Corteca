@@ -7,6 +7,7 @@ import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
 import { ApEthernetPorts } from "./ApEthernetPorts";
 import { ApRadios } from "./ApRadios";
+import { ApEvents } from "@/web/components/events/ApEvents";
 import { AiNotesSection } from "./AiNotesSection";
 import { SwitchDetails } from "./SwitchDetails";
 import { WanDetails } from "./WanDetails";
@@ -40,29 +41,6 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
       <DetailSection title="Access point">
         <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
         <DetailRow label="Clients">{ap.clientCount}</DetailRow>
-        {ap.mlo && <DetailRow label="Multi-link (MLO)">On</DetailRow>}
-        <DetailRow label="MAC" mono>{ap.mac}</DetailRow>
-        <DetailRow label="Serial" mono>{ap.serial}</DetailRow>
-        <DetailRow label="Firmware" mono>{ap.firmware}</DetailRow>
-        <DetailRow label="Hardware" mono>{ap.hardwareVersion}</DetailRow>
-        <DetailRow label="LAN IP" mono>{ap.ipAddress}</DetailRow>
-        <DetailRow label="Public IP" mono>{ap.wanIp}</DetailRow>
-        <DetailRow label="Last boot">{formatDate(ap.lastBoot)}</DetailRow>
-        <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
-      </DetailSection>
-      <AiNotesSection notes={ap.ai} />
-      {talkers.length > 0 && (
-        <DetailSection title="Top clients by traffic">
-          {talkers.map(({ member, total }) => (
-            <DetailRow key={member.id} label={formatBytes(total)}>
-              <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{clientName(member)}</JumpButton>
-            </DetailRow>
-          ))}
-        </DetailSection>
-      )}
-      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
-      <ApRadios ap={ap} />
-      <DetailSection title="Mesh">
         {parent && uplink ? (
           <>
             <DetailRow label="Uplink to">
@@ -85,7 +63,29 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
             </DetailRow>
           );
         })}
+        {ap.mlo && <DetailRow label="Multi-link (MLO)">On</DetailRow>}
+        <DetailRow label="MAC" mono>{ap.mac}</DetailRow>
+        <DetailRow label="Serial" mono>{ap.serial}</DetailRow>
+        <DetailRow label="Firmware" mono>{ap.firmware}</DetailRow>
+        <DetailRow label="Hardware" mono>{ap.hardwareVersion}</DetailRow>
+        <DetailRow label="LAN IP" mono>{ap.ipAddress}</DetailRow>
+        <DetailRow label="Public IP" mono>{ap.wanIp}</DetailRow>
+        <DetailRow label="Last boot">{formatDate(ap.lastBoot)}</DetailRow>
+        <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
       </DetailSection>
+      <AiNotesSection notes={ap.ai} />
+      {talkers.length > 0 && (
+        <DetailSection title="Top clients by traffic">
+          {talkers.map(({ member, total }) => (
+            <DetailRow key={member.id} label={formatBytes(total)}>
+              <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{clientName(member)}</JumpButton>
+            </DetailRow>
+          ))}
+        </DetailSection>
+      )}
+      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
+      <ApEvents ap={ap} />
+      <ApRadios ap={ap} />
     </>
   );
 }

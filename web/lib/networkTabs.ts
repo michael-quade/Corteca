@@ -26,12 +26,16 @@ export interface TabStatus {
   capturedAt: string | null;
   gatewayModel?: string;
   layout: LayoutMode;
+  /** Network events in the last 24 h (top-bar Events button). */
+  eventsToday?: number;
 }
 
 /** Top-bar actions on the active tab, registered by its workspace. */
 export interface WorkspaceActions {
   refresh: () => void;
   aiAnalysis: () => void;
+  /** Open the events drawer on the diagram. */
+  events: () => void;
 }
 
 export const isBusy = (s: TabStatus | undefined) => !!s && (s.loading || s.refreshing || s.aiRunning);

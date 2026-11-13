@@ -83,6 +83,8 @@ export default function McpNetworkVisualizerPage() {
             refreshing={activeStatus?.refreshing}
             onAiAnalysis={canAct ? () => activeTab && actions.current[activeTab.networkId]?.aiAnalysis() : undefined}
             aiRunning={activeStatus?.aiRunning}
+            onEvents={canAct ? () => activeTab && actions.current[activeTab.networkId]?.events() : undefined}
+            eventsToday={activeStatus?.eventsToday}
           />
 
           {tabs.tabs.length > 0 && (

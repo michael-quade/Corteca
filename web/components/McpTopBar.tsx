@@ -24,7 +24,7 @@ function capturedLabel(iso: string): string {
 }
 
 /** One slim row: back link, title, subscriber search, and the current network chip. */
-export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber, onRefresh, refreshing, onAiAnalysis, aiRunning }: McpTopBarProps) {
+export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscriber, onRefresh, refreshing, onAiAnalysis, aiRunning, onEvents, eventsToday }: McpTopBarProps) {
   const online = subscriber?.home_wifis?.[0]?.status?.online;
   // Re-render every 30 s so "(3 min ago)" keeps counting.
   const [, tick] = useState(0);
@@ -76,6 +76,20 @@ export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscribe
                   </svg>
                 )}
               AI analysis
+            </button>
+          )}
+          {onEvents && (
+            <button
+              type="button"
+              onClick={onEvents}
+              title="Network events from Corteca's activity log: reboots, outages, backhaul and channel changes, new clients"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M4 6h16M4 12h16M4 18h10" />
+              </svg>
+              Events
+              {!!eventsToday && <span className="rounded-full bg-red-50 px-1.5 text-[11px] text-red-700">{eventsToday} today</span>}
             </button>
           )}
           {onRefresh && (

@@ -4,6 +4,7 @@ import { Handle, type NodeProps } from "@xyflow/react";
 import { cn } from "@/web/lib/utils";
 import { AP_H, AP_W, type ApFlowNode } from "@/web/lib/topologyFlow";
 import { HIDDEN_HANDLE, handleLayout, isSelected, useTopologyUi } from "./TopologyContext";
+import { EventBadge } from "@/web/components/events/EventBadge";
 
 function GatewayGlyph() {
   return (
@@ -90,6 +91,8 @@ export function ApNode({ data }: NodeProps<ApFlowNode>) {
       >
         {ap.clientCount}
       </span>
+
+      <EventBadge mac={ap.mac} />
 
       <Handle type="source" position={handles.source} style={handles.style} className={HIDDEN_HANDLE} />
     </div>

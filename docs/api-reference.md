@@ -658,16 +658,18 @@ Pass modem MAC → returns connected gateways. Pass gateway MAC → returns conn
 ### Search network activity
 
 ```
-GET /networks/{homeWifiId}/activity
+GET /networks/{homeWifiId}/activity_traces/
 ```
 
 **Swagger:** `activity-log#/Networks/getNetworkActivity`
+
+*Checked on demo2 (2026-11-12): the path is `activity_traces/` (`/activity` returns 500). Max 500 rows per page, `page` starts at 0. A client's events carry its MAC in `device_id`; `member_id` filtering returns nothing. Request payloads in operator events can contain passwords.*
 
 **Query parameters:**
 
 | Parameter | Description |
 |---|---|
-| `device_id` | Filter by extender MAC |
+| `device_id` | Filter by AP or client MAC |
 | `origin` | `USER`, `AGENT`, `DEVICE`, `MESHNETWORK` |
 | `operation` | e.g. `DEV_REBOOT`, `DEV_FIRMWARE_UPGRADED` (comma-separated for multiple) |
 | `from` / `to` | Date range |
@@ -678,7 +680,7 @@ GET /networks/{homeWifiId}/activity
 ### Download activity history (CSV/text)
 
 ```
-GET /networks/{homeWifiId}/activity/download
+GET /networks/{homeWifiId}/activity_traces/download
 ```
 
 **Swagger:** `activity-log#/Networks/downloadNetworkActivity`

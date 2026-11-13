@@ -10,6 +10,7 @@ import { clientStandard, standardLabel } from "@/web/lib/wifiDetails";
 import { memberAiNotes } from "@/web/lib/aiAnalysis";
 import { AiNotesSection } from "./AiNotesSection";
 import { ClientRoaming } from "./ClientRoaming";
+import { ClientEvents } from "@/web/components/events/ClientEvents";
 import { switchOfClient, wiredPort } from "@/web/lib/inferredSwitches";
 import { clientLinks, type ClientLink } from "@/web/lib/clientFields";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatDuration, formatMbps } from "./DetailParts";
@@ -119,6 +120,7 @@ export function ClientDetails({ network, member, onSelect }: {
         {!wired && <DetailRow label="802.11k/v/r">{roaming || null}</DetailRow>}
         <DetailRow label="First seen">{formatDate(member.first_seen)}</DetailRow>
       </DetailSection>
+      <ClientEvents member={member} />
     </>
   );
 }

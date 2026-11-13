@@ -22,6 +22,9 @@ import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
 import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
+import { flowClickHandlers } from "./flowClicks";
+import { EventsDrawer } from "@/web/components/events/EventsDrawer";
+import { EventsExpanded } from "@/web/components/events/EventsExpanded";
 
 const PANEL_W = 424; // detail panel width + margin, kept clear when panning to a node
 
@@ -213,30 +216,7 @@ function Canvas(props: TopologyCanvasProps) {
               elementsSelectable={false}
               // Registering click handlers also keeps React Flow from turning off
               // pointer events on non-selectable nodes/edges (pills, "+N", labels).
-              onNodeClick={(_, node) => {
-                if (node.type === "wired") {
-                  const id = node.id.slice(3);
-                  onSelect(selection?.kind === "client" && selection.id === id ? null : { kind: "client", id });
-                  return;
-                }
-                if (node.type !== "ap" && node.type !== "switch") return;
-                const kind = node.type === "switch" ? "switch" : "ap";
-                onSelect(selection?.kind === kind && selection.id === node.id ? null : { kind, id: node.id });
-              }}
-              onEdgeClick={(_, edge) => {
-                if (edge.type === "wiredLink") {
-                  const id = edge.target.slice(3);
-                  onSelect(selection?.kind === "client" && selection.id === id ? null : { kind: "client", id });
-                  return;
-                }
-                if (edge.type === "switchUplink") {
-                  onSelect(selection?.kind === "switch" && selection.id === edge.target ? null : { kind: "switch", id: edge.target });
-                  return;
-                }
-                if (edge.type !== "backhaul") return;
-                const child = edge.target;
-                onSelect(selection?.kind === "link" && selection.id === child ? null : { kind: "link", id: child });
-              }}
+              {...flowClickHandlers(selection, onSelect)}
               onPaneClick={() => {
                 const s0 = gestureStart.current, v = getViewport();
                 gestureStart.current = null;
@@ -271,12 +251,17 @@ function Canvas(props: TopologyCanvasProps) {
                   className="!rounded-lg !border !border-neutral-200"
                 />
               )}
-              <Panel position="top-left" className="flex items-start gap-2">
-                <TopologyLegend />
-                <ZoomControls />
+              {/* Full height, so the events drawer under the legend can fill the rest of the left side. */}
+              <Panel position="top-left" className="!bottom-0 !pointer-events-none flex flex-col items-start gap-2">
+                <div className="pointer-events-auto flex items-start gap-2">
+                  <TopologyLegend />
+                  <ZoomControls />
+                </div>
+                <EventsDrawer />
               </Panel>
             </ReactFlow>
           )}
+          <EventsExpanded />
           <div ref={overlay.setTarget} />
           {selection && (
             <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} />
