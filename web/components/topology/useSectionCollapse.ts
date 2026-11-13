@@ -35,6 +35,14 @@ function subscribe(l: () => void) {
   return () => { listeners.delete(l); };
 }
 
+/** Every collapsed section id (the section chips mark folded sections). */
+export function useCollapsedSections(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribe, read, () => EMPTY);
+}
+
+/** Fold / unfold a section from outside it (a section chip unfolds what it jumps to). */
+export const setSectionCollapsed = write;
+
 /** [collapsed, setCollapsed] for one section id. */
 export function useSectionCollapse(id: string): [boolean, (value: boolean) => void] {
   const set = useSyncExternalStore(subscribe, read, () => EMPTY);

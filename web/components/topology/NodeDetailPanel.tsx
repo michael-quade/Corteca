@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { BackhaulBand, McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
 import { SLOW_ETHERNET_MBPS, clientName, isEthernet } from "@/web/lib/topologyFlow";
 import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
@@ -15,6 +16,7 @@ import { GatewayLocation } from "./GatewayLocation";
 import { switchById } from "@/web/lib/inferredSwitches";
 import { memberIdentity } from "@/web/lib/deviceNames";
 import { useDeviceRename, type RenameTarget } from "./DeviceRename";
+import { SectionChips } from "./SectionChips";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -158,6 +160,11 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
   onSelect: Select;
   onClose: () => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rename = useDeviceRename();
+  const selKey = `${selection.kind}:${selection.id}`;
+  // Another device starts at the top of the panel (the scroll area is reused between them).
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [selKey]);
   const ap = selection.kind === "ap" ? network.aps.find((a) => a.mac === selection.id) : undefined;
   const member = selection.kind === "client" ? network.members.find((m) => m.id === selection.id) : undefined;
   const link = selection.kind === "link" ? network.backhaul.find((l) => l.childMac === selection.id) : undefined;
@@ -167,7 +174,6 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
 
   const title = ap ? apLabel(ap) : member ? clientName(member) : sw ? `Switch on ${sw.port}` : wanGateway ? "Internet" : "Backhaul link";
   const kicker = ap ? "Access point" : member ? "Client" : sw ? "Switch (inferred)" : wanGateway ? "WAN" : "Link";
-  const rename = useDeviceRename();
   const renameTarget: RenameTarget | null = ap
     ? { mac: ap.mac, kind: "Beacon", description: `${ap.model} · ${ap.mac}` }
     : member
@@ -208,7 +214,8 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </header>
-      <div className="flex-1 overflow-y-auto">
+      <SectionChips scrollRef={scrollRef} resetKey={selKey} />
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {ap && <ApDetails network={network} ap={ap} onSelect={onSelect} />}
         {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
         {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}

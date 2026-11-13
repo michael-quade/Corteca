@@ -26,7 +26,7 @@ export function DetailSection({ title, id, summary, actions, plain, sectionRef, 
   const [collapsed, setCollapsed] = useSectionCollapse(key);
   const toggle = () => setCollapsed(!collapsed);
   return (
-    <section ref={sectionRef} className="scroll-mt-0 border-t border-neutral-200 first:border-t-0">
+    <section ref={sectionRef} data-section={key} className="scroll-mt-0 border-t border-neutral-200 first:border-t-0">
       {/* Grey header strip, pinned to the top of the panel while its section scrolls. */}
       <div className="sticky top-0 z-[5] flex min-h-[2.5rem] items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-1.5">
         <button
