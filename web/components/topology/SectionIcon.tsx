@@ -8,6 +8,7 @@ const PATHS: Record<string, string> = {
   "Top clients by traffic": "M4 20h16M7 16V10M12 16V5M17 16v-4",
   "Ethernet ports": "M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM7 10v4M10 10v4M14 10v4M17 10v4",
   "Events": "M4 6h16M4 12h16M4 18h10",
+  "Backhaul history": "M12 8v4l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5M3.5 4v4.5H8",
   "Radios": "M5 19v-4M10 19v-8M15 19V7M20 19V4",
   "Backhaul link": "M9 15l6-6M10.5 6.5l1.8-1.8a4 4 0 0 1 5.7 5.7l-1.8 1.8M13.5 17.5l-1.8 1.8a4 4 0 0 1-5.7-5.7l1.8-1.8",
   "Bands": "M3 8h18M3 12h18M3 16h18",

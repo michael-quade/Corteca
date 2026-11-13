@@ -40,6 +40,8 @@ export interface McpAccessPoint {
   mlo: boolean;
   /** Channel / width / airtime per radio, from the gateway (applyWifiDetails). */
   radios?: ApRadio[];
+  /** Its backhaul's MLO (MLD) station MAC, lowercase colon form: MCP's `BSTA` MLD, else the gateway's (applyWifiDetails). */
+  backhaulMld?: string;
   /** Lines about this AP from the AI analysis report (applyAiReport). */
   ai?: AiNotes;
 }
@@ -357,6 +359,11 @@ export function normaliseMcpNetwork(payload: unknown, homeWifiId: string): McpNe
       ssidBands,
       clientCount: clientsByAp.get(mac) ?? 0,
       mlo: (Array.isArray(a.mlds) ? (a.mlds as Obj[]) : []).some((m) => m.role === "AP" && Array.isArray(m.links) && m.links.length > 1),
+      // Its backhaul station MLD (`role: "BSTA"`): Corteca files an MLO backhaul's history under it.
+      ...(() => {
+        const bsta = (Array.isArray(a.mlds) ? (a.mlds as Obj[]) : []).find((m) => m.role === "BSTA" && typeof m.mac === "string");
+        return bsta ? { backhaulMld: String(bsta.mac).toLowerCase().replace(/-/g, ":") } : {};
+      })(),
       index,
     };
   })

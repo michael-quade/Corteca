@@ -15,6 +15,8 @@ export interface WifiDetails {
   /** Station MAC (lowercase colon form) → negotiated standard. */
   backhaul: Record<string, AssociationStandard>;
   clients: Record<string, AssociationStandard>;
+  /** Backhaul MLO stations: MLD MAC → its per-band (affiliated) station MACs. */
+  backhaulMlds?: Record<string, string[]>;
 }
 
 const GENERATIONS = ["WiFi 4", "WiFi 5", "WiFi 6", "WiFi 7"];
@@ -58,6 +60,10 @@ export function sanitiseWifiDetails(raw: unknown): WifiDetails | null {
   for (const key of ["backhaul", "clients"] as const) {
     for (const [mac, std] of Object.entries(d[key] ?? {})) if (standardOk(std)) out[key][colon(mac)] = std;
   }
+  for (const [mld, list] of Object.entries(d.backhaulMlds ?? {})) {
+    const macs = Array.isArray(list) ? list.filter((m): m is string => typeof m === "string").map(colon) : [];
+    if (macs.length) (out.backhaulMlds ??= {})[colon(mld)] = macs;
+  }
   return out;
 }
 
@@ -89,7 +95,11 @@ export function applyWifiDetails(network: McpNetwork, details: WifiDetails | nul
   });
   const aps = network.aps.map((ap) => {
     const radios = radiosOf.get(ap.mac);
-    return radios ? { ...ap, radios: radios.map((r) => (backhaulRadios.has(r) ? { ...r, backhaul: true } : r)) } : ap;
+    if (!radios) return ap;
+    // Its backhaul MLD: the one whose per-band stations are this AP's backhaul stations.
+    const stas = new Set(radios.map((r) => r.backhaulStaMac).filter(Boolean));
+    const backhaulMld = Object.entries(details.backhaulMlds ?? {}).find(([, macs]) => macs.some((m) => stas.has(m)))?.[0];
+    return { ...ap, radios: radios.map((r) => (backhaulRadios.has(r) ? { ...r, backhaul: true } : r)), ...(backhaulMld && !ap.backhaulMld && { backhaulMld }) };
   });
   const members = network.members.map((m) => {
     const gatewayStandard = details.clients[colon(m.id)];

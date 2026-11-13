@@ -25,7 +25,7 @@ type Hit = { x: number } & ({ kind: "session"; session: RoamSession } | { kind: 
  * connected. Hovering anywhere on it (or focusing a segment) shows that connection — or gap — in a
  * bubble under the pointer.
  */
-export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf }: {
+export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf, axis = true }: {
   sessions: RoamSession[];
   from: number;
   to: number;
@@ -33,6 +33,8 @@ export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf
   labelOf: (ap: string) => string;
   /** Detail lines for a connection's bubble (band · channel · signal, how it ended). */
   linesOf: (s: RoamSession) => string[];
+  /** The time axis under the bar (off for all but the last of several stacked bars). */
+  axis?: boolean;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
   const [hit, setHit] = useState<Hit | null>(null);
@@ -64,7 +66,7 @@ export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf
   const bubbleLeft = hit ? Math.min(Math.max(hit.x - BUBBLE_W / 2, 0), Math.max(width - BUBBLE_W, 0)) : 0;
 
   return (
-    <div className="mb-3">
+    <div className={axis ? "mb-3" : "mb-2"}>
       <div className="relative">
         <div
           ref={barRef}
@@ -126,11 +128,11 @@ export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf
           </div>
         )}
       </div>
-      <div className="mt-1 flex justify-between gap-2 text-[10px] text-neutral-400">
+      {axis && <div className="mt-1 flex justify-between gap-2 text-[10px] text-neutral-400">
         <span>{shortTime(from)}</span>
         <span>Hover for details · grey = not connected</span>
         <span>now</span>
-      </div>
+      </div>}
     </div>
   );
 }

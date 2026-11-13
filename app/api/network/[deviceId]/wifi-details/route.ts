@@ -94,13 +94,21 @@ export async function GET(
   // Each MLO station: its MLD MAC and every per-band MAC (MCP keys a backhaul band by the
   // per-band station, a client by its MLD MAC). A backhaul station is listed in BackhaulSta.
   const mldMacs = new Map<string, string[]>();
+  const mldOwn = new Map<string, string>();
   for (const [path, mac] of Object.entries(flat)) {
     const m = path.match(STAMLD_RE);
-    if (m && mac) mldMacs.set(m[1], [...(mldMacs.get(m[1]) ?? []), mac.toLowerCase()]);
+    if (!m || !mac) continue;
+    mldMacs.set(m[1], [...(mldMacs.get(m[1]) ?? []), mac.toLowerCase()]);
+    if (path.endsWith('.MLDMACAddress')) mldOwn.set(m[1], mac.toLowerCase());
   }
-  for (const macs of mldMacs.values()) {
-    const target = macs.some((m) => backhaulStas.has(m)) ? details.backhaul : details.clients;
+  for (const [key, macs] of mldMacs) {
+    const isBackhaul = macs.some((m) => backhaulStas.has(m));
+    const target = isBackhaul ? details.backhaul : details.clients;
     for (const mac of macs) target[mac] = MLO;
+    // A backhaul MLD → its per-band stations: Corteca files the MLO backhaul's history under
+    // the MLD MAC, so the AP panel's Backhaul history needs it per Beacon.
+    const own = mldOwn.get(key);
+    if (isBackhaul && own) (details.backhaulMlds ??= {})[own] = macs.filter((m) => m !== own);
   }
 
   console.log(`[wifi-details:${gatewayMac}] ${Object.keys(details.radios).length} APs with radios, ${Object.keys(details.backhaul).length} backhaul + ${Object.keys(details.clients).length} client standards`);

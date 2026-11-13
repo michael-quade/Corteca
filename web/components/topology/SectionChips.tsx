@@ -10,6 +10,7 @@ const SHORT: Record<string, string> = {
   "Ethernet ports": "Ports",
   "Backhaul link": "Backhaul",
   "Roaming history": "Roaming",
+  "Backhaul history": "Backhaul",
   "Device events": "Events",
   "Inferred switch": "Switch",
   "Wired clients": "Wired",

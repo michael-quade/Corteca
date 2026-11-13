@@ -8,6 +8,7 @@ import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
 import { ApEthernetPorts } from "./ApEthernetPorts";
 import { ApRadios } from "./ApRadios";
+import { BackhaulHistory } from "./BackhaulHistory";
 import { ApEvents } from "@/web/components/events/ApEvents";
 import { AiNotesSection } from "./AiNotesSection";
 import { SwitchDetails } from "./SwitchDetails";
@@ -87,6 +88,7 @@ function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAcce
         </DetailSection>
       )}
       <ApEvents ap={ap} />
+      <BackhaulHistory network={network} ap={ap} onSelect={onSelect} />
       <ApRadios ap={ap} />
     </>
   );
