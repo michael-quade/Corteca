@@ -5,7 +5,7 @@ import { cn } from "@/web/lib/utils";
 import { EventsContext } from "@/web/components/events/EventsContext";
 import { IconButton } from "@/web/components/events/EventsChrome";
 import { DRAWER_MIN, TDS_TITLE, useTdsEvents } from "./TdsEventsContext";
-import { TdsBody, downloadTdsCsv, useTdsView } from "./TdsBody";
+import { ROOMY_WIDTH, TdsBody, downloadTdsCsv, useTdsView } from "./TdsBody";
 import { TdsRangeSwitch } from "./TdsFilters";
 
 /** Half the diagram at most, so the canvas stays usable beside it. */
@@ -107,7 +107,7 @@ export function TdsEventsDrawer() {
           </IconButton>
         </header>
         <div className="min-h-0 flex-1">
-          <TdsBody lead={<TdsRangeSwitch small />} />
+          <TdsBody roomy={width >= ROOMY_WIDTH} lead={<TdsRangeSwitch small />} />
         </div>
         <button
           type="button"

@@ -12,8 +12,10 @@ const MIN_SPAN = 0.004; // a span shorter than this share of the range draws as 
  * Each row at its exact time, one lane per level: dots for moments, bars for spans
  * (outages, backhaul episodes). Hover shows the row; a click jumps the list to its day.
  */
-export function TdsTimeline({ items, from, to, onPick }: {
+export function TdsTimeline({ items, from, to, onPick, caption = true }: {
   items: TdsItem[];
+  /** "Dot = one event …" line under the lanes. */
+  caption?: boolean;
   from: number;
   to: number;
   onPick: (at: number) => void;
@@ -68,8 +70,10 @@ export function TdsTimeline({ items, from, to, onPick }: {
           </div>
         </div>
       ))}
-      <span />
-      <p className="text-[10px] text-neutral-400">Dot = one event · bar = how long it lasted · click to jump the list to that day</p>
+      {caption && <>
+        <span />
+        <p className="text-[10px] text-neutral-400">Dot = one event · bar = how long it lasted · click to jump the list to that day</p>
+      </>}
     </div>
   );
 }

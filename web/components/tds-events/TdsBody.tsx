@@ -37,8 +37,14 @@ export function downloadTdsCsv(tds: TdsUi, items: TdsUi["items"]) {
   downloadText(tdsCsv(items, tds.base.names.label, (it, i) => eventPriority(it.events[i])), `tds-network-events-${tds.base.networkId}-${day}.csv`);
 }
 
-/** Fixed top (range, tiles, chart, timeline when wide, filters) over the scrolling list. */
-export function TdsBody({ wide, lead }: { wide?: boolean; lead?: ReactNode }) {
+/** Drawer width from which the chart and timeline sit beside the filters (as in the expanded view). */
+export const ROOMY_WIDTH = 600;
+
+/**
+ * Fixed top (range, tiles, chart, filters) over the scrolling list. `wide` = the expanded
+ * view; `roomy` = a drawer stretched past ROOMY_WIDTH: chart + timeline beside the filters.
+ */
+export function TdsBody({ wide, roomy, lead }: { wide?: boolean; roomy?: boolean; lead?: ReactNode }) {
   const tds = useTdsEvents();
   const view = useTdsView(tds);
   const [jump, setJump] = useState<{ day: number; n: number } | null>(null);
@@ -84,15 +90,16 @@ export function TdsBody({ wide, lead }: { wide?: boolean; lead?: ReactNode }) {
             ))}
           </p>
         )}
-        {wide ? (
-          // Chart + timeline beside the filters, so all of it stays on screen above the list.
-          <div className="grid grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)] gap-6">
+        {wide || roomy ? (
+          // Chart + timeline beside the filters: uses the width, and all of it stays on screen above the list.
+          <div className={cn("grid", wide ? "grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)] gap-6" : "grid-cols-2 gap-4")}>
             <div className="min-w-0 space-y-3">
-              <TdsBars buckets={view.buckets} hourly={view.hourly} wide onPick={pick} />
-              <TdsTimeline items={view.visible} from={view.from} to={view.to} onPick={pick} />
+              {/* In a stretched drawer: no bar legend or caption (the chips carry the colours), shorter bars. */}
+              <TdsBars buckets={view.buckets} hourly={view.hourly} wide legend={!!wide} height={wide ? 64 : 52} onPick={pick} />
+              <TdsTimeline items={view.visible} from={view.from} to={view.to} onPick={pick} caption={!!wide} />
             </div>
-            <div className="min-w-0 border-l border-neutral-100 pl-6">
-              <TdsFilters counts={view.counts} devices={view.devices} routineCount={view.routineCount} wide />
+            <div className={cn("min-w-0 border-l border-neutral-100", wide ? "pl-6" : "pl-4")}>
+              <TdsFilters counts={view.counts} devices={view.devices} routineCount={view.routineCount} wide={wide} />
             </div>
           </div>
         ) : (
