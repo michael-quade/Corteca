@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { FloatingTip, pointAnchor } from "@/web/components/ui/FloatingTip";
 import { buildTree, buildPositions, buildLinkDataMap, linkTip, collectEdges, flatNodes, buildBoundingBox, CANVAS_W, LEVEL_H, PAD_TOP } from "@/web/lib/networkTopology";
 import { filterConnectedDevices, computeDevicePositions, deviceColor, type DeviceNode } from "@/web/lib/networkMembers";
 import { wheelPixels } from "@/web/lib/wheelZoom";
@@ -188,13 +189,19 @@ export function NetworkTopologyMap({ data }: { data: NetworkTopologyData }) {
         </svg>
 
         {/* Floating tooltip */}
-        {tooltip && (
-          <div className="pointer-events-none absolute z-20 rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-lg"
-            style={{ left: Math.min(tooltip.px+14, (svgRef.current?.clientWidth??900)-160), top: Math.max(4, tooltip.py-40) }}>
-            <p className="text-xs font-semibold text-neutral-900">{tooltip.label}</p>
-            <p className="text-xs text-neutral-500">{tooltip.sub}</p>
-          </div>
-        )}
+        {/* Drawn at page level (FloatingTip), so the map's rounded, clipped frame can't cut it off near an edge. */}
+        {tooltip && svgRef.current && (() => {
+          const r = svgRef.current.getBoundingClientRect();
+          return (
+            <FloatingTip
+              anchor={pointAnchor(r.left + tooltip.px, r.top + tooltip.py - 10)} placement="above" onScrollAway={() => setTooltip(null)}
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-lg"
+            >
+              <p className="text-xs font-semibold text-neutral-900">{tooltip.label}</p>
+              <p className="text-xs text-neutral-500">{tooltip.sub}</p>
+            </FloatingTip>
+          );
+        })()}
       </div>
       <p className="text-center text-xs text-neutral-400">Scroll to zoom · drag to pan · double-click to fit</p>
     </div>

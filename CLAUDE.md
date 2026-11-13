@@ -517,7 +517,8 @@ web/
       SwNetworkTable.tsx
     ui/
       Button.tsx
-      Hint.tsx                    # Quick hover/focus tip (toolbar chips, network tabs)
+      FloatingTip.tsx             # Page-level hover tip (portal; fullscreen element in full screen) at an element or point, kept inside the window, flips above/below, optional arrow — so drawers' / panels' overflow can't clip it. Use it for every hover bubble: Hint, TDS severity timeline, roaming / backhaul bars, REST graph
+      Hint.tsx                    # Quick hover/focus tip (toolbar chips, network tabs, events filter chips) via FloatingTip
   contexts/
     ApiLogContext.tsx             # Stores API log entries; registers fetchWithAuth interceptor
     ApiStatsContext.tsx           # Accumulates call/byte stats; persists sessions to DB

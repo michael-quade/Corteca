@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { RoamSession } from "@/web/lib/roamingHistory";
 import { cn } from "@/web/lib/utils";
+import { FloatingTip, pointAnchor } from "@/web/components/ui/FloatingTip";
 
 export const shortTime = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -23,7 +24,7 @@ type Hit = { x: number } & ({ kind: "session"; session: RoamSession } | { kind: 
 /**
  * The window as one bar: a coloured segment per association (colour = access point), grey = not
  * connected. Hovering anywhere on it (or focusing a segment) shows that connection — or gap — in a
- * bubble under the pointer.
+ * bubble under the pointer, drawn at page level so the panel's scroll area can't hide it.
  */
 export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf, axis = true }: {
   sessions: RoamSession[];
@@ -61,9 +62,7 @@ export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf
     if (r && r.width > 0) setHit(hitAt(Math.min(Math.max(e.clientX - r.left, 0), r.width), r.width));
   };
 
-  const width = barRef.current?.offsetWidth ?? 0;
-  // Keep the bubble inside the bar's width; its arrow stays on the pointer.
-  const bubbleLeft = hit ? Math.min(Math.max(hit.x - BUBBLE_W / 2, 0), Math.max(width - BUBBLE_W, 0)) : 0;
+  const bar = hit ? barRef.current?.getBoundingClientRect() : undefined;
 
   return (
     <div className={axis ? "mb-3" : "mb-2"}>
@@ -96,36 +95,33 @@ export function RoamingTimeline({ sessions, from, to, colourOf, labelOf, linesOf
           {hit && <span className="pointer-events-none absolute inset-y-0 w-px bg-neutral-900/40" style={{ left: hit.x }} />}
         </div>
 
-        {hit && (
-          <div
-            role="tooltip"
-            className="pointer-events-none absolute top-full z-30 mt-2 rounded-lg bg-neutral-900 px-2.5 py-2 text-[11px] leading-snug text-white shadow-lg"
-            style={{ left: bubbleLeft, width: BUBBLE_W }}
+        {hit && bar && (
+          <FloatingTip
+            anchor={pointAnchor(bar.left + hit.x, bar.bottom)} arrow onScrollAway={() => setHit(null)}
+            className="rounded-lg bg-neutral-900 px-2.5 py-2 text-[11px] leading-snug text-white shadow-lg"
           >
-            <span
-              className="absolute -top-1 h-2 w-2 rotate-45 bg-neutral-900"
-              style={{ left: Math.min(Math.max(hit.x - bubbleLeft - 4, 8), BUBBLE_W - 16) }}
-            />
-            {hit.kind === "session" ? (
-              <>
-                <div className="flex items-center gap-1.5 font-semibold">
-                  <span className={cn("h-2 w-2 flex-shrink-0 rounded-full ring-1 ring-white/60", colourOf(hit.session.ap))} />
-                  <span className="truncate">{labelOf(hit.session.ap)}</span>
-                </div>
-                <div className="mt-0.5 text-neutral-300">
-                  {shortTime(hit.session.start)} · <span className="whitespace-nowrap">{shortDuration(hit.session.end - hit.session.start)}</span>
-                </div>
-                {linesOf(hit.session).filter(Boolean).map((line) => <div key={line}>{line}</div>)}
-              </>
-            ) : (
-              <>
-                <div className="font-semibold">Not connected</div>
-                <div className="mt-0.5 text-neutral-300">
-                  {shortTime(hit.start)} – {shortTime(hit.end)} · <span className="whitespace-nowrap">{shortDuration(hit.end - hit.start)}</span>
-                </div>
-              </>
-            )}
-          </div>
+            <div style={{ width: BUBBLE_W - 20 }}>
+              {hit.kind === "session" ? (
+                <>
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <span className={cn("h-2 w-2 flex-shrink-0 rounded-full ring-1 ring-white/60", colourOf(hit.session.ap))} />
+                    <span className="truncate">{labelOf(hit.session.ap)}</span>
+                  </div>
+                  <div className="mt-0.5 text-neutral-300">
+                    {shortTime(hit.session.start)} · <span className="whitespace-nowrap">{shortDuration(hit.session.end - hit.session.start)}</span>
+                  </div>
+                  {linesOf(hit.session).filter(Boolean).map((line) => <div key={line}>{line}</div>)}
+                </>
+              ) : (
+                <>
+                  <div className="font-semibold">Not connected</div>
+                  <div className="mt-0.5 text-neutral-300">
+                    {shortTime(hit.start)} – {shortTime(hit.end)} · <span className="whitespace-nowrap">{shortDuration(hit.end - hit.start)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </FloatingTip>
         )}
       </div>
       {axis && <div className="mt-1 flex justify-between gap-2 text-[10px] text-neutral-400">

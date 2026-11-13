@@ -5,12 +5,14 @@ import { cn } from "@/web/lib/utils";
 import { PRIORITIES, PRIORITY_META, type Priority } from "@/web/lib/eventPriority";
 import { dateOnly, spanLabel } from "@/web/lib/eventFormat";
 import type { TdsItem } from "@/web/lib/tdsEvents";
+import { FloatingTip, type TipAnchor } from "@/web/components/ui/FloatingTip";
 
 const MIN_SPAN = 0.004; // a span shorter than this share of the range draws as a dot
 
 /**
  * Each row at its exact time, one lane per level: dots for moments, bars for spans
- * (outages, backhaul episodes). Hover shows the row; a click jumps the list to its day.
+ * (outages, backhaul episodes). Hover shows the row (a page-level tip, so the drawer can't
+ * clip it); a click jumps the list to its day.
  */
 export function TdsTimeline({ items, from, to, onPick, caption = true }: {
   items: TdsItem[];
@@ -20,7 +22,11 @@ export function TdsTimeline({ items, from, to, onPick, caption = true }: {
   to: number;
   onPick: (at: number) => void;
 }) {
-  const [hover, setHover] = useState<{ item: TdsItem; x: number } | null>(null);
+  const [hover, setHover] = useState<{ item: TdsItem; anchor: TipAnchor } | null>(null);
+  const hoverOn = (item: TdsItem, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setHover({ item, anchor: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+  };
   const span = Math.max(1, to - from);
   const pos = (t: number) => Math.min(1, Math.max(0, (t - from) / span));
   const lanes = new Map<Priority, TdsItem[]>(PRIORITIES.map((p) => [p, []]));
@@ -41,8 +47,8 @@ export function TdsTimeline({ items, from, to, onPick, caption = true }: {
                   key={it.key}
                   type="button"
                   aria-label={text}
-                  onMouseEnter={() => setHover({ item: it, x: x0 })}
-                  onFocus={() => setHover({ item: it, x: x0 })}
+                  onMouseEnter={(e) => hoverOn(it, e.currentTarget)}
+                  onFocus={(e) => hoverOn(it, e.currentTarget)}
                   onBlur={() => setHover(null)}
                   onClick={() => onPick(it.start)}
                   style={isSpan ? { left: `${x0 * 100}%`, width: `${(x1 - x0) * 100}%` } : { left: `${x0 * 100}%` }}
@@ -57,15 +63,14 @@ export function TdsTimeline({ items, from, to, onPick, caption = true }: {
               );
             })}
             {hover?.item.priority === p && (
-              <div
-                role="tooltip"
-                className="pointer-events-none absolute bottom-full z-20 mb-1.5 max-w-[22rem] rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] text-white shadow-lg"
-                style={hover.x > 0.6 ? { right: `${(1 - hover.x) * 100}%` } : { left: `${hover.x * 100}%` }}
+              <FloatingTip
+                anchor={hover.anchor} placement="above" onScrollAway={() => setHover(null)}
+                className="max-w-[22rem] rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] text-white shadow-lg"
               >
                 <p className="font-semibold">{PRIORITY_META[p].short} · {dateOnly(hover.item.start)} {spanLabel(hover.item)}</p>
                 <p className="truncate">{hover.item.title}</p>
                 {hover.item.detail && <p className="truncate text-neutral-300">{hover.item.detail}</p>}
-              </div>
+              </FloatingTip>
             )}
           </div>
         </div>
