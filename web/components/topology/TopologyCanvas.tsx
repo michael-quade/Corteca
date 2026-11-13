@@ -25,6 +25,8 @@ import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
 import { flowClickHandlers } from "./flowClicks";
 import { EventsDrawer } from "@/web/components/events/EventsDrawer";
 import { EventsExpanded } from "@/web/components/events/EventsExpanded";
+import { TdsEventsDrawer } from "@/web/components/tds-events/TdsEventsDrawer";
+import { TdsEventsExpanded } from "@/web/components/tds-events/TdsEventsExpanded";
 
 const PANEL_W = 424; // detail panel width + margin, kept clear when panning to a node
 
@@ -258,10 +260,12 @@ function Canvas(props: TopologyCanvasProps) {
                   <ZoomControls />
                 </div>
                 <EventsDrawer />
+                <TdsEventsDrawer />
               </Panel>
             </ReactFlow>
           )}
           <EventsExpanded />
+          <TdsEventsExpanded />
           <div ref={overlay.setTarget} />
           {selection && (
             <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} />

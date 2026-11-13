@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/web/lib/utils";
 import type { EventItem } from "@/web/lib/eventItems";
 import { clock, spanLabel } from "@/web/lib/eventFormat";
@@ -37,7 +37,7 @@ export function EventDeviceLink({ mac }: { mac: string | null }) {
  * otherwise stacked for the drawer. `own` = a device's own panel: subject without the
  * device name, no device link.
  */
-export function EventRow({ item, wide, own }: { item: EventItem; wide?: boolean; own?: boolean }) {
+export function EventRow({ item, wide, own, marker }: { item: EventItem; wide?: boolean; own?: boolean; marker?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const expandable = item.fields.length > 0 || item.events.length > 1;
   const title = own ? item.subject : item.title;
@@ -45,7 +45,7 @@ export function EventRow({ item, wide, own }: { item: EventItem; wide?: boolean;
   const text = (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-neutral-900">
-        {!wide && <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", SEVERITY_DOT[item.severity])} aria-hidden />}
+        {!wide && (marker ?? <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", SEVERITY_DOT[item.severity])} aria-hidden />)}
         {expandable ? (
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="text-left hover:text-blue-700">
             {title}
@@ -63,9 +63,9 @@ export function EventRow({ item, wide, own }: { item: EventItem; wide?: boolean;
 
   if (wide) {
     return (
-      <li className={cn("grid grid-cols-[7.5rem_0.75rem_minmax(0,1fr)_14rem] items-start gap-3 rounded-lg px-3 py-2 hover:bg-neutral-50", open && "bg-neutral-50")}>
+      <li className={cn("grid items-start gap-3 rounded-lg px-3 py-2 hover:bg-neutral-50", marker ? "grid-cols-[7.5rem_1.75rem_minmax(0,1fr)_14rem]" : "grid-cols-[7.5rem_0.75rem_minmax(0,1fr)_14rem]", open && "bg-neutral-50")}>
         <span className="text-xs tabular-nums text-neutral-500">{spanLabel(item)}</span>
-        <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", SEVERITY_DOT[item.severity])} aria-hidden />
+        {marker ?? <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", SEVERITY_DOT[item.severity])} aria-hidden />}
         {text}
         <span className="min-w-0 text-right text-xs">{!own && <EventDeviceLink mac={item.device} />}</span>
       </li>

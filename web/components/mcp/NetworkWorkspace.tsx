@@ -25,6 +25,7 @@ import { rememberNetwork } from "@/web/lib/recentNetworks";
 import type { Selection } from "@/web/lib/topologySelection";
 import { useTopologyViewState } from "@/web/lib/useTopologyViewState";
 import { EventsContext, useEventsController } from "@/web/components/events/EventsContext";
+import { TdsEventsContext, useTdsEventsController } from "@/web/components/tds-events/TdsEventsContext";
 import { cn } from "@/web/lib/utils";
 import type { NetworkWorkspaceProps } from "./NetworkWorkspace.types";
 
@@ -77,6 +78,8 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
   }, [response, names, wifi, ports, wan, ai.analysis.result, modelBands]);
   // Corteca's activity log (events drawer, AP / client panels, diagram badges), read in the background.
   const events = useEventsController(networkId, response?.homeWifiId ?? null, network);
+  // TDS Network Events RCR: the same log with P1–P4 severity, its own popout.
+  const tdsEvents = useTdsEventsController(events);
   // MCP lists only clients online now; Corteca's REST history fills "Recently disconnected" (in the background).
   const history = useMemberHistory(response?.homeWifiId ?? null, response);
   const disconnected = useMemo(() => ({
@@ -190,6 +193,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
             <section ref={topologyRef} className="scroll-mt-16">
               <h2 className="sr-only">Network topology</h2>
               <EventsContext.Provider value={events}>
+              <TdsEventsContext.Provider value={tdsEvents}>
               <TopologyCanvas
                 network={network}
                 selection={view.selection}
@@ -201,6 +205,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
                 initialViewport={view.viewport}
                 onViewportChange={(viewport) => update({ viewport })}
               />
+              </TdsEventsContext.Provider>
               </EventsContext.Provider>
             </section>
           ) : (

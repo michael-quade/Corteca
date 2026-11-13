@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cortecaFetch } from '@/web/lib/corteca/cortecaFetch';
 import { EVENT_DAYS, parseEvents, type NetworkEvent } from '@/web/lib/networkEvents';
+import { markSsidResets } from '@/web/lib/ssidReset';
 
 // Corteca returns at most 500 rows per page (pages start at 0); a busy network fills
 // that in under a week, so we page until a short page or MAX_PAGES.
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ netw
     if (page === MAX_PAGES - 1) truncated = true;
   }
 
-  // Sanitised, de-duplicated across pages, newest first.
-  const events: NetworkEvent[] = parseEvents(rows);
+  // WiFi password changes flagged (value never sent), then sanitised, de-duplicated across pages, newest first.
+  const events: NetworkEvent[] = parseEvents(markSsidResets(rows));
   return NextResponse.json({ events, from, to, truncated });
 }

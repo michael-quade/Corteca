@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { EventItem } from "@/web/lib/eventItems";
 import { dayHeading, startOfDay } from "@/web/lib/eventFormat";
 import { EventRow } from "./EventRow";
@@ -11,15 +11,17 @@ const PER_DAY = 8;
 export const dayAnchor = (networkId: string, day: number) => `events-${networkId}-${day}`;
 
 /** Rows grouped by day, newest first; a few days at a time, a few rows per busy day. */
-export function EventList({ items, wide, networkId, jump }: {
-  items: EventItem[];
+export function EventList<T extends EventItem>({ items, wide, networkId, jump, marker }: {
+  items: T[];
   wide?: boolean;
   networkId: string;
   /** A day (start ms) picked on the day bars; bump `n` to jump again to the same day. */
   jump: { day: number; n: number } | null;
+  /** Replaces the severity dot on each row (the TDS popout's P1–P4 pill). */
+  marker?: (item: T) => ReactNode;
 }) {
   const days = useMemo(() => {
-    const map = new Map<number, EventItem[]>();
+    const map = new Map<number, T[]>();
     for (const it of items) {
       const d = startOfDay(it.start);
       const list = map.get(d);
@@ -52,7 +54,7 @@ export function EventList({ items, wide, networkId, jump }: {
               {list.length > 3 && <span className="font-normal text-neutral-500"> · {list.length} events</span>}
             </h4>
             <ol className="mt-0.5 space-y-0.5">
-              {shown.map((it) => <EventRow key={it.key} item={it} wide={wide} />)}
+              {shown.map((it) => <EventRow key={it.key} item={it} wide={wide} marker={marker?.(it)} />)}
             </ol>
             {list.length > PER_DAY && (
               <button
