@@ -17,6 +17,7 @@ import { edgeTypes, nodeTypes } from "./flowTypes";
 import { clientOwner } from "@/web/lib/inferredSwitches";
 import { TopologyLegend } from "./TopologyLegend";
 import { ZoomControls } from "./ZoomControls";
+import { useDrawerFit } from "./useDrawerFit";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
@@ -46,7 +47,7 @@ function Canvas(props: TopologyCanvasProps) {
   const { network, selection, onSelect, filters, onFiltersChange, layout, onLayoutChange, initialViewport, onViewportChange } = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
-  const { fitView, getViewport, setViewport, setCenter, getNode } = useReactFlow();
+  const { getViewport, setViewport, setCenter, getNode } = useReactFlow();
   // View from just before the detail panel first pushed the diagram aside;
   // restored when the panel closes. Dropped if the user moves the view meanwhile.
   const restoreView = useRef<Viewport | null>(null);
@@ -58,6 +59,11 @@ function Canvas(props: TopologyCanvasProps) {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
   const lastLayoutMode = useRef(layout);
+  // Fits keep clear of an open events drawer (at a comfortable width) and refit when it opens / closes.
+  const forgetRestore = useCallback(() => { restoreView.current = null; }, []);
+  const drawerFit = useDrawerFit(flowRef, nodes != null, forgetRestore);
+  const fitRef = useRef(drawerFit.fit);
+  fitRef.current = drawerFit.fit;
 
   const toggleCluster = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -92,12 +98,12 @@ function Canvas(props: TopologyCanvasProps) {
       // switching layout refits.
       if (lastLayoutMode.current !== layout) {
         restoreView.current = null;
-        requestAnimationFrame(() => fitView({ padding: 0.15, duration: 400 }));
+        requestAnimationFrame(() => fitRef.current(400));
       }
       lastLayoutMode.current = layout;
     });
     return () => { cancelled = true; };
-  }, [graph, layout, fitView]);
+  }, [graph, layout]);
 
   const highlight = useMemo(() => highlightFor(network, selection), [network, selection]);
 
@@ -153,11 +159,11 @@ function Canvas(props: TopologyCanvasProps) {
     const onChange = () => {
       restoreView.current = null;
       setFullscreen(document.fullscreenElement === wrapperRef.current);
-      requestAnimationFrame(() => fitView({ padding: 0.15, duration: 300 }));
+      requestAnimationFrame(() => fitRef.current(300));
     };
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
-  }, [fitView]);
+  }, []);
 
   function toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -226,7 +232,7 @@ function Canvas(props: TopologyCanvasProps) {
                 onSelect(null);
               }}
               fitView={!initialViewport}
-              fitViewOptions={{ padding: 0.15 }}
+              fitViewOptions={drawerFit.options}
               defaultViewport={initialViewport ?? undefined}
               // A user pan/zoom (event present; programmatic moves have none) keeps their view.
               onMoveStart={(event, v) => {
@@ -257,7 +263,7 @@ function Canvas(props: TopologyCanvasProps) {
               <Panel position="top-left" className="!bottom-0 !pointer-events-none flex flex-col items-start gap-2">
                 <div className="pointer-events-auto flex items-start gap-2">
                   <TopologyLegend />
-                  <ZoomControls />
+                  <ZoomControls onFit={() => drawerFit.fit(300)} />
                 </div>
                 <EventsDrawer />
                 <TdsEventsDrawer />
