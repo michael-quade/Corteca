@@ -75,6 +75,21 @@ export function ClientDetails({ network, member, onSelect }: {
   return (
     <>
       <AiNotesSection notes={memberAiNotes(member)} />
+      <DetailSection title="Device" summary={[deviceKindLabel(member), member.ipv4, member.id].filter(Boolean).join(" · ")}>
+        <DetailRow label="Name">{clientName(member)}</DetailRow>
+        {identity.autoAlias && identity.autoAlias !== member.alias && <DetailRow label="Detected name">{identity.autoAlias}</DetailRow>}
+        {raw.hostname && raw.hostname !== member.alias && raw.hostname !== identity.autoAlias && <DetailRow label="Hostname">{raw.hostname}</DetailRow>}
+        <DetailRow label="Detected as">{deviceKindLabel(member)}</DetailRow>
+        <DetailRow label="Category">{categoryLabel(identity.category)}</DetailRow>
+        <DetailRow label="MAC" mono>{member.id}</DetailRow>
+        <DetailRow label="IPv4" mono>{member.ipv4}</DetailRow>
+        <DetailRow label="IPv6" mono>{raw.ipv6?.[0]}</DetailRow>
+        {!wired && <DetailRow label="Supported bands">{bands.join(" · ") || null}</DetailRow>}
+        {!wired && <DetailRow label="Standard">{standard ? standardLabel(standard) : caps?.wifi_standard ?? member.wifi_standard}</DetailRow>}
+        {!wired && <DetailRow label="Mode">{caps?.ht_mode}</DetailRow>}
+        {!wired && <DetailRow label="802.11k/v/r">{roaming || null}</DetailRow>}
+        <DetailRow label="First seen">{formatDate(member.first_seen)}</DetailRow>
+      </DetailSection>
       <DetailSection title="Connection" summary={[ap ? apLabel(ap) : null, wired ? wiredType : mlo ? "WiFi · MLO" : `WiFi · ${clientBand(member)}`, !mlo && signal != null ? `${signal} dBm` : null].filter(Boolean).join(" · ")}>
         <DetailRow label="Access point">
           {ap ? <JumpButton onClick={() => onSelect({ kind: "ap", id: ap.mac })}>{apLabel(ap)}</JumpButton> : member.device_id}
@@ -104,22 +119,6 @@ export function ClientDetails({ network, member, onSelect }: {
       </DetailSection>
       {mlo && <MloLinks links={links} />}
       {!wired && <ClientRoaming network={network} member={member} onSelect={onSelect} />}
-
-      <DetailSection title="Device" summary={[deviceKindLabel(member), member.ipv4, member.id].filter(Boolean).join(" · ")}>
-        <DetailRow label="Name">{clientName(member)}</DetailRow>
-        {identity.autoAlias && identity.autoAlias !== member.alias && <DetailRow label="Detected name">{identity.autoAlias}</DetailRow>}
-        {raw.hostname && raw.hostname !== member.alias && raw.hostname !== identity.autoAlias && <DetailRow label="Hostname">{raw.hostname}</DetailRow>}
-        <DetailRow label="Detected as">{deviceKindLabel(member)}</DetailRow>
-        <DetailRow label="Category">{categoryLabel(identity.category)}</DetailRow>
-        <DetailRow label="MAC" mono>{member.id}</DetailRow>
-        <DetailRow label="IPv4" mono>{member.ipv4}</DetailRow>
-        <DetailRow label="IPv6" mono>{raw.ipv6?.[0]}</DetailRow>
-        {!wired && <DetailRow label="Supported bands">{bands.join(" · ") || null}</DetailRow>}
-        {!wired && <DetailRow label="Standard">{standard ? standardLabel(standard) : caps?.wifi_standard ?? member.wifi_standard}</DetailRow>}
-        {!wired && <DetailRow label="Mode">{caps?.ht_mode}</DetailRow>}
-        {!wired && <DetailRow label="802.11k/v/r">{roaming || null}</DetailRow>}
-        <DetailRow label="First seen">{formatDate(member.first_seen)}</DetailRow>
-      </DetailSection>
       <ClientEvents member={member} />
     </>
   );

@@ -17,7 +17,7 @@ import { GatewayLocation } from "./GatewayLocation";
 import { switchById } from "@/web/lib/inferredSwitches";
 import { memberIdentity } from "@/web/lib/deviceNames";
 import { useDeviceRename, type RenameTarget } from "./DeviceRename";
-import { SectionChips } from "./SectionChips";
+import { SectionChips, SectionOrderReset } from "./SectionChips";
 import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
 
 type Select = (sel: Selection) => void;
@@ -207,6 +207,8 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
             )}
           </h3>
         </div>
+        <div className="flex flex-shrink-0 items-center gap-0.5">
+        <SectionOrderReset kind={selection.kind} />
         <button
           type="button"
           onClick={onClose}
@@ -215,9 +217,11 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
+        </div>
       </header>
-      <SectionChips scrollRef={scrollRef} resetKey={selKey} />
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <SectionChips scrollRef={scrollRef} resetKey={selKey} kind={selection.kind} />
+      {/* A flex column: the sections' CSS order follows the user's chip order (SectionChips). */}
+      <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto">
         {ap && <ApDetails network={network} ap={ap} onSelect={onSelect} />}
         {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
         {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}
