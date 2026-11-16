@@ -7,9 +7,13 @@ import { dateOnly, spanLabel } from "@/web/lib/eventFormat";
 import type { TdsItem } from "@/web/lib/tdsEvents";
 import { FloatingTip, type TipAnchor } from "@/web/components/ui/FloatingTip";
 
+/** Lane labels | lanes. The chart above uses the same columns so the two line up. */
+export const TIMELINE_GRID = "grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2";
+
 const MIN_SPAN = 0.004; // a span shorter than this share of the range draws as a dot
 
 /**
+ * `from` / `to` = the chart's whole buckets (not the exact range), so both share one scale.
  * Each row at its exact time, one lane per level: dots for moments, bars for spans
  * (outages, backhaul episodes). Hover shows the row (a page-level tip, so the drawer can't
  * clip it); a click jumps the list to its day.
@@ -33,7 +37,7 @@ export function TdsTimeline({ items, from, to, onPick, caption = true }: {
   for (const it of items) lanes.get(it.priority)!.push(it);
 
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1" onMouseLeave={() => setHover(null)}>
+    <div className={cn(TIMELINE_GRID, "items-center gap-y-1")} onMouseLeave={() => setHover(null)}>
       {PRIORITIES.map((p) => (
         <div key={p} className="contents">
           <span className="text-[11px] text-neutral-600">{PRIORITY_META[p].label}</span>

@@ -69,7 +69,8 @@ export function ApRadios({ ap }: { ap: McpAccessPoint }) {
     <DetailSection title="Radios" summary={ap.radios?.length ? ap.radios.map((r) => `${r.band}${r.channel != null ? ` Ch ${r.channel}` : ""}`).join(" · ") : `${ap.ssids.length} SSID${ap.ssids.length === 1 ? "" : "s"} · channel and airtime per radio`}>
       {ap.radios?.length ? (
         <>
-          <div className="divide-y divide-neutral-100">
+          {/* Roomy panel: radios side by side (three-up when wide). */}
+          <div className="divide-y divide-neutral-100 group-data-[roomy]/panel:grid group-data-[roomy]/panel:grid-cols-2 group-data-[roomy]/panel:gap-x-8 group-data-[roomy]/panel:divide-y-0 group-data-[wide]/panel:grid-cols-3">
             {ap.radios.map((r) => <RadioRow key={`${r.band}-${r.channel}`} radio={r} />)}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1 pb-1 pt-0.5 text-[10px] text-neutral-500">

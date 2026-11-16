@@ -23,13 +23,12 @@ import { NodeDetailPanel } from "./NodeDetailPanel";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
 import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
+import { PANEL_GAP, useDetailPanel } from "./useDetailPanel";
 import { flowClickHandlers } from "./flowClicks";
 import { EventsDrawer } from "@/web/components/events/EventsDrawer";
 import { EventsExpanded } from "@/web/components/events/EventsExpanded";
 import { TdsEventsDrawer } from "@/web/components/tds-events/TdsEventsDrawer";
 import { TdsEventsExpanded } from "@/web/components/tds-events/TdsEventsExpanded";
-
-const PANEL_W = 504; // detail panel width + margin, kept clear when panning to a node
 
 export interface TopologyCanvasProps {
   network: McpNetwork;
@@ -65,6 +64,9 @@ function Canvas(props: TopologyCanvasProps) {
   const lastNetwork = useRef<McpNetwork | null>(null);
   const selectionRef = useRef(selection);
   selectionRef.current = selection;
+  // The detail panel's width (resizable, shared by every kind) and expanded state.
+  const panel = useDetailPanel(flowRef, !!selection);
+  const panelW = panel.width + 2 * PANEL_GAP; // kept clear when panning to a node
 
   const toggleCluster = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -133,7 +135,8 @@ function Canvas(props: TopologyCanvasProps) {
     [edges, highlight]
   );
 
-  // Pan to the selection only when it is off-screen (or under the detail panel).
+  // Pan to the selection only when it is off-screen (or under the detail panel) — also after
+  // the panel is resized over it.
   useEffect(() => {
     if (!selection || !nodes) return;
     const id = anchorNodeId(network, selection);
@@ -143,14 +146,14 @@ function Canvas(props: TopologyCanvasProps) {
     const { x, y, zoom } = getViewport();
     const w = node.width ?? 0, h = node.height ?? 0;
     const left = node.position.x * zoom + x, top = node.position.y * zoom + y;
-    const fits = left >= 0 && top >= 0 && left + w * zoom <= box.width - PANEL_W && top + h * zoom <= box.height;
+    const fits = left >= 0 && top >= 0 && left + w * zoom <= box.width - panelW && top + h * zoom <= box.height;
     if (!fits) {
       restoreView.current ??= { x, y, zoom };
       const z = Math.max(zoom, 0.8);
       // Offset the centre left by half the panel so the node lands in the visible area.
-      setCenter(node.position.x + w / 2 + PANEL_W / 2 / z, node.position.y + h / 2, { zoom: z, duration: 400 });
+      setCenter(node.position.x + w / 2 + panelW / 2 / z, node.position.y + h / 2, { zoom: z, duration: 400 });
     }
-  }, [selection, nodes, network, getNode, getViewport, setCenter]);
+  }, [selection, nodes, network, getNode, getViewport, setCenter, panelW]);
 
   // Panel closed → put the diagram back where it was before the panel moved it.
   useEffect(() => {
@@ -177,7 +180,7 @@ function Canvas(props: TopologyCanvasProps) {
   // Arrow keys step through devices, Esc clears; clicks keep focus on the canvas.
   const keyboard = useCanvasKeyboard(wrapperRef, network, selection, onSelect);
   // The gateway's expanded location map, drawn over the diagram; it handles its own keys.
-  const overlay = useCanvasOverlayState();
+  const overlay = useCanvasOverlayState(panel.expanded ? null : panelW - 3);
 
   return (
     <TopologyUiContext.Provider value={ui}>
@@ -277,7 +280,7 @@ function Canvas(props: TopologyCanvasProps) {
           <TdsEventsExpanded />
           <div ref={overlay.setTarget} />
           {selection && (
-            <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} />
+            <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} panel={panel} />
           )}
         </div>
       </div>

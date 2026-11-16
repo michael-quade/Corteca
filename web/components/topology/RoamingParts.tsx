@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { ROAMING_DAYS, type RoamSession } from "@/web/lib/roamingHistory";
 import { cn } from "@/web/lib/utils";
 import { shortDuration, shortTime } from "./RoamingTimeline";
+import { ROW, ROW_LABEL, ROW_LIST, ROW_VALUE } from "./DetailParts";
+import { usePanelLayout } from "./useDetailPanel";
 
 // Pieces shared by the client panel's "Roaming history" and the AP panel's "Backhaul history".
 
@@ -52,11 +54,11 @@ export function HistoryLoading() {
 /** Label / value rows ("Moves between APs  3"); rows with `hideZero` are left out at 0. */
 export function CountRows({ rows }: { rows: { label: string; value: number; hideZero?: boolean }[] }) {
   return (
-    <dl className="mb-3 space-y-1.5 text-xs">
+    <dl className={cn("mb-3", ROW_LIST)}>
       {rows.filter((r) => !(r.hideZero && r.value === 0)).map((r) => (
-        <div key={r.label} className="flex justify-between gap-3">
-          <dt className="text-neutral-500">{r.label}</dt>
-          <dd className="font-medium text-neutral-800">{r.value}</dd>
+        <div key={r.label} data-row className={ROW}>
+          <dt className={ROW_LABEL}>{r.label}</dt>
+          <dd className={ROW_VALUE}>{r.value}</dd>
         </div>
       ))}
     </dl>
@@ -78,9 +80,9 @@ export function TimeShare({ title, caption, rows, colourOf, renderAp }: {
         <span className="font-semibold text-neutral-700">{title}</span>
         <span className="text-neutral-400">{caption}</span>
       </div>
-      <dl className="mb-3 space-y-1.5 text-xs">
+      <dl className={cn("mb-3", ROW_LIST)}>
         {rows.map((t) => (
-          <div key={t.ap} className="flex items-center justify-between gap-3">
+          <div key={t.ap} data-row className="flex items-center justify-between gap-3">
             <dt className="flex min-w-0 items-center gap-1.5 text-neutral-500">
               <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", colourOf(t.ap))} />
               <span className="truncate">{renderAp(t.ap)}</span>
@@ -110,25 +112,39 @@ export function SessionList({ items, colourOf, renderAp }: {
   renderAp: (mac: string) => ReactNode;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const { roomy } = usePanelLayout();
   const listed = showAll ? items : items.slice(0, LIST_LIMIT);
+  const apCell = (s: RoamSession, tags: SessionItem["tags"]) => (
+    <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-neutral-800">
+      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", colourOf(s.ap))} />
+      <span className={cn("min-w-0", roomy && "truncate")}>{renderAp(s.ap)}</span>
+      {tags?.map((t) => (
+        <span key={t.text} className={cn("flex-shrink-0 rounded-full px-1.5 text-[10px] font-medium", t.tone === "blue" ? "bg-blue-50 text-blue-700" : "bg-neutral-100 text-neutral-600")}>
+          {t.text}
+        </span>
+      ))}
+    </div>
+  );
+  const start = (s: RoamSession) => (s.startedBefore ? `Before ${shortTime(s.start)}` : shortTime(s.start));
   return (
     <>
       <ol className="-mx-2 space-y-0.5">
-        {listed.map(({ key, session: s, tags, lines }) => (
+        {/* Roomy panel: one line per connection — start | AP | details | duration. */}
+        {roomy && listed.map(({ key, session: s, tags, lines }) => (
+          <li key={key} className="grid grid-cols-[9.5rem_minmax(0,1fr)_minmax(0,1.6fr)_3.5rem] items-baseline gap-3 rounded-lg px-2 py-1.5 hover:bg-neutral-50">
+            <span className="text-[11px] tabular-nums text-neutral-500">{start(s)}</span>
+            {apCell(s, tags)}
+            <span className="text-[11px] text-neutral-600">{lines.filter(Boolean).join(" · ")}</span>
+            <span className="text-right text-[11px] tabular-nums text-neutral-500">{shortDuration(s.end - s.start)}</span>
+          </li>
+        ))}
+        {!roomy && listed.map(({ key, session: s, tags, lines }) => (
           <li key={key} className="rounded-lg px-2 py-1.5 hover:bg-neutral-50">
             <div className="flex justify-between gap-2 text-[11px] text-neutral-500">
-              <span>{s.startedBefore ? `Before ${shortTime(s.start)}` : shortTime(s.start)}</span>
+              <span>{start(s)}</span>
               <span>{shortDuration(s.end - s.start)}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-800">
-              <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", colourOf(s.ap))} />
-              {renderAp(s.ap)}
-              {tags?.map((t) => (
-                <span key={t.text} className={cn("rounded-full px-1.5 text-[10px] font-medium", t.tone === "blue" ? "bg-blue-50 text-blue-700" : "bg-neutral-100 text-neutral-600")}>
-                  {t.text}
-                </span>
-              ))}
-            </div>
+            {apCell(s, tags)}
             {lines.filter(Boolean).map((l, i) => (
               <div key={i} className={cn("text-[11px]", i === 0 ? "text-neutral-600" : "text-neutral-500")}>{l}</div>
             ))}

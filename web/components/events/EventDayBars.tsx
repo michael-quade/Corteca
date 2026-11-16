@@ -3,6 +3,7 @@
 import { cn } from "@/web/lib/utils";
 import type { DayBucket } from "@/web/lib/eventStats";
 import { dateOnly } from "@/web/lib/eventFormat";
+import { EventAxis } from "./EventAxis";
 
 const COLOURS = { outage: "bg-red-600", degraded: "bg-amber-500", info: "bg-blue-300" } as const;
 
@@ -34,19 +35,7 @@ export function EventDayBars({ buckets, wide, onPick }: { buckets: DayBucket[]; 
           );
         })}
       </div>
-      {wide ? (
-        <div className="mt-1 flex gap-[2px] text-[10px] text-neutral-400">
-          {buckets.map((b, i) => (
-            <span key={b.day} className="min-w-0 flex-1 text-center">
-              {i === 0 || i === buckets.length - 1 || new Date(b.day).getDate() % 5 === 0 ? new Date(b.day).getDate() : ""}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-0.5 flex justify-between text-[10px] text-neutral-400">
-          <span>{dateOnly(buckets[0].day)}</span><span>today</span>
-        </div>
-      )}
+      <EventAxis slots={buckets.map((b) => ({ start: b.day }))} />
       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-600">
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-red-600" />Outage / reboot</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-500" />Degraded</span>

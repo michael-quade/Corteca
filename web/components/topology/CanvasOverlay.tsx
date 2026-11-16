@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { cn } from "@/web/lib/utils";
 import { createPortal } from "react-dom";
 
 // Lets a detail-panel section (the gateway's location map) take over the diagram area:
@@ -11,6 +12,8 @@ export interface CanvasOverlay {
   target: HTMLElement | null;
   open: boolean;
   setOpen: (open: boolean) => void;
+  /** Room the frame leaves on the right for the detail panel (wide screens); null = the panel is expanded over the diagram, so the frame covers everything, above it. */
+  panelSpace: number | null;
 }
 
 export const CanvasOverlayContext = createContext<CanvasOverlay | null>(null);
@@ -19,15 +22,16 @@ export const CanvasOverlayContext = createContext<CanvasOverlay | null>(null);
 export const useCanvasOverlay = () => useContext(CanvasOverlayContext);
 
 /** State for the canvas: the overlay value and the element to set as its target. */
-export function useCanvasOverlayState() {
+export function useCanvasOverlayState(panelSpace: number | null) {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const value = useMemo<CanvasOverlay>(() => ({ target, open, setOpen }), [target, open]);
+  const value = useMemo<CanvasOverlay>(() => ({ target, open, setOpen, panelSpace }), [target, open, panelSpace]);
   return { value, setTarget };
 }
 
 /**
- * The overlay frame: covers the diagram (keeping the detail panel visible on wide screens),
+ * The overlay frame: covers the diagram (keeping the detail panel visible on wide screens; all
+ * of it, above the panel, while the panel is expanded),
  * with a title bar and ×; Esc closes it. While it's open the canvas ignores its own keys.
  */
 export function CanvasOverlayFrame({ title, kicker, onClose, children }: {
@@ -46,8 +50,11 @@ export function CanvasOverlayFrame({ title, kicker, onClose, children }: {
 
   return createPortal(
     // The ground covers the whole diagram, so nothing shows between the map and the panel.
-    <div data-canvas-overlay role="dialog" aria-label={`${kicker}: ${title}`} className="absolute inset-0 z-[9] bg-neutral-50">
-    <div className="absolute bottom-3 left-3 right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg lg:right-[calc(30rem+1.5rem)]">
+    <div data-canvas-overlay role="dialog" aria-label={`${kicker}: ${title}`} className={cn("absolute inset-0 bg-neutral-50", overlay.panelSpace == null ? "z-30" : "z-[9]")}>
+    <div
+      style={{ "--panel-space": `${overlay.panelSpace ?? 12}px` } as CSSProperties}
+      className="absolute bottom-3 left-3 right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg lg:right-[var(--panel-space)]"
+    >
       <header className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600">{kicker}</p>

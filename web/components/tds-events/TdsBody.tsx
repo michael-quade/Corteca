@@ -11,7 +11,7 @@ import { EventSummaryTiles } from "@/web/components/events/EventSummaryTiles";
 import { EventList } from "@/web/components/events/EventList";
 import { useTdsEvents, type TdsUi } from "./TdsEventsContext";
 import { PriorityPill, TdsBars } from "./TdsBars";
-import { TdsTimeline } from "./TdsTimeline";
+import { TIMELINE_GRID, TdsTimeline } from "./TdsTimeline";
 import { TdsFilters } from "./TdsFilters";
 
 /** Rows on screen for the range / device / routine / severity / category filters. */
@@ -95,8 +95,12 @@ export function TdsBody({ wide, roomy, lead }: { wide?: boolean; roomy?: boolean
           <div className={cn("grid", wide ? "grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)] gap-6" : "grid-cols-2 gap-4")}>
             <div className="min-w-0 space-y-3">
               {/* In a stretched drawer: no bar legend or caption (the chips carry the colours), shorter bars. */}
-              <TdsBars buckets={view.buckets} hourly={view.hourly} wide legend={!!wide} height={wide ? 64 : 52} onPick={pick} />
-              <TdsTimeline items={view.visible} from={view.from} to={view.to} onPick={pick} caption={!!wide} />
+              {/* The bars take the timeline's label column and its time span, so a day's bar sits right above its dots. */}
+              <div className={TIMELINE_GRID}>
+                <span className="self-start pt-1 text-[10px] leading-tight text-neutral-400">{view.hourly ? "Events per hour" : "Events per day"}</span>
+                <TdsBars buckets={view.buckets} hourly={view.hourly} wide legend={!!wide} height={wide ? 64 : 52} onPick={pick} />
+              </div>
+              <TdsTimeline items={view.visible} from={view.buckets[0]?.start ?? view.from} to={view.buckets.at(-1)?.end ?? view.to} onPick={pick} caption={!!wide} />
             </div>
             <div className={cn("min-w-0 border-l border-neutral-100", wide ? "pl-6" : "pl-4")}>
               <TdsFilters counts={view.counts} devices={view.devices} routineCount={view.routineCount} wide={wide} />

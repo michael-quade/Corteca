@@ -6,7 +6,8 @@ import type { McpAccessPoint } from "@/web/lib/mcpNetwork";
 import { mediumLabel, normaliseMac } from "@/web/lib/networkEvents";
 import { apBadge, apStats, inPeriod, isSilenced, timelineSegments, type EventPeriod } from "@/web/lib/eventStats";
 import { DAY, dateOnly, duration, shortDay } from "@/web/lib/eventFormat";
-import { DetailRow, DetailSection } from "@/web/components/topology/DetailParts";
+import { DetailRow, DetailSection, ROW_LIST } from "@/web/components/topology/DetailParts";
+import { usePanelLayout } from "@/web/components/topology/useDetailPanel";
 import { useSectionCollapse } from "@/web/components/topology/useSectionCollapse";
 import { useEvents } from "./EventsContext";
 import { EventPeriodSwitch } from "./EventFilters";
@@ -19,6 +20,7 @@ const SEGMENT = { outage: "bg-red-600", degraded: "bg-amber-500", info: "bg-blue
 /** AP panel "Events": online/offline bar, tallies, badge state and this AP's events. */
 export function ApEvents({ ap }: { ap: McpAccessPoint }) {
   const ev = useEvents();
+  const { roomy } = usePanelLayout();
   const mac = normaliseMac(ap.mac);
   const [period, setPeriod] = useState<EventPeriod>(30);
   const [all, setAll] = useState(false);
@@ -85,7 +87,7 @@ export function ApEvents({ ap }: { ap: McpAccessPoint }) {
             <span>{dateOnly(from)}</span><span>online · <span className="text-red-600">offline</span> · <span className="text-amber-600">backhaul bad</span></span><span>now</span>
           </div>
 
-          <dl className="mb-2 space-y-1.5 text-xs">
+          <dl className={cn("mb-2", ROW_LIST)}>
             <DetailRow label="Offline episodes">{`${stats.outages}${stats.outages ? ` · ${duration(stats.outageMs)} in total` : ""}`}</DetailRow>
             <DetailRow label="Reboots">{`${stats.reboots}${stats.lastReboot ? ` (last ${shortDay(stats.lastReboot.start)})` : ""}`}</DetailRow>
             {stats.degraded > 0 && <DetailRow label="Backhaul degraded">{`${stats.degraded} time${stats.degraded === 1 ? "" : "s"}`}</DetailRow>}
@@ -98,7 +100,7 @@ export function ApEvents({ ap }: { ap: McpAccessPoint }) {
             <p className="text-xs text-neutral-500">No events for this access point in this period.</p>
           ) : (
             <ol className="-mx-2 space-y-0.5">
-              {shown.map((it) => <EventRow key={it.key} item={it} own />)}
+              {shown.map((it) => <EventRow key={it.key} item={it} own wide={roomy} />)}
             </ol>
           )}
           <div className="mt-1 flex flex-wrap gap-x-4">

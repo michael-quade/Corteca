@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { cn } from "@/web/lib/utils";
+import { useRef } from "react";
+import { ResizeGrip, useResizeDrag } from "@/web/components/ui/ResizeGrip";
 import { DRAWER_MIN, useEvents } from "./EventsContext";
 import { EventsBody, downloadEventsCsv, useVisibleEvents } from "./EventsBody";
 import { EventPeriodSwitch } from "./EventFilters";
@@ -21,8 +21,13 @@ export function EventsDrawer() {
   const ev = useEvents();
   const view = useVisibleEvents(ev);
   const ref = useRef<HTMLElement>(null);
-  const [dragW, setDragW] = useState<number | null>(null);
-  const drag = useRef<{ x: number; w: number; max: number } | null>(null);
+  const resize = useResizeDrag({
+    side: "right",
+    width: Math.min(ev?.width ?? DRAWER_MIN, maxWidth(ref.current)),
+    min: DRAWER_MIN,
+    max: () => maxWidth(ref.current),
+    onCommit: (w) => ev?.setWidth(w),
+  });
   if (!ev || !view) return null;
 
   if (ev.drawer !== "open") {
@@ -44,28 +49,7 @@ export function EventsDrawer() {
     );
   }
 
-  const width = Math.max(DRAWER_MIN, dragW ?? Math.min(ev.width, maxWidth(ref.current)));
-
-  const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, w: width, max: maxWidth(ref.current) };
-  };
-  const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
-    const d = drag.current;
-    if (d) setDragW(Math.min(d.max, Math.max(DRAWER_MIN, d.w + e.clientX - d.x)));
-  };
-  const onPointerUp = () => {
-    if (drag.current && dragW != null) ev.setWidth(dragW);
-    drag.current = null;
-    setDragW(null);
-  };
-  const onHandleKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const step = e.key === "ArrowRight" ? 20 : e.key === "ArrowLeft" ? -20 : 0;
-    if (!step) return;
-    e.preventDefault();
-    e.stopPropagation();
-    ev.setWidth(Math.min(maxWidth(ref.current), Math.max(DRAWER_MIN, width + step)));
-  };
+  const width = resize.width;
 
   return (
     <section
@@ -92,24 +76,7 @@ export function EventsDrawer() {
       <div className="min-h-0 flex-1">
         <EventsBody lead={<EventPeriodSwitch value={ev.period} onChange={ev.setPeriod} small />} />
       </div>
-      <button
-        type="button"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Drag to resize the events drawer"
-        aria-valuenow={width}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onKeyDown={onHandleKey}
-        className={cn(
-          "absolute -right-1.5 top-1/2 flex h-12 w-3 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center gap-0.5 rounded-md border border-neutral-300 bg-white shadow-sm hover:border-blue-600",
-          dragW != null && "border-blue-600"
-        )}
-      >
-        <span className="h-6 w-px bg-neutral-400" /><span className="h-6 w-px bg-neutral-400" />
-      </button>
+      <ResizeGrip side="right" label="Drag to resize the events drawer" {...resize} />
     </section>
   );
 }

@@ -57,17 +57,32 @@ export function DetailSection({ title, id, summary, actions, plain, sectionRef, 
       </div>
       {collapsed
         ? summary != null && summary !== "" && <p className="truncate py-2 pl-[2.4375rem] pr-4 text-[11px] text-neutral-500">{summary}</p>
-        : <div className="px-4 pb-3.5 pt-2.5">{plain ? children : <dl className="space-y-1.5 text-xs">{children}</dl>}</div>}
+        : <div className="px-4 pb-3.5 pt-2.5">{plain ? children : <dl className={ROW_LIST}>{children}</dl>}</div>}
     </section>
   );
 }
 
+/*
+ * Label / value lists in the detail panel. Narrow (as before): one column, label left, value
+ * right. In a roomy panel (`data-roomy` on the panel, ≥ ROOMY_PANEL) they go two-up — three-up
+ * when wide — and each value sits right after its label instead of across a wide gap.
+ * Anything in the list that isn't a row (notes, warnings) spans the full width.
+ */
+export const ROW_LIST = cn(
+  "space-y-1.5 text-xs [&>:not([data-row])]:col-span-full",
+  "group-data-[roomy]/panel:grid group-data-[roomy]/panel:grid-cols-2 group-data-[roomy]/panel:gap-x-8 group-data-[roomy]/panel:gap-y-1.5 group-data-[roomy]/panel:space-y-0",
+  "group-data-[wide]/panel:grid-cols-3"
+);
+export const ROW = "flex justify-between gap-3 group-data-[roomy]/panel:justify-start";
+export const ROW_LABEL = "flex-shrink-0 text-neutral-500 group-data-[roomy]/panel:w-32 group-data-[roomy]/panel:flex-shrink";
+export const ROW_VALUE = "min-w-0 break-words text-right font-medium text-neutral-800 group-data-[roomy]/panel:text-left";
+
 export function DetailRow({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
   if (children == null || children === "" || children === false) return null;
   return (
-    <div className="flex justify-between gap-3">
-      <dt className="flex-shrink-0 text-neutral-500">{label}</dt>
-      <dd className={cn("min-w-0 break-words text-right font-medium text-neutral-800", mono && "font-mono text-[11px]")}>{children}</dd>
+    <div data-row className={ROW}>
+      <dt className={ROW_LABEL}>{label}</dt>
+      <dd className={cn(ROW_VALUE, mono && "font-mono text-[11px]")}>{children}</dd>
     </div>
   );
 }

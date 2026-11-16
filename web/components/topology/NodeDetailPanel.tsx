@@ -1,172 +1,61 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { BackhaulBand, McpAccessPoint, McpBackhaulLink, McpNetwork } from "@/web/lib/mcpNetwork";
-import { SLOW_ETHERNET_MBPS, clientName, isEthernet } from "@/web/lib/topologyFlow";
-import { formatBytes, topTalkers } from "@/web/lib/clientInsights";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "@/web/lib/utils";
+import type { McpNetwork } from "@/web/lib/mcpNetwork";
+import { clientName } from "@/web/lib/topologyFlow";
 import type { Selection } from "@/web/lib/topologySelection";
 import { ClientDetails } from "./ClientDetails";
-import { ApEthernetPorts } from "./ApEthernetPorts";
-import { ApRadios } from "./ApRadios";
-import { BackhaulHistory } from "./BackhaulHistory";
-import { ApEvents } from "@/web/components/events/ApEvents";
-import { AiNotesSection } from "./AiNotesSection";
+import { ApDetails } from "./ApDetails";
+import { LinkDetails } from "./LinkDetails";
 import { SwitchDetails } from "./SwitchDetails";
 import { WanDetails } from "./WanDetails";
-import { GatewayLocation } from "./GatewayLocation";
 import { switchById } from "@/web/lib/inferredSwitches";
 import { memberIdentity } from "@/web/lib/deviceNames";
 import { useDeviceRename, type RenameTarget } from "./DeviceRename";
 import { SectionChips, SectionOrderReset } from "./SectionChips";
-import { DetailRow, DetailSection, JumpButton, apLabel, formatDate, formatMbps } from "./DetailParts";
+import { apLabel } from "./DetailParts";
+import { useCanvasOverlay } from "./CanvasOverlay";
+import { IconButton } from "@/web/components/events/EventsChrome";
+import { ResizeGrip, useResizeDrag } from "@/web/components/ui/ResizeGrip";
+import {
+  PANEL_GAP, PANEL_MIN, PanelLayoutContext, ROOMY_PANEL, WIDE_PANEL, type DetailPanelState, type PanelLayout,
+} from "./useDetailPanel";
 
 type Select = (sel: Selection) => void;
 
-function LinkSummary({ link, onSelect }: { link: McpBackhaulLink; onSelect: Select }) {
-  const eth = isEthernet(link);
-  return (
-    <JumpButton onClick={() => onSelect({ kind: "link", id: link.childMac })}>
-      {eth ? "Ethernet" : `WiFi${link.mloBands ? " · MLO" : ""}${link.quality ? ` · ${link.quality}` : ""}`}
-      {link.rateMbps ? ` · ${formatMbps(link.rateMbps)}` : ""}
-    </JumpButton>
-  );
-}
-
-function ApDetails({ network, ap, onSelect }: { network: McpNetwork; ap: McpAccessPoint; onSelect: Select }) {
-  const uplink = network.backhaul.find((l) => l.childMac === ap.mac);
-  const parent = uplink && network.aps.find((a) => a.mac === uplink.parentMac);
-  const children = network.backhaul.filter((l) => l.parentMac === ap.mac);
-  const talkers = topTalkers(network, ap.mac);
-
-  return (
-    <>
-      {ap.role === "root" && <GatewayLocation network={network} gateway={ap} />}
-      <DetailSection title="Access point" summary={[ap.online ? "Online" : "Offline", `${ap.clientCount} client${ap.clientCount === 1 ? "" : "s"}`, parent ? `uplink to ${apLabel(parent)}` : ap.role === "root" ? "gateway" : null, ap.firmware].filter(Boolean).join(" · ")}>
-        <DetailRow label="Status">{ap.online ? "Online" : "Offline"}</DetailRow>
-        <DetailRow label="Clients">{ap.clientCount}</DetailRow>
-        {parent && uplink ? (
-          <>
-            <DetailRow label="Uplink to">
-              <JumpButton onClick={() => onSelect({ kind: "ap", id: parent.mac })}>{apLabel(parent)}</JumpButton>
-            </DetailRow>
-            <DetailRow label="Backhaul"><LinkSummary link={uplink} onSelect={onSelect} /></DetailRow>
-          </>
-        ) : (
-          <DetailRow label="Uplink">
-            {ap.role === "root" ? <JumpButton onClick={() => onSelect({ kind: "wan", id: ap.mac })}>Internet (WAN)</JumpButton> : "Unknown"}
-          </DetailRow>
-        )}
-        {children.map((l) => {
-          const child = network.aps.find((a) => a.mac === l.childMac);
-          return (
-            <DetailRow key={l.childMac} label="Downlink to">
-              <JumpButton onClick={() => onSelect({ kind: "ap", id: l.childMac })}>
-                {child ? apLabel(child) : l.childMac}
-              </JumpButton>
-            </DetailRow>
-          );
-        })}
-        {ap.mlo && <DetailRow label="Multi-link (MLO)">On</DetailRow>}
-        <DetailRow label="MAC" mono>{ap.mac}</DetailRow>
-        <DetailRow label="Serial" mono>{ap.serial}</DetailRow>
-        <DetailRow label="Firmware" mono>{ap.firmware}</DetailRow>
-        <DetailRow label="Hardware" mono>{ap.hardwareVersion}</DetailRow>
-        <DetailRow label="LAN IP" mono>{ap.ipAddress}</DetailRow>
-        <DetailRow label="Public IP" mono>{ap.wanIp}</DetailRow>
-        <DetailRow label="Last boot">{formatDate(ap.lastBoot)}</DetailRow>
-        <DetailRow label="Last offline">{formatDate(ap.lastOffline)}</DetailRow>
-      </DetailSection>
-      <AiNotesSection notes={ap.ai} />
-      <ApEthernetPorts network={network} ap={ap} onSelect={onSelect} />
-      {talkers.length > 0 && (
-        <DetailSection title="Top clients by traffic" summary={`Most data: ${clientName(talkers[0].member)} · ${formatBytes(talkers[0].total)}`}>
-          {talkers.map(({ member, total }) => (
-            <DetailRow key={member.id} label={formatBytes(total)}>
-              <JumpButton onClick={() => onSelect({ kind: "client", id: member.id })}>{clientName(member)}</JumpButton>
-            </DetailRow>
-          ))}
-        </DetailSection>
-      )}
-      <ApEvents ap={ap} />
-      <BackhaulHistory network={network} ap={ap} onSelect={onSelect} />
-      <ApRadios ap={ap} />
-    </>
-  );
-}
-
-/** An MLO backhaul's bands, one row each: channel · width, then signal · data rate (PHY). */
-function MloBands({ bands }: { bands: BackhaulBand[] }) {
-  return (
-    <DetailSection title={`Bands (MLO · ${bands.length})`} summary={bands.map((b) => b.band ?? "WiFi").join(" + ")}>
-      {bands.map((b, i) => (
-        <DetailRow key={b.staMac ?? i} label={[b.band ?? "WiFi", b.channel != null && `Ch ${b.channel}`, b.widthMhz && `${b.widthMhz} MHz`].filter(Boolean).join(" · ")}>
-          {[
-            b.rssiDbm != null && `${b.rssiDbm} dBm`,
-            b.rateMbps != null && formatMbps(b.rateMbps),
-            b.phyRateMbps != null && b.phyRateMbps !== b.rateMbps && `PHY ${formatMbps(b.phyRateMbps)}`,
-          ].filter(Boolean).join(" · ") || null}
-        </DetailRow>
-      ))}
-    </DetailSection>
-  );
-}
-
-function LinkDetails({ network, link, onSelect }: { network: McpNetwork; link: McpBackhaulLink; onSelect: Select }) {
-  const parent = network.aps.find((a) => a.mac === link.parentMac);
-  const child = network.aps.find((a) => a.mac === link.childMac);
-  const eth = isEthernet(link);
-  const slow = eth && link.rateMbps != null && link.rateMbps < SLOW_ETHERNET_MBPS;
-  // WiFi standard from the gateway (applyWifiDetails); without it the band-only view stays.
-  const std = eth ? undefined : link.standard;
-  const medium = eth ? "Ethernet" : [std ? `${std.generation} (${std.ieee})` : "WiFi", link.band].filter(Boolean).join(" · ");
-  const mlo = link.mloBands;
-  return (
-    <>
-    <DetailSection title="Backhaul link" summary={[medium, link.rateMbps ? formatMbps(link.rateMbps) : null, link.quality].filter(Boolean).join(" · ")}>
-      <DetailRow label="From">
-        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.parentMac })}>{parent ? apLabel(parent) : link.parentMac}</JumpButton>
-      </DetailRow>
-      <DetailRow label="To">
-        <JumpButton onClick={() => onSelect({ kind: "ap", id: link.childMac })}>{child ? apLabel(child) : link.childMac}</JumpButton>
-      </DetailRow>
-      <DetailRow label="Medium">{medium}</DetailRow>
-      {!eth && link.channel != null && (
-        <DetailRow label="Channel">{[link.channel, link.widthMhz && `${link.widthMhz} MHz`].filter(Boolean).join(" · ")}</DetailRow>
-      )}
-      {eth && <DetailRow label="Gateway port">{link.port}</DetailRow>}
-      {std?.generation === "WiFi 7" && <DetailRow label="Multi-link (MLO)">{std.mlo ? "Yes" : "No"}</DetailRow>}
-      {!eth && <DetailRow label="Backhaul quality">{link.quality ?? "Not rated"}</DetailRow>}
-      {!eth && !mlo && <DetailRow label="RSSI">{link.rssiDbm != null ? `${link.rssiDbm} dBm` : null}</DetailRow>}
-      <DetailRow label={mlo ? "Data rate (all bands)" : "Data rate"}>{formatMbps(link.rateMbps)}</DetailRow>
-      {!eth && <DetailRow label={mlo ? "PHY rate (all bands)" : "PHY rate"}>{formatMbps(link.phyRateMbps)}</DetailRow>}
-      <DetailRow label="Traffic ↓ / ↑">
-        {link.bytesDown != null || link.bytesUp != null ? `${formatBytes(link.bytesDown ?? 0)} / ${formatBytes(link.bytesUp ?? 0)}` : null}
-      </DetailRow>
-      <DetailRow label="Errors tx / rx">
-        {link.errorsTx != null || link.errorsRx != null ? `${link.errorsTx ?? "—"} / ${link.errorsRx ?? "—"}` : null}
-      </DetailRow>
-      {slow && (
-        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-          Ethernet negotiated below 1 Gbps — often a damaged cable, a 100 Mbps switch, or a bad port.
-        </p>
-      )}
-    </DetailSection>
-    {mlo && <MloBands bands={mlo} />}
-    </>
-  );
-}
-
-export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
+/**
+ * The right-hand detail panel (AP, client, link, switch, WAN), framed like the events drawer:
+ * resizable from its left edge (one width for every kind, up to half the canvas), and ⤢
+ * expands it over the whole diagram (Esc / "Back to panel" returns). From ROOMY_PANEL wide its
+ * content goes two-up (`data-roomy`, `PanelLayoutContext`), from WIDE_PANEL three-up.
+ */
+export function NodeDetailPanel({ network, selection, onSelect, onClose, panel }: {
   network: McpNetwork;
   selection: Selection;
   onSelect: Select;
   onClose: () => void;
+  panel: DetailPanelState;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLElement>(null);
   const rename = useDeviceRename();
+  const overlay = useCanvasOverlay();
+  const [boxW, setBoxW] = useState(PANEL_MIN);
+  const resize = useResizeDrag({ side: "left", width: panel.width, min: PANEL_MIN, max: panel.max, onCommit: panel.setWidth });
   const selKey = `${selection.kind}:${selection.id}`;
   // Another device starts at the top of the panel (the scroll area is reused between them).
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [selKey]);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBoxW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  useEffect(() => { if (panel.expanded) boxRef.current?.focus({ preventScroll: true }); }, [panel.expanded]);
+  const layout = useMemo<PanelLayout>(() => ({ roomy: boxW >= ROOMY_PANEL, wide: boxW >= WIDE_PANEL }), [boxW]);
+
   const ap = selection.kind === "ap" ? network.aps.find((a) => a.mac === selection.id) : undefined;
   const member = selection.kind === "client" ? network.members.find((m) => m.id === selection.id) : undefined;
   const link = selection.kind === "link" ? network.backhaul.find((l) => l.childMac === selection.id) : undefined;
@@ -182,14 +71,29 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
       ? { mac: member.id, kind: "client", description: `${memberIdentity(member).autoAlias ?? (member as { hostname?: string }).hostname ?? "Client"} · ${member.id}` }
       : null;
   const canRename = !!renameTarget && !!rename?.canRename(renameTarget.mac);
+  const expanded = panel.expanded;
 
   return (
     <aside
+      ref={boxRef}
       aria-label={`${kicker} details`}
-      className="absolute bottom-3 right-3 top-14 z-10 flex w-[30rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
+      tabIndex={expanded ? -1 : undefined}
+      data-canvas-overlay={expanded ? "" : undefined}
+      data-roomy={layout.roomy ? "" : undefined}
+      data-wide={layout.wide ? "" : undefined}
+      onKeyDown={expanded ? (e) => {
+        // The canvas's own keys stay off while this covers it; Esc first closes an open map.
+        e.stopPropagation();
+        if (e.key === "Escape" && !overlay?.open) panel.setExpanded(false);
+      } : undefined}
+      style={expanded ? undefined : { width: resize.width, top: PANEL_GAP, right: PANEL_GAP, bottom: PANEL_GAP }}
+      className={cn(
+        "group/panel absolute flex max-w-[calc(100%-1.5rem)] flex-col rounded-xl border border-neutral-200 bg-white shadow-lg focus:outline-none",
+        expanded ? "inset-3 z-20 max-w-none" : "z-10"
+      )}
     >
-      <header className="flex items-start justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-        <div className="min-w-0">
+      <header className="flex items-start gap-1.5 border-b border-neutral-100 py-2 pl-3.5 pr-2">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600">{kicker}</p>
           <h3 className="flex items-start gap-1.5 break-words text-sm font-semibold text-neutral-900">
             {title}
@@ -207,27 +111,44 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose }: {
             )}
           </h3>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-0.5">
-        <SectionOrderReset kind={selection.kind} />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close details"
-          className="rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-0.5 self-center">
+          {expanded ? (
+            <button
+              type="button"
+              onClick={() => panel.setExpanded(false)}
+              title="Back to panel (Esc)"
+              className="mr-1 inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-200"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M10 4v6H4M14 20v-6h6M4 10l6-6M20 14l-6 6" />
+              </svg>
+              Back to panel
+            </button>
+          ) : (
+            <IconButton label="Expand over the diagram" onClick={() => panel.setExpanded(true)}>
+              <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+            </IconButton>
+          )}
+          <SectionOrderReset kind={selection.kind} />
+          <IconButton label="Close details" onClick={onClose} muted>
+            <path d="M18 6 6 18M6 6l12 12" />
+          </IconButton>
         </div>
       </header>
       <SectionChips scrollRef={scrollRef} resetKey={selKey} kind={selection.kind} />
       {/* A flex column: the sections' CSS order follows the user's chip order (SectionChips). */}
-      <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto">
-        {ap && <ApDetails network={network} ap={ap} onSelect={onSelect} />}
-        {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
-        {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}
-        {sw && <SwitchDetails network={network} sw={sw} onSelect={onSelect} />}
-        {wanGateway && <WanDetails network={network} gateway={wanGateway} onSelect={onSelect} />}
-      </div>
+      <PanelLayoutContext.Provider value={layout}>
+        <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto rounded-b-xl">
+          {ap && <ApDetails network={network} ap={ap} onSelect={onSelect} />}
+          {member && <ClientDetails network={network} member={member} onSelect={onSelect} />}
+          {link && <LinkDetails network={network} link={link} onSelect={onSelect} />}
+          {sw && <SwitchDetails network={network} sw={sw} onSelect={onSelect} />}
+          {wanGateway && <WanDetails network={network} gateway={wanGateway} onSelect={onSelect} />}
+        </div>
+      </PanelLayoutContext.Provider>
+      {!expanded && (
+        <ResizeGrip side="left" label="Drag to resize the details panel" {...resize} onReset={() => panel.setWidth(PANEL_MIN)} />
+      )}
     </aside>
   );
 }

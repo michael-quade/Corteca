@@ -16,7 +16,8 @@ import { PortIcon, portTone, type PortTone } from "@/web/components/PortFaceplat
 
 const fmtMbps = (mbps: number) => formatRate(mbps);
 
-const COLS = "grid grid-cols-[1.75rem_2.75rem_2.5rem_4.75rem_minmax(0,1fr)] items-center gap-2";
+// Roomy panel: the device column sits next to the rate (left-aligned) instead of across a wide gap.
+const COLS = "grid grid-cols-[1.75rem_2.75rem_2.5rem_4.75rem_minmax(0,1fr)] items-center gap-2 group-data-[roomy]/panel:gap-x-4";
 
 /** Negotiated rate, with the port's maximum under it: capability vs what the link runs at. */
 function RateCell({ rate, max }: { rate?: string; max?: string }) {
@@ -51,7 +52,7 @@ function Row({ port, tone, status, rate, max, device, deviceTitle, title, wide }
       <PortIcon tone={tone} size={28} />
       <span className="font-semibold text-neutral-800">{port}</span>
       {wide ? (
-        <span className="col-span-3 min-w-0 truncate text-right" title={deviceTitle}>{device}</span>
+        <span className="col-span-3 min-w-0 truncate text-right group-data-[roomy]/panel:text-left" title={deviceTitle}>{device}</span>
       ) : (
         <>
           {status ? (
@@ -60,7 +61,7 @@ function Row({ port, tone, status, rate, max, device, deviceTitle, title, wide }
             </span>
           ) : <span />}
           <RateCell rate={rate} max={max} />
-          <span className="min-w-0 truncate text-right" title={deviceTitle}>{device ?? <span className="text-neutral-400">—</span>}</span>
+          <span className="min-w-0 truncate text-right group-data-[roomy]/panel:text-left" title={deviceTitle}>{device ?? <span className="text-neutral-400">—</span>}</span>
         </>
       )}
     </div>
@@ -74,7 +75,7 @@ function PortList({ note, children }: { note: string; children: React.ReactNode 
       <div className={cn(COLS, "border-b border-neutral-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400")}>
         <span /><span>Port</span><span>Link</span>
         <span title="Negotiated rate; under it the port's maximum speed">Rate</span>
-        <span className="text-right">Device</span>
+        <span className="text-right group-data-[roomy]/panel:text-left">Device</span>
       </div>
       <div className="divide-y divide-neutral-100">{children}</div>
       <p className="pt-1 text-[11px] text-neutral-400">{note} Under each rate: the port&apos;s maximum speed.</p>

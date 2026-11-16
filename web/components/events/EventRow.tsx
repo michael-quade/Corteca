@@ -35,7 +35,7 @@ export function EventDeviceLink({ mac }: { mac: string | null }) {
 /**
  * One event row. `wide` = the expanded card layout (time | dot | text | device);
  * otherwise stacked for the drawer. `own` = a device's own panel: subject without the
- * device name, no device link.
+ * device name, no device link (and, wide, no device column — the detail panel's roomy rows).
  */
 export function EventRow({ item, wide, own, marker }: { item: EventItem; wide?: boolean; own?: boolean; marker?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -63,11 +63,17 @@ export function EventRow({ item, wide, own, marker }: { item: EventItem; wide?: 
 
   if (wide) {
     return (
-      <li className={cn("grid items-start gap-3 rounded-lg px-3 py-2 hover:bg-neutral-50", marker ? "grid-cols-[7.5rem_1.75rem_minmax(0,1fr)_14rem]" : "grid-cols-[7.5rem_0.75rem_minmax(0,1fr)_14rem]", open && "bg-neutral-50")}>
+      <li className={cn(
+        "grid items-start gap-3 rounded-lg hover:bg-neutral-50",
+        // A device's own panel has no device column (and is tighter).
+        own ? "gap-2.5 px-2 py-1.5" : "px-3 py-2",
+        marker ? "grid-cols-[7.5rem_1.75rem_minmax(0,1fr)_14rem]" : own ? "grid-cols-[9.5rem_0.75rem_minmax(0,1fr)]" : "grid-cols-[7.5rem_0.75rem_minmax(0,1fr)_14rem]",
+        open && "bg-neutral-50"
+      )}>
         <span className="text-xs tabular-nums text-neutral-500">{spanLabel(item)}</span>
         {marker ?? <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", SEVERITY_DOT[item.severity])} aria-hidden />}
         {text}
-        <span className="min-w-0 text-right text-xs">{!own && <EventDeviceLink mac={item.device} />}</span>
+        {!own && <span className="min-w-0 text-right text-xs"><EventDeviceLink mac={item.device} /></span>}
       </li>
     );
   }
