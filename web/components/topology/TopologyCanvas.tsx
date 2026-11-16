@@ -9,7 +9,7 @@ import {
 import { cn } from "@/web/lib/utils";
 import { buildFlowGraph, clientBand, layoutFlowGraph, type FlowNode, type LayoutMode } from "@/web/lib/topologyFlow";
 import {
-  anchorNodeId, clientMatches, filtersActive, highlightFor,
+  clientMatches, filtersActive, highlightFor,
   type ClientFilters, type Selection, type Viewport,
 } from "@/web/lib/topologySelection";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
@@ -24,6 +24,7 @@ import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
 import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
 import { PANEL_GAP, useDetailPanel } from "./useDetailPanel";
+import { usePanToSelection } from "./usePanToSelection";
 import { flowClickHandlers } from "./flowClicks";
 import { EventsDrawer } from "@/web/components/events/EventsDrawer";
 import { EventsExpanded } from "@/web/components/events/EventsExpanded";
@@ -46,7 +47,7 @@ function Canvas(props: TopologyCanvasProps) {
   const { network, selection, onSelect, filters, onFiltersChange, layout, onLayoutChange, initialViewport, onViewportChange } = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
-  const { getViewport, setViewport, setCenter, getNode } = useReactFlow();
+  const { getViewport } = useReactFlow();
   // View from just before the detail panel first pushed the diagram aside;
   // restored when the panel closes. Dropped if the user moves the view meanwhile.
   const restoreView = useRef<Viewport | null>(null);
@@ -135,32 +136,9 @@ function Canvas(props: TopologyCanvasProps) {
     [edges, highlight]
   );
 
-  // Pan to the selection only when it is off-screen (or under the detail panel) — also after
-  // the panel is resized over it.
-  useEffect(() => {
-    if (!selection || !nodes) return;
-    const id = anchorNodeId(network, selection);
-    const node = id ? getNode(id) : undefined;
-    const box = flowRef.current?.getBoundingClientRect();
-    if (!node || !box) return;
-    const { x, y, zoom } = getViewport();
-    const w = node.width ?? 0, h = node.height ?? 0;
-    const left = node.position.x * zoom + x, top = node.position.y * zoom + y;
-    const fits = left >= 0 && top >= 0 && left + w * zoom <= box.width - panelW && top + h * zoom <= box.height;
-    if (!fits) {
-      restoreView.current ??= { x, y, zoom };
-      const z = Math.max(zoom, 0.8);
-      // Offset the centre left by half the panel so the node lands in the visible area.
-      setCenter(node.position.x + w / 2 + panelW / 2 / z, node.position.y + h / 2, { zoom: z, duration: 400 });
-    }
-  }, [selection, nodes, network, getNode, getViewport, setCenter, panelW]);
-
-  // Panel closed → put the diagram back where it was before the panel moved it.
-  useEffect(() => {
-    if (selection || !restoreView.current) return;
-    void setViewport(restoreView.current, { duration: 400 });
-    restoreView.current = null;
-  }, [selection, setViewport]);
+  // Slide a hidden selection just clear of the detail panel, follow the panel when it is
+  // resized, and restore the view when it closes.
+  usePanToSelection({ flowRef, restoreView, network, selection, nodes, panelW, panelExpanded: panel.expanded });
 
   useEffect(() => {
     const onChange = () => {
