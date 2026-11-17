@@ -2,11 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import type { McpAccessPoint, McpNetwork } from "@/web/lib/mcpNetwork";
-import { osmUrl, type LatLng } from "@/web/lib/networkLocation";
+import { osmUrl } from "@/web/lib/networkLocation";
 import { DetailSection } from "./DetailParts";
 import { CanvasOverlayFrame, useCanvasOverlay } from "./CanvasOverlay";
+import { LocationCheck, type LocationSource } from "./LocationCheck";
+import { compareLocations, useGatewayLocation } from "./useGatewayLocation";
 import type { MapView } from "@/web/components/map/LocationMap";
 
 // MapLibre is only downloaded when a gateway or WAN panel opens.
@@ -15,42 +16,36 @@ const LocationMap = dynamic(() => import("@/web/components/map/LocationMap").the
   loading: () => <div className="h-56 animate-pulse rounded-xl bg-neutral-100" />,
 });
 
-// Per gateway, for the page's lifetime: null = Corteca has no position, "error" = couldn't read it.
-const cache = new Map<string, Promise<LatLng | null | "error">>();
-
-function readLocation(mac: string): Promise<LatLng | null | "error"> {
-  let p = cache.get(mac);
-  if (!p) {
-    p = fetchWithAuth(`/api/network/${encodeURIComponent(mac)}/location`)
-      .then(async (r) => (r.ok ? ((await r.json()) as { location: LatLng | null }).location : "error" as const))
-      .catch(() => "error" as const);
-    p.then((v) => { if (v === "error") cache.delete(mac); });
-    cache.set(mac, p);
-  }
-  return p;
-}
-
 /**
  * Gateway / WAN panel "Location": mini-map of the home (one marker, as on the fleet Network Map).
+ * Corteca's stored position is checked against Corteca's Autodetect (read-only); when they differ
+ * the panel flags it and the map shows the detected position (switchable) — in this view only.
  * A click on the map (or its expand button) opens it over the diagram area at the same view, where
  * it zooms and drags freely and the marker's card lists the access points; × or Esc puts it back.
  */
 export function GatewayLocation({ network, gateway }: { network: McpNetwork; gateway: McpAccessPoint }) {
-  const [loc, setLoc] = useState<LatLng | null | "error" | undefined>(undefined);
-  useEffect(() => {
-    let cancelled = false;
-    setLoc(undefined);
-    void readLocation(gateway.mac).then((v) => { if (!cancelled) setLoc(v); });
-    return () => { cancelled = true; };
-  }, [gateway.mac]);
+  const { stored, detected, busy, reload } = useGatewayLocation(gateway.mac, network.capturedAt);
+  const [source, setSource] = useState<LocationSource>("detected");
+  const view = useRef<MapView | null>(null);
+  useEffect(() => { setSource("detected"); }, [gateway.mac]);
+
+  const cmp = compareLocations(stored, detected);
+  const storedLoc = stored && stored !== "error" ? stored : null;
+  const detectedLoc = detected && detected !== "error" ? detected : null;
+  // Our view: the detected position when it differs from Corteca's (unless switched back).
+  const showDetected = !!cmp?.differs && !!detectedLoc && (source === "detected" || !storedLoc);
+  const loc = showDetected ? detectedLoc : storedLoc;
+  // A moved marker (other gateway, detected ↔ stored) opens the map centred on it, not at the old
+  // view; reset while rendering, since the map reads `view` when it is created in its own effect.
+  const locKey = loc ? `${gateway.mac}|${loc.lat},${loc.lng}` : "";
+  const lastLocKey = useRef(locKey);
+  if (lastLocKey.current !== locKey) { lastLocKey.current = locKey; view.current = null; }
 
   const overlay = useCanvasOverlay();
-  const view = useRef<MapView | null>(null);
   const setOpen = overlay?.setOpen;
   const expand = setOpen ? () => setOpen(true) : undefined;
   const collapse = useCallback(() => setOpen?.(false), [setOpen]);
-  // A new gateway starts at its own view; leaving the panel closes the expanded map.
-  useEffect(() => { view.current = null; }, [gateway.mac]);
+  // Leaving the panel closes the expanded map.
   useEffect(() => collapse, [collapse]);
 
   const aps = network.aps.map((a) => ({
@@ -58,11 +53,16 @@ export function GatewayLocation({ network, gateway }: { network: McpNetwork; gat
   }));
 
   return (
-    <DetailSection title="Location" summary={loc && loc !== "error" ? "Map of the home, from the gateway's Corteca summary" : "No location from Corteca"}>
-      {loc === undefined && <div className="h-56 animate-pulse rounded-xl bg-neutral-100" />}
-      {loc === "error" && <p className="text-xs text-neutral-500">Location unavailable: Corteca didn&apos;t return the device summary.</p>}
-      {loc === null && <p className="text-xs text-neutral-500">Corteca has no location for this gateway.</p>}
-      {loc && loc !== "error" && (
+    <DetailSection
+      title="Location"
+      summary={cmp?.differs ? "Differs from Corteca's Autodetect" : loc ? "Map of the home, from the gateway's Corteca summary" : "No location from Corteca"}
+      actions={<LocationRefresh busy={busy} onClick={reload} />}
+    >
+      {stored === undefined && <div className="h-56 animate-pulse rounded-xl bg-neutral-100" />}
+      {stored !== undefined && <LocationCheck stored={stored} detected={detected} source={source} onSource={setSource} />}
+      {stored === "error" && !loc && <p className="text-xs text-neutral-500">Location unavailable: Corteca didn&apos;t return the device summary.</p>}
+      {stored === null && !loc && <p className="text-xs text-neutral-500">Corteca has no location for this gateway.</p>}
+      {loc && stored !== undefined && (
         <>
           <div className="relative">
             <LocationMap
@@ -89,7 +89,8 @@ export function GatewayLocation({ network, gateway }: { network: McpNetwork; gat
           )}
           <p className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-2 text-[11px] text-neutral-400">
             <span>
-              {aps.length > 1 ? `${aps.length} access points at the gateway's address.` : "The gateway's address."}
+              {showDetected ? "Position from Corteca's Autodetect (this view only)." : "Position stored in Corteca."}
+              {aps.length > 1 && ` ${aps.length} access points at the gateway's address.`}
               {expand && " Click the map to expand it."}
             </span>
             <a href={osmUrl(loc)} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap font-medium text-blue-600 hover:underline">
@@ -105,5 +106,20 @@ export function GatewayLocation({ network, gateway }: { network: McpNetwork; gat
         </>
       )}
     </DetailSection>
+  );
+}
+
+/** Re-reads Corteca's stored position and re-runs Autodetect. */
+function LocationRefresh({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={busy}
+      aria-label="Refresh location" title="Check the location with Corteca again"
+      className="rounded-lg p-1 text-blue-600 hover:bg-blue-50 disabled:text-neutral-400 disabled:hover:bg-transparent"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={busy ? "animate-spin" : undefined}>
+        <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+      </svg>
+    </button>
   );
 }
