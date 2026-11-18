@@ -89,7 +89,7 @@ export function McpTopBar({ subscriber, networkId, capturedAt, onSelectSubscribe
                 <path d="M4 6h16M4 12h16M4 18h10" />
               </svg>
               Events
-              {!!eventsToday && <span className="rounded-full bg-red-50 px-1.5 text-[11px] text-red-700">{eventsToday} today</span>}
+              {!!eventsToday && <span className="rounded-full bg-red-50 px-1.5 text-[11px] text-red-700">{eventsToday} in 24 h</span>}
             </button>
           )}
           {onRefresh && (

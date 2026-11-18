@@ -12,11 +12,11 @@ export function EventsIcon() {
   );
 }
 
-/** Red "3 today" pill when something happened in the last 24 h. */
+/** Red "3 in 24 h" pill when something happened in the last 24 h (rolling, not since midnight). */
 export function TodayPill() {
   const ev = useEvents();
   if (!ev?.today) return null;
-  return <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{ev.today} today</span>;
+  return <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{ev.today} in 24 h</span>;
 }
 
 /** Small square icon button for the drawer headers (stroke icon paths as children). */

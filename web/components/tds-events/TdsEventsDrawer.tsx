@@ -14,11 +14,11 @@ function maxWidth(el: HTMLElement | null): number {
   return Math.max(DRAWER_MIN, Math.floor((canvas?.clientWidth ?? 1200) / 2));
 }
 
-/** Red "N P1–P2 today" pill. */
+/** Red "N P1–P2 in 24 h" pill (rolling 24 h, not since midnight). */
 export function TdsTodayPill() {
   const tds = useTdsEvents();
   if (!tds?.today) return null;
-  return <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{tds.today} P1–P2 today</span>;
+  return <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{tds.today} P1–P2 in 24 h</span>;
 }
 
 function TdsIcon() {
