@@ -25,8 +25,11 @@ const COLS: { key: Col; label: string; num?: boolean }[] = [
 const sortValue = (h: HomeApRow, c: Col): string | number =>
   c === "aps" ? h.aps : c === "online" ? (h.online ? 1 : 0) : c === "kind" ? GATEWAY_KIND_META[h.kind].label : h[c];
 
-/** One row per home: gateway, its type, and how many WiFi devices (gateway + Beacons) it has. Row click opens the console. */
-export function HomeApTable({ homes }: { homes: HomeApRow[] }) {
+/**
+ * One row per home: gateway, its type, and how many WiFi devices (gateway + Beacons) it has. Row click
+ * opens the console. With showSource, counts not from the live mesh are tagged "report".
+ */
+export function HomeApTable({ homes, showSource }: { homes: HomeApRow[]; showSource?: boolean }) {
   const [sort, setSort] = useState<{ col: Col; dir: 1 | -1 }>({ col: "aps", dir: -1 });
   const [query, setQuery] = useState("");
 
@@ -89,6 +92,9 @@ export function HomeApTable({ homes }: { homes: HomeApRow[] }) {
                 <td className="px-3 py-1.5 text-right tabular-nums text-neutral-900">
                   <span className="font-semibold">{h.aps}</span>
                   <span className="ml-1.5 text-xs text-neutral-500">{h.onlineAps} online</span>
+                  {showSource && h.source === "report" && (
+                    <span className="ml-1.5 rounded bg-neutral-100 px-1 text-[10px] text-neutral-500" title="From the deployment report — Corteca's live mesh wasn't read for this home">report</span>
+                  )}
                 </td>
                 <td className="px-3 py-1.5">
                   <StatusPill tone={h.online ? "good" : "neutral"}>{h.online ? "Online" : "Offline"}</StatusPill>

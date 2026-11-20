@@ -272,7 +272,7 @@ export default function NetworkMapPage() {
         </CortecaCard>
       )}
 
-      <HomeApCard rawRows={rawRows} />
+      <HomeApCard rawRows={rawRows} reportAt={reportCachedAt} />
 
       <DeploymentReportCard
         rawRows={rawRows} headers={csvHeaders} macFilter={macFilter} regionMacs={regionMacs}

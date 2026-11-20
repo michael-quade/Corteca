@@ -1,3 +1,5 @@
+import type { MeshCount } from "./meshCounts";
+
 // Per-home WiFi device counts from the fleet deployment report (one CSV row per managed
 // WiFi device; a home's rows share its "Home WiFi ID", the root gateway's MAC).
 
@@ -24,6 +26,8 @@ export interface HomeApRow {
   onlineAps: number;
   /** Gateway online (any device online when the report has no gateway row). */
   online: boolean;
+  /** Where aps / onlineAps / online come from: the deployment report, or Corteca's live mesh. */
+  source: "report" | "mesh";
 }
 
 /**
@@ -78,7 +82,19 @@ export function homesFromReport(rows: Record<string, string>[]): HomeApRow[] {
       aps: devs.length,
       onlineAps,
       online: gw ? isOnline(gw) : onlineAps > 0,
+      source: "report" as const,
     };
+  });
+}
+
+/**
+ * Counts and gateway status from the live mesh where it was read (the console's view); homes
+ * without one (not read yet, read failed, no mesh) keep the report's.
+ */
+export function withMeshCounts(homes: HomeApRow[], counts: Map<string, MeshCount | null>): HomeApRow[] {
+  return homes.map((h) => {
+    const m = counts.get(h.homeId);
+    return m ? { ...h, aps: m.aps, onlineAps: m.onlineAps, online: m.gatewayOnline, source: "mesh" } : h;
   });
 }
 

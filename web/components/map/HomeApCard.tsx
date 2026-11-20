@@ -6,8 +6,10 @@ import { HealthTile } from "@/web/components/corteca/HealthTile";
 import { SegmentedControl } from "@/web/components/corteca/SegmentedControl";
 import { HomeApTable } from "@/web/components/tables/HomeApTable";
 import {
-  homesFromReport, summariseHomes, bucketOf, bucketLabel, pct, GATEWAY_KIND_META, type GatewayKind,
+  homesFromReport, withMeshCounts, summariseHomes, bucketOf, bucketLabel, pct, GATEWAY_KIND_META, type GatewayKind,
 } from "@/web/lib/homeApStats";
+import { useMeshCounts } from "@/web/lib/useMeshCounts";
+import { MeshCountStatus } from "./MeshCountStatus";
 import { GatewayMixBar } from "./GatewayMixBar";
 import { ApCountChart } from "./ApCountChart";
 
@@ -31,14 +33,22 @@ const KIND_TILES: { kind: GatewayKind; icon: ReactNode }[] = [
 /**
  * Network Map: WiFi devices per home across the whole deployment report (not the map's filters):
  * totals, primary gateway type, homes by device count, and a per-home table. Chart picks filter the table.
+ * All homes = the report's registered devices; Gateway online = the homes the report lists online,
+ * re-counted from Corteca's live mesh (the console's view), keeping those whose gateway is online there.
  */
-export function HomeApCard({ rawRows }: { rawRows: Record<string, string>[] }) {
+export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, string>[]; reportAt: number | null }) {
   const [scope, setScope] = useState<Scope>("all");
   const [kind, setKind] = useState<GatewayKind | null>(null);
   const [bucket, setBucket] = useState<number | null>(null);
 
   const allHomes = useMemo(() => homesFromReport(rawRows), [rawRows]);
-  const homes = useMemo(() => (scope === "online" ? allHomes.filter((h) => h.online) : allHomes), [allHomes, scope]);
+  const reportOnline = useMemo(() => allHomes.filter((h) => h.online), [allHomes]);
+  const onlineIds = useMemo(() => reportOnline.map((h) => h.homeId), [reportOnline]);
+  const mesh = useMeshCounts(onlineIds, reportAt, scope === "online");
+  const live = useMemo(() => withMeshCounts(reportOnline, mesh.counts), [reportOnline, mesh.counts]);
+  const homes = useMemo(() => (scope === "online" ? live.filter((h) => h.online) : allHomes), [scope, live, allHomes]);
+  const wentOffline = live.length - live.filter((h) => h.online).length;
+  const reportOnly = mesh.loading ? 0 : live.filter((h) => h.source === "report").length;
   const s = useMemo(() => summariseHomes(homes), [homes]);
   const tableHomes = useMemo(
     () => homes.filter((h) => (!kind || h.kind === kind) && (!bucket || bucketOf(h.aps) === bucket)),
@@ -56,7 +66,7 @@ export function HomeApCard({ rawRows }: { rawRows: Record<string, string>[] }) {
   return (
     <CortecaCard
       title="WiFi devices per home"
-      info={`Whole deployment report, not the map's filters. A home is a Home WiFi ID; its gateway (primary RG) is the device whose MAC is the Home WiFi ID. WiFi devices = gateway + Beacons in the report; rows with only a MAC (no model, serial, firmware or role) are Corteca stubs and not counted.${loose ? ` ${loose.toLocaleString()} devices with no Home WiFi ID are left out.` : ""}`}
+      info={`Whole deployment report, not the map's filters. A home is a Home WiFi ID; its gateway (primary RG) is the device whose MAC is the Home WiFi ID. All homes: WiFi devices = gateway + Beacons registered in the report; rows with only a MAC (no model, serial, firmware or role) are Corteca stubs and not counted. Gateway online: homes the report lists online, re-counted from Corteca's live mesh (the console's WiFi points); homes whose gateway is offline in the mesh are left out.${loose ? ` ${loose.toLocaleString()} devices with no Home WiFi ID are left out.` : ""}`}
       actions={
         <SegmentedControl<Scope>
           label="Homes" value={scope} onChange={(v) => { setScope(v); setKind(null); setBucket(null); }}
@@ -65,6 +75,9 @@ export function HomeApCard({ rawRows }: { rawRows: Record<string, string>[] }) {
       }
     >
       <div className="space-y-6">
+        <div className="-mt-2">
+          <MeshCountStatus scope={scope} mesh={mesh} wentOffline={wentOffline} reportOnly={reportOnly} />
+        </div>
         <div className="grid grid-cols-2 gap-y-4 md:grid-cols-5 md:divide-x md:divide-neutral-200">
           <HealthTile icon={<HomeIcon />} label="Homes" value={s.homes.toLocaleString()} sub={`${s.aps.toLocaleString()} WiFi devices`} />
           <HealthTile icon={<WifiIcon />} label="Avg WiFi devices per home" value={s.avg.toFixed(2)}
@@ -101,7 +114,7 @@ export function HomeApCard({ rawRows }: { rawRows: Record<string, string>[] }) {
               </span>
             )}
           </div>
-          <HomeApTable homes={tableHomes} />
+          <HomeApTable homes={tableHomes} showSource={scope === "online"} />
         </section>
       </div>
     </CortecaCard>
