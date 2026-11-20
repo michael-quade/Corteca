@@ -41,12 +41,24 @@ export function gatewayKind(model: string): GatewayKind {
 
 const isOnline = (r: Record<string, string>) => r["Online status"]?.toLowerCase() === "true";
 
-/** One row per home; devices with no Home WiFi ID (not in any network) are left out. */
+/**
+ * Fields that show a row is a real managed device. Some rows carry only MAC, Home WiFi ID and
+ * online status (12 on demo2, 2026-11-20; e.g. 40-48-6E-FF-E9-B0 listed under a 4-Beacon home that
+ * MCP shows with 4 APs) — Corteca stubs, not WiFi devices, so they aren't counted.
+ */
+const DEVICE_FIELDS = ["Model Name", "Serial Number", "Firmware version", "Product Code", "Work Role", "USP end point ID", "Hardware Version"];
+
+export const isDeviceStub = (r: Record<string, string>) => DEVICE_FIELDS.every((k) => !(r[k] ?? "").trim());
+
+/**
+ * One row per home. Devices with no Home WiFi ID (not in any network) and stub rows are left out;
+ * a home with only stub rows is left out too.
+ */
 export function homesFromReport(rows: Record<string, string>[]): HomeApRow[] {
   const byHome = new Map<string, Record<string, string>[]>();
   for (const r of rows) {
     const id = (r["Home WiFi ID"] ?? "").trim();
-    if (!id) continue;
+    if (!id || isDeviceStub(r)) continue;
     const list = byHome.get(id);
     if (list) list.push(r); else byHome.set(id, [r]);
   }

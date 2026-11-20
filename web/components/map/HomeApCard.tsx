@@ -56,7 +56,7 @@ export function HomeApCard({ rawRows }: { rawRows: Record<string, string>[] }) {
   return (
     <CortecaCard
       title="WiFi devices per home"
-      info={`Whole deployment report, not the map's filters. A home is a Home WiFi ID; its gateway (primary RG) is the device whose MAC is the Home WiFi ID. WiFi devices = gateway + Beacons in the report.${loose ? ` ${loose.toLocaleString()} devices with no Home WiFi ID are left out.` : ""}`}
+      info={`Whole deployment report, not the map's filters. A home is a Home WiFi ID; its gateway (primary RG) is the device whose MAC is the Home WiFi ID. WiFi devices = gateway + Beacons in the report; rows with only a MAC (no model, serial, firmware or role) are Corteca stubs and not counted.${loose ? ` ${loose.toLocaleString()} devices with no Home WiFi ID are left out.` : ""}`}
       actions={
         <SegmentedControl<Scope>
           label="Homes" value={scope} onChange={(v) => { setScope(v); setKind(null); setBucket(null); }}
