@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/web/contexts/AuthContext";
 import { fetchWithAuth } from "@/web/lib/fetchWithAuth";
 import type { ReportDevice } from "@/app/api/network-map/route";
 import type { DeviceMarker } from "@/app/api/network-map/locate/route";
-import { DeploymentTable } from "@/web/components/tables/DeploymentTable";
 import { NetworkMapControls, isMapBusy, type MapPhase } from "@/web/components/NetworkMapControls";
 import { NetworkMapSearch } from "@/web/components/NetworkMapSearch";
 import { CortecaPage, CortecaLoading } from "@/web/components/corteca/CortecaPage";
 import { CortecaCard } from "@/web/components/corteca/CortecaCard";
 import { OutlineButton } from "@/web/components/corteca/OutlineButton";
 import { RegionFilterBar } from "@/web/components/map/RegionFilterBar";
+import { HomeApCard } from "@/web/components/map/HomeApCard";
+import { DeploymentReportCard } from "@/web/components/map/DeploymentReportCard";
 import { useRegionFilter } from "@/web/lib/useRegionFilter";
 import {
   loadMarkerCache, saveMarkerCache, clearMarkerCache,
@@ -213,15 +214,6 @@ export default function NetworkMapPage() {
   const region = useRegionFilter(devices);
   const regionMacs = region.macs;
 
-  // The deployment report follows the map: region filter, then a pinned network.
-  const tableRows = useMemo(() => {
-    if (!macFilter && !regionMacs) return rawRows;
-    return rawRows.filter((r) => {
-      const mac = (r["Home WiFi ID"] || r["MAC"] || "").trim();
-      return (!regionMacs || regionMacs.has(mac)) && (!macFilter || mac === macFilter);
-    });
-  }, [rawRows, macFilter, regionMacs]);
-
   if (isLoading || !isAuthenticated) return <CortecaLoading />;
 
   const busy = isMapBusy(phase);
@@ -280,21 +272,12 @@ export default function NetworkMapPage() {
         </CortecaCard>
       )}
 
-      {rawRows.length > 0 && (
-        <CortecaCard
-          title="Deployment report"
-          info={regionMacs ? "With a location filter set, only networks placed on the map are listed (the map locates online networks with a Customer ID)." : undefined}
-          actions={(macFilter || regionMacs) && (
-            <span className="text-sm text-blue-600">
-              Filtered to {macFilter
-                ? rawRows.find((r) => (r["Home WiFi ID"] || r["MAC"] || "").trim() === macFilter)?.["Account Name"] || macFilter
-                : `${region.summary} · ${region.shown.length.toLocaleString()} network${region.shown.length === 1 ? "" : "s"}`}
-            </span>
-          )}
-        >
-          <DeploymentTable rows={tableRows} headers={csvHeaders} />
-        </CortecaCard>
-      )}
+      <HomeApCard rawRows={rawRows} />
+
+      <DeploymentReportCard
+        rawRows={rawRows} headers={csvHeaders} macFilter={macFilter} regionMacs={regionMacs}
+        regionSummary={region.summary} shownCount={region.shown.length}
+      />
     </CortecaPage>
   );
 }
