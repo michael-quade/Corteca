@@ -82,6 +82,15 @@ function SwOverviewIcon() {
   );
 }
 
+function FleetMetricsIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7 16v-3M11 16V8M15 16v-5M19 16V6" />
+    </svg>
+  );
+}
+
 function AlarmsIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -178,6 +187,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/sw-overview",
   },
   {
+    title: "Fleet Metrics",
+    description: "Fleet-wide health: WiFi points online / offline, reboots, cloud disconnections, coverage, noise and congestion across every network.",
+    icon: <FleetMetricsIcon />,
+    href: "/fleet-metrics",
+  },
+  {
     title: "Network Alarms",
     description: "Query open alarms across all managed networks by severity and time range via the ouife fault manager.",
     icon: <AlarmsIcon />,
@@ -203,6 +218,7 @@ export const DASHBOARD_CARD_HREFS = [
   "/network-map",
   "/device-browser",
   "/sw-overview",
+  "/fleet-metrics",
 ];
 
 /** Tall feature tile on the dashboard landing page. */

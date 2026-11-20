@@ -8,6 +8,9 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Vercel cron jobs carry no cookies; the routes check `Authorization: Bearer $CRON_SECRET` themselves.
+  if (pathname.startsWith('/api/cron/')) return NextResponse.next();
+
   // If gate credentials are not configured (local dev), skip the check
   const siteUser = process.env.SITE_USERNAME;
   const sitePass = process.env.SITE_PASSWORD;

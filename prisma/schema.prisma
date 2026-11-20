@@ -66,3 +66,17 @@ model RadioBands {
 
   @@map("radio_bands")
 }
+
+// Fleet Metrics rollups: one row per source and time bucket (an hour of cluster alarms /
+// events, a day of a Corteca daily report). `complete` = the bucket is over, never re-read.
+// Filled on demand by /api/fleet/* and daily by /api/cron/fleet-rollups.
+model FleetRollup {
+  source    String
+  bucket    DateTime
+  data      Json
+  complete  Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([source, bucket])
+  @@map("fleet_rollups")
+}

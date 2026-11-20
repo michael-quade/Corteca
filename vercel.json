@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/fleet-rollups", "schedule": "0 3 * * *" }
+  ]
+}
