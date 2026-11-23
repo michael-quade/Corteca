@@ -98,10 +98,15 @@ export function withMeshCounts(homes: HomeApRow[], counts: Map<string, MeshCount
   });
 }
 
-/** Devices-per-home buckets: 1 … OPEN_BUCKET-1, then "OPEN_BUCKET+". */
+/** Devices-per-home buckets: 0 (online count only) … OPEN_BUCKET-1, then "OPEN_BUCKET+". */
 export const OPEN_BUCKET = 8;
 
-export const bucketOf = (aps: number) => Math.min(aps, OPEN_BUCKET);
+/** Which count the devices-per-home chart uses: devices registered for the home, or those online now. */
+export type ApMeasure = "configured" | "online";
+
+export const apCount = (h: HomeApRow, measure: ApMeasure) => (measure === "online" ? h.onlineAps : h.aps);
+
+export const bucketOf = (aps: number) => Math.max(0, Math.min(aps, OPEN_BUCKET));
 export const bucketLabel = (b: number) => (b >= OPEN_BUCKET ? `${OPEN_BUCKET}+` : String(b));
 
 export interface ApBucket {
@@ -116,30 +121,33 @@ const emptyKinds = (): Record<GatewayKind, number> => ({ beacon: 0, ont: 0, fwa:
 
 export interface HomeApSummary {
   homes: number;
+  /** Sum of the measured count (registered or online devices). */
   aps: number;
   avg: number;
   byKind: Record<GatewayKind, number>;
-  /** Index 0 = 1 device … last = OPEN_BUCKET+. */
+  /** 1 device … OPEN_BUCKET+, preceded by a 0 bucket when some home has none (online count only). */
   buckets: ApBucket[];
 }
 
-export function summariseHomes(homes: HomeApRow[]): HomeApSummary {
+export function summariseHomes(homes: HomeApRow[], measure: ApMeasure = "configured"): HomeApSummary {
   const byKind = emptyKinds();
-  const buckets: ApBucket[] = Array.from({ length: OPEN_BUCKET }, (_, i) => ({ bucket: i + 1, label: bucketLabel(i + 1), homes: 0, ...emptyKinds() }));
+  const bucket = (n: number): ApBucket => ({ bucket: n, label: bucketLabel(n), homes: 0, ...emptyKinds() });
+  const all = Array.from({ length: OPEN_BUCKET + 1 }, (_, i) => bucket(i));
   let aps = 0;
   for (const h of homes) {
+    const n = apCount(h, measure);
     byKind[h.kind]++;
-    const b = buckets[bucketOf(h.aps) - 1];
+    const b = all[bucketOf(n)];
     b.homes++;
     b[h.kind]++;
-    aps += h.aps;
+    aps += n;
   }
   return {
     homes: homes.length,
     aps,
     avg: homes.length ? aps / homes.length : 0,
     byKind,
-    buckets,
+    buckets: all[0].homes ? all : all.slice(1),
   };
 }
 

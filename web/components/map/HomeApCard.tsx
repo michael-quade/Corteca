@@ -6,7 +6,8 @@ import { HealthTile } from "@/web/components/corteca/HealthTile";
 import { SegmentedControl } from "@/web/components/corteca/SegmentedControl";
 import { HomeApTable } from "@/web/components/tables/HomeApTable";
 import {
-  homesFromReport, withMeshCounts, summariseHomes, bucketOf, bucketLabel, pct, GATEWAY_KIND_META, type GatewayKind,
+  homesFromReport, withMeshCounts, summariseHomes, bucketOf, bucketLabel, apCount, pct, GATEWAY_KIND_META,
+  type GatewayKind, type ApMeasure,
 } from "@/web/lib/homeApStats";
 import { useMeshCounts } from "@/web/lib/useMeshCounts";
 import { MeshCountStatus } from "./MeshCountStatus";
@@ -40,6 +41,7 @@ export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, stri
   const [scope, setScope] = useState<Scope>("all");
   const [kind, setKind] = useState<GatewayKind | null>(null);
   const [bucket, setBucket] = useState<number | null>(null);
+  const [measure, setMeasure] = useState<ApMeasure>("configured");
 
   const allHomes = useMemo(() => homesFromReport(rawRows), [rawRows]);
   const reportOnline = useMemo(() => allHomes.filter((h) => h.online), [allHomes]);
@@ -50,9 +52,10 @@ export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, stri
   const wentOffline = live.length - live.filter((h) => h.online).length;
   const reportOnly = mesh.loading ? 0 : live.filter((h) => h.source === "report").length;
   const s = useMemo(() => summariseHomes(homes), [homes]);
+  const chart = useMemo(() => summariseHomes(homes, measure), [homes, measure]);
   const tableHomes = useMemo(
-    () => homes.filter((h) => (!kind || h.kind === kind) && (!bucket || bucketOf(h.aps) === bucket)),
-    [homes, kind, bucket],
+    () => homes.filter((h) => (!kind || h.kind === kind) && (bucket == null || bucketOf(apCount(h, measure)) === bucket)),
+    [homes, kind, bucket, measure],
   );
   const loose = useMemo(() => rawRows.filter((r) => !(r["Home WiFi ID"] ?? "").trim()).length, [rawRows]);
 
@@ -60,7 +63,7 @@ export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, stri
 
   const filterText = [
     kind && GATEWAY_KIND_META[kind].label,
-    bucket && `${bucketLabel(bucket)} WiFi device${bucket === 1 ? "" : "s"}`,
+    bucket != null && `${bucketLabel(bucket)} ${measure === "online" ? "online " : ""}WiFi device${bucket === 1 ? "" : "s"}`,
   ].filter(Boolean).join(" · ");
 
   return (
@@ -81,7 +84,7 @@ export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, stri
         <div className="grid grid-cols-2 gap-y-4 md:grid-cols-5 md:divide-x md:divide-neutral-200">
           <HealthTile icon={<HomeIcon />} label="Homes" value={s.homes.toLocaleString()} sub={`${s.aps.toLocaleString()} WiFi devices`} />
           <HealthTile icon={<WifiIcon />} label="Avg WiFi devices per home" value={s.avg.toFixed(2)}
-            sub={`${pct(s.homes - s.buckets[0].homes, s.homes)} of homes have 2+`} />
+            sub={`${pct(s.buckets.filter((x) => x.bucket >= 2).reduce((n, x) => n + x.homes, 0), s.homes)} of homes have 2+`} />
           {KIND_TILES.map(({ kind: k, icon }) => (
             <HealthTile
               key={k} icon={icon} label={`${GATEWAY_KIND_META[k].label} as gateway`} value={s.byKind[k].toLocaleString()}
@@ -97,8 +100,16 @@ export function HomeApCard({ rawRows, reportAt }: { rawRows: Record<string, stri
             <GatewayMixBar byKind={s.byKind} total={s.homes} selected={kind} onSelect={setKind} />
           </section>
           <section>
-            <h3 className="mb-1 text-sm font-semibold text-neutral-900">Homes by number of WiFi devices</h3>
-            <ApCountChart buckets={s.buckets} total={s.homes} selected={bucket} onSelect={setBucket} />
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-neutral-900">
+                Homes by number of {measure === "online" ? "online " : ""}WiFi devices
+              </h3>
+              <SegmentedControl<ApMeasure>
+                label="Count" value={measure} onChange={(v) => { setMeasure(v); setBucket(null); }}
+                options={[{ value: "configured", label: "Configured APs" }, { value: "online", label: "Online APs" }]}
+              />
+            </div>
+            <ApCountChart buckets={chart.buckets} total={chart.homes} measure={measure} selected={bucket} onSelect={setBucket} />
           </section>
         </div>
 
