@@ -30,12 +30,14 @@ type Select = (sel: Selection) => void;
  * expands it over the whole diagram (Esc / "Back to panel" returns). From ROOMY_PANEL wide its
  * content goes two-up (`data-roomy`, `PanelLayoutContext`), from WIDE_PANEL three-up.
  */
-export function NodeDetailPanel({ network, selection, onSelect, onClose, panel }: {
+export function NodeDetailPanel({ network, selection, onSelect, onClose, panel, top = PANEL_GAP }: {
   network: McpNetwork;
   selection: Selection;
   onSelect: Select;
   onClose: () => void;
   panel: DetailPanelState;
+  /** Distance from the canvas top (the folded Network summary row sits above it). */
+  top?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLElement>(null);
@@ -86,7 +88,7 @@ export function NodeDetailPanel({ network, selection, onSelect, onClose, panel }
         e.stopPropagation();
         if (e.key === "Escape" && !overlay?.open) panel.setExpanded(false);
       } : undefined}
-      style={expanded ? undefined : { width: resize.width, top: PANEL_GAP, right: PANEL_GAP, bottom: PANEL_GAP }}
+      style={expanded ? undefined : { width: resize.width, top, right: PANEL_GAP, bottom: PANEL_GAP }}
       className={cn(
         "group/panel absolute flex max-w-[calc(100%-1.5rem)] flex-col rounded-xl border border-neutral-200 bg-white shadow-lg focus:outline-none",
         expanded ? "inset-3 z-20 max-w-none" : "z-10"

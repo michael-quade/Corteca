@@ -8,6 +8,7 @@ import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable
 import { FoldSection } from "@/web/components/ui/FoldSection";
 import { setSectionFolded } from "@/web/lib/useFoldedSections";
 import { memberConnection } from "@/web/lib/memberConnection";
+import { clientsLine, summariseNetwork } from "@/web/lib/networkSummary";
 import { RECENT_DAYS, recentlyDisconnected } from "@/web/lib/recentlyDisconnected";
 import { useMemberHistory } from "@/web/lib/useMemberHistory";
 import { useModelBands } from "@/web/lib/useModelBands";
@@ -164,6 +165,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
     topologyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const summary = useMemo(() => (network ? summariseNetwork(network) : null), [network]);
   const failedApis = network?.results.filter((r) => !r.ok) ?? [];
 
   return (
@@ -242,7 +244,10 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
           <FoldSection
             id="mcp.clients"
             title={`Clients (${network.members.length})`}
-            summary={disconnected.status === "ready" ? `${disconnected.members.length} recently disconnected` : undefined}
+            summary={[
+              summary && clientsLine(summary),
+              disconnected.status === "ready" && `${disconnected.members.length} recently disconnected`,
+            ].filter(Boolean).join(" · ") || undefined}
           >
             {network.members.length > 0
               ? (

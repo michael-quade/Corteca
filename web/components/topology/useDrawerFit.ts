@@ -19,7 +19,7 @@ const EDGE = "6%"; // about the old `padding: 0.15` per side
  * opens, closes or is resized to a comfortable width — never for a drawer stretched wide
  * or expanded over the canvas. `fit()` (the Fit button, layout switches) uses the same area.
  */
-export function useDrawerFit(flowRef: RefObject<HTMLDivElement | null>, ready: boolean, onAutoFit: () => void) {
+export function useDrawerFit(flowRef: RefObject<HTMLDivElement | null>, ready: boolean, onAutoFit: () => void, rightClear: number | null = null) {
   const ev = useEvents();
   const tds = useTdsEvents();
   const { fitView } = useReactFlow();
@@ -43,8 +43,9 @@ export function useDrawerFit(flowRef: RefObject<HTMLDivElement | null>, ready: b
   const comfortable = width != null && (!canvasW || width <= canvasW * DRAWER_FIT_SHARE);
 
   const options = useMemo<FitViewOptions>(() => ({
-    padding: { top: EDGE, right: EDGE, bottom: EDGE, left: mode === "open" && comfortable && width != null ? `${PANEL_MARGIN + width + GAP}px` : EDGE },
-  }), [mode, comfortable, width]);
+    // The open Network summary covers the right side: fit beside it.
+    padding: { top: EDGE, right: rightClear != null ? `${rightClear + GAP}px` : EDGE, bottom: EDGE, left: mode === "open" && comfortable && width != null ? `${PANEL_MARGIN + width + GAP}px` : EDGE },
+  }), [mode, comfortable, width, rightClear]);
 
   const fit = useCallback((duration = 300) => { void fitView({ ...options, duration }); }, [fitView, options]);
 
@@ -68,12 +69,13 @@ export function useDrawerFit(flowRef: RefObject<HTMLDivElement | null>, ready: b
  * fit, so data arriving later can refit only an untouched view. A view restored from the URL
  * doesn't count: it is saved after every move, automatic fits included (a tab restored after
  * a reload would otherwise keep a view fitted before the gateway's data widened the diagram).
+ * `rightClear` = px the open Network summary covers on the right (null when folded / a panel is open).
  * `fitRef.current(duration)` fits (drawer-aware) and marks the view untouched again.
  */
-export function useCanvasFit(flowRef: RefObject<HTMLDivElement | null>, ready: boolean, forgetRestore: () => void) {
+export function useCanvasFit(flowRef: RefObject<HTMLDivElement | null>, ready: boolean, forgetRestore: () => void, rightClear: number | null = null) {
   const userMoved = useRef(false);
   const onAutoFit = useCallback(() => { forgetRestore(); userMoved.current = false; }, [forgetRestore]);
-  const { options, fit } = useDrawerFit(flowRef, ready, onAutoFit);
+  const { options, fit } = useDrawerFit(flowRef, ready, onAutoFit, rightClear);
   const fitRef = useRef<(duration?: number) => void>(() => {});
   fitRef.current = (duration) => { onAutoFit(); fit(duration); };
   return { options, fitRef, userMoved };

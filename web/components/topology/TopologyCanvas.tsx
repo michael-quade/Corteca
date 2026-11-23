@@ -20,6 +20,8 @@ import { ZoomControls } from "./ZoomControls";
 import { useCanvasFit } from "./useDrawerFit";
 import { TopologyToolbar } from "./TopologyToolbar";
 import { NodeDetailPanel } from "./NodeDetailPanel";
+import { NetworkSummaryDrawer } from "./NetworkSummaryDrawer";
+import { SUMMARY_ROW_H, SUMMARY_W, useSummaryDrawer } from "./useSummaryDrawer";
 import { TopologyUiContext, type TopologyUi } from "./TopologyContext";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
 import { CanvasOverlayContext, useCanvasOverlayState } from "./CanvasOverlay";
@@ -61,7 +63,14 @@ function Canvas(props: TopologyCanvasProps) {
   const lastLayoutMode = useRef(layout);
   // Fits keep clear of an open events drawer; a view the user moved survives later data.
   const forgetRestore = useCallback(() => { restoreView.current = null; }, []);
-  const { options: fitOptions, fitRef, userMoved } = useCanvasFit(flowRef, nodes != null, forgetRestore);
+  // Network summary, top right: open until something is selected (then a row over the detail panel).
+  const summaryToggled = useRef(() => {});
+  const onSummaryToggle = useCallback(() => summaryToggled.current(), []);
+  const summary = useSummaryDrawer(selection, onSummaryToggle);
+  const summaryClear = !selection && summary.open ? PANEL_GAP + SUMMARY_W : null;
+  const { options: fitOptions, fitRef, userMoved } = useCanvasFit(flowRef, nodes != null, forgetRestore, summaryClear);
+  // Opening / folding the summary by hand refits beside it (like the events drawers).
+  summaryToggled.current = () => requestAnimationFrame(() => fitRef.current(400));
   const lastNetwork = useRef<McpNetwork | null>(null);
   const selectionRef = useRef(selection);
   selectionRef.current = selection;
@@ -258,7 +267,20 @@ function Canvas(props: TopologyCanvasProps) {
           <TdsEventsExpanded />
           <div ref={overlay.setTarget} />
           {selection && (
-            <NodeDetailPanel network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} panel={panel} />
+            <NodeDetailPanel
+              network={network} selection={selection} onSelect={onSelect} onClose={() => onSelect(null)} panel={panel}
+              top={PANEL_GAP + SUMMARY_ROW_H + 8}
+            />
+          )}
+          {/* Under an expanded panel / events view (z-20), over the detail panel when opened from its row. */}
+          {!panel.expanded && (
+            <NetworkSummaryDrawer
+              network={network}
+              state={summary}
+              panelWidth={selection ? panel.width : null}
+              filters={filters}
+              onFiltersChange={onFiltersChange}
+            />
           )}
         </div>
       </div>
