@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFoldedSection } from "@/web/lib/useFoldedSections";
 import { CortecaCard } from "@/web/components/corteca/CortecaCard";
 import { Notice } from "@/web/components/corteca/Notice";
 import { OutlineButton } from "@/web/components/corteca/OutlineButton";
@@ -43,6 +44,9 @@ const ICON = (
 );
 
 /** On-demand Corteca AI: full network analysis and plain-language troubleshooting. */
+/** Its minimized state (useFoldedSection id); the top bar's AI analysis button opens it. */
+export const AI_SECTION = "mcp.ai";
+
 export function AiAnalysisCard({ analysis, diagnosis, onAnalyze, onTroubleshoot }: {
   analysis: AiRun<AnalysisReport>;
   diagnosis: AiRun<Diagnosis> & { query: string };
@@ -50,14 +54,19 @@ export function AiAnalysisCard({ analysis, diagnosis, onAnalyze, onTroubleshoot 
   onTroubleshoot: (query: string) => void;
 }) {
   const report = analysis.result;
+  const [folded, setFolded] = useFoldedSection(AI_SECTION);
+  const busy = analysis.running || diagnosis.running;
   return (
     <CortecaCard
       title="AI analysis"
+      folded={folded}
+      onToggleFold={() => setFolded(!folded)}
+      summary={busy ? "Running…" : report ? `Ran ${new Date(report.ranAt).toLocaleTimeString()}` : "Not run yet"}
       info="Runs Corteca's AI network analyzer and troubleshooter through MCP. Read-only: nothing on the network changes. Results are AI-generated; verify before acting."
       actions={
         <>
           {report?.state && <StatusPill tone={stateTone(report.state)}>{report.state}</StatusPill>}
-          <OutlineButton icon={ICON} onClick={onAnalyze} disabled={analysis.running}>
+          <OutlineButton icon={ICON} onClick={() => { setFolded(false); onAnalyze(); }} disabled={analysis.running}>
             {report ? "Run again" : "Run analysis"}
           </OutlineButton>
         </>

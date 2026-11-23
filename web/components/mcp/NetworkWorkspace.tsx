@@ -5,13 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { McpAccessPointCards } from "@/web/components/McpAccessPointCards";
 import { NetworkMembersTable } from "@/web/components/tables/NetworkMembersTable";
+import { FoldSection } from "@/web/components/ui/FoldSection";
+import { setSectionFolded } from "@/web/lib/useFoldedSections";
 import { memberConnection } from "@/web/lib/memberConnection";
 import { RECENT_DAYS, recentlyDisconnected } from "@/web/lib/recentlyDisconnected";
 import { useMemberHistory } from "@/web/lib/useMemberHistory";
 import { useModelBands } from "@/web/lib/useModelBands";
 import { applyModelBands } from "@/web/lib/radioBands";
 import { McpDebugPanel, type McpResponse } from "@/web/components/McpDebugPanel";
-import { AiAnalysisCard } from "@/web/components/ai/AiAnalysisCard";
+import { AiAnalysisCard, AI_SECTION } from "@/web/components/ai/AiAnalysisCard";
 import { DeviceRenameProvider } from "@/web/components/topology/DeviceRename";
 import { subscriberName } from "@/web/components/SubscriberSearchBox";
 import { normaliseMcpNetwork } from "@/web/lib/mcpNetwork";
@@ -124,6 +126,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
   }, [networkId, response, refreshing]);
 
   const aiAnalysis = useCallback(() => {
+    setSectionFolded(AI_SECTION, false);
     aiRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!ai.analysis.result && !ai.analysis.running) void ai.analyze();
   }, [ai]);
@@ -224,21 +227,29 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
             />
           </div>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-700">Access Points ({network.aps.length})</h2>
+          <FoldSection
+            id="mcp.aps"
+            title={`Access Points (${network.aps.length})`}
+            summary={`${network.aps.filter((a) => a.online).length} online`}
+          >
             <McpAccessPointCards
               aps={network.aps}
               selectedMac={view.selection?.kind === "ap" ? view.selection.id : null}
               onSelect={(mac) => selectAndReveal({ kind: "ap", id: mac })}
             />
-          </section>
+          </FoldSection>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-700">Clients ({network.members.length})</h2>
+          <FoldSection
+            id="mcp.clients"
+            title={`Clients (${network.members.length})`}
+            summary={disconnected.status === "ready" ? `${disconnected.members.length} recently disconnected` : undefined}
+          >
             {network.members.length > 0
               ? (
                 <NetworkMembersTable
                   members={network.members}
+                  networkId={response?.homeWifiId}
+                  snapshot={response}
                   selectedId={view.selection?.kind === "client" ? view.selection.id : null}
                   onSelect={(id) => selectAndReveal({ kind: "client", id })}
                   connection={(m) => memberConnection(network, m)}
@@ -246,7 +257,7 @@ export function NetworkWorkspace({ networkId, subscriber, initialView, active, o
                 />
               )
               : <p className="text-sm text-neutral-400">MCP returned no client data for this network.</p>}
-          </section>
+          </FoldSection>
 
           <McpDebugPanel response={response} />
         </div>
