@@ -11,7 +11,7 @@ import { StatusPill } from "@/web/components/corteca/StatusPill";
 
 // Pieces of NetworkMembersTable: cells and the per-column filter popover.
 
-/** Name + MAC, a Paused pill when parental controls paused it, other MACs it was seen under. */
+/** Name, MAC · IP, a Paused pill when parental controls paused it, other MACs it was seen under. */
 export function DeviceCell({ m }: { m: DisconnectedMember }) {
   const others = m.otherMacs?.length ?? 0;
   return (
@@ -20,7 +20,10 @@ export function DeviceCell({ m }: { m: DisconnectedMember }) {
         {m.alias ?? "—"}
         {m.paused && <StatusPill tone="fair">Paused</StatusPill>}
       </p>
-      <p className="mt-0.5 font-mono text-xs text-neutral-400">{m.id}</p>
+      <p className="mt-0.5 font-mono text-xs text-neutral-400">
+        {m.id}
+        {m.ipv4 && <span className="text-neutral-500"> · {m.ipv4}</span>}
+      </p>
       {others > 0 && (
         <p className="mt-0.5 text-xs text-neutral-500" title={m.otherMacs!.join(", ")}>
           +{others} older randomized MAC{others === 1 ? "" : "s"}

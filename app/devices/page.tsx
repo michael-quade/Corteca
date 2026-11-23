@@ -101,7 +101,7 @@ export default function DevicesPage() {
                   {members.length} device{members.length !== 1 ? "s" : ""} found
                 </p>
               )}
-              <NetworkMembersTable members={members} />
+              <NetworkMembersTable members={members} networkId={networkId} />
             </>
           )}
         </CortecaCard>

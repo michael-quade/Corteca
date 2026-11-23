@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { cn } from "@/web/lib/utils";
 import type { Member } from "@/web/lib/corteca/types";
-import { EMPTY_FILTERS, MemberDeviceTable, type ConnectionOf, type SortDir, type SortKey } from "./MemberDeviceTable";
+import { EMPTY_FILTERS, MemberDeviceTable, type ConnectionOf, type Filters, type SortDir, type SortKey } from "./MemberDeviceTable";
+import { clientIdentity } from "./memberColumns";
+import { ClientColumnPicker } from "./ClientColumnPicker";
+import { useMemberProfiles } from "@/web/lib/useMemberProfiles";
+import { useClientColumns } from "@/web/lib/useClientColumns";
 
 type TabId = "connected" | "not-connected";
 
@@ -20,6 +24,10 @@ export interface DisconnectedTab {
 
 interface NetworkMembersTableProps {
   members: Member[];
+  /** The network's id: Type / Manufacturer / Model come from Corteca's client classification for it. */
+  networkId?: string | null;
+  /** Changes when the network is re-read (Refresh), so the classification is read again. */
+  snapshot?: unknown;
   /** How / where each client is connected (MCP visualizer): port / switch and the AP's name, model, MAC. */
   connection?: ConnectionOf;
   disconnected?: DisconnectedTab;
@@ -30,11 +38,14 @@ interface NetworkMembersTableProps {
 
 const DEFAULT_SORT: Record<TabId, [SortKey, SortDir]> = { connected: ["alias", "asc"], "not-connected": ["last_seen", "desc"] };
 
-export function NetworkMembersTable({ members, selectedId, onSelect, connection, disconnected }: NetworkMembersTableProps) {
+export function NetworkMembersTable({ members, networkId, snapshot, selectedId, onSelect, connection, disconnected }: NetworkMembersTableProps) {
   const [activeTab, setActiveTab] = useState<TabId>("connected");
   const [sortKey, setSortKey] = useState<SortKey>("alias");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filters, setFilters] = useState<Record<SortKey, string>>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const profiles = useMemberProfiles(networkId, snapshot ?? members);
+  const identity = useCallback((m: Member) => clientIdentity(m, profiles), [profiles]);
+  const columns = useClientColumns();
 
   const connectedMembers = useMemo(() => members.filter((m) => m.connected), [members]);
   const ownDisconnected = useMemo(() => members.filter((m) => !m.connected), [members]);
@@ -69,7 +80,7 @@ export function NetworkMembersTable({ members, selectedId, onSelect, connection,
         ? "text-blue-700 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-blue-600"
         : "text-neutral-500 hover:text-neutral-800"
     );
-  const table = { filters, setFilters, sortKey, sortDir, onSort: handleSort, connection };
+  const table = { filters, setFilters, sortKey, sortDir, onSort: handleSort, connection, identity, visible: columns.visible };
 
   return (
     <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
@@ -97,6 +108,9 @@ export function NetworkMembersTable({ members, selectedId, onSelect, connection,
                 </span>
               )}
           </Tabs.Trigger>
+          <div className="ml-auto flex items-center pr-3">
+            <ClientColumnPicker visible={columns.visible} onToggle={columns.toggle} onReset={columns.reset} />
+          </div>
         </Tabs.List>
 
         <Tabs.Content value="connected">
