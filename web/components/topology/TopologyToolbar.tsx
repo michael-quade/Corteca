@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/web/lib/utils";
 import { Hint } from "@/web/components/ui/Hint";
 import type { McpNetwork } from "@/web/lib/mcpNetwork";
+import { CopyDiagramButton } from "./CopyDiagramButton";
 import { clientName, type Band, type LayoutMode } from "@/web/lib/topologyFlow";
 import {
   EMPTY_FILTERS, WEAK_SIGNAL_DBM, filtersActive, searchClients, ssidsOf, type ClientFilters, type Selection,
@@ -175,6 +176,7 @@ export function TopologyToolbar(props: TopologyToolbarProps) {
             </Hint>
           ))}
         </div>
+        <CopyDiagramButton fileName={`network-${network.topology.rootDeviceId}-${new Date().toISOString().slice(0, 10)}.png`} />
         <button
           type="button"
           onClick={onToggleFullscreen}

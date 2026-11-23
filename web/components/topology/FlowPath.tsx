@@ -22,7 +22,8 @@ export function FlowPath({ path, width, rateMbps }: { path: string; width: numbe
   const style = { animationDuration: `${seconds}s` };
   const cls = "pointer-events-none motion-safe:animate-flow-dash motion-reduce:hidden";
   return (
-    <g>
+    // data-flow-dots: left out of "Copy diagram" pictures (frozen, they read as stray circles).
+    <g data-flow-dots="">
       <path d={path} fill="none" strokeWidth={dot + 2} strokeLinecap="round" strokeDasharray={DOTS}
         style={style} className={`${cls} stroke-neutral-900/45`} />
       <path d={path} fill="none" strokeWidth={dot} strokeLinecap="round" strokeDasharray={DOTS}
